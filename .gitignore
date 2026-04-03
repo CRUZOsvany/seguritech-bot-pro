@@ -1,0 +1,99 @@
+# SegurITech Bot Pro - .gitignore
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Node
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# Build
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+coverage/
+.nyc_output/
+.jest/
+
+# Logs
+logs/
+*.log
+pids/
+*.pid
+*.seed
+
+# Runtime
+sessions/
+.sessions/
+
+# Temporary files
+*.tmp
+*.temp
+tmp/
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Security
+.ssh/
+.gpg/
+secrets/
+private/
+
+# Editor backup files
+*~
+*.orig
+*.bak
+
+# PM2
+ecosystem-production.config.js
+.pm2/
+
+# Docker
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# CI/CD
+.github/workflows/*.log
+
+# Compiled TypeScript
+**/*.js
+**/*.js.map
+**/*.d.ts
+!node_modules/**
+
+# Dependencies lock files (usar package.json)
+package-lock.json
+yarn.lock
+
+# IDE settings (usar editorconfig)
+.editorconfig
+
+# Archivos grandes
+*.zip
+*.tar.gz
+*.rar
