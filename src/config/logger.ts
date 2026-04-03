@@ -40,3 +40,8 @@ export function createLogger(): pino.Logger {
 
   return pino(options);
 }
+
+// Exportar instancia por defecto
+const logger = createLogger();
+export default logger;
+

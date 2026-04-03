@@ -2,7 +2,9 @@
   "ts-node": {
     "require": ["tsconfig-paths/register"],
     "transpileOnly": true,
-    "files": true
+    "files": true,
+    "esm": false,
+    "experimentalEsm": false
   },
   "compilerOptions": {
     "target": "ES2020",
@@ -23,14 +25,26 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "baseUrl": ".",
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "removeComments": false,
+    "preserveConstEnums": true,
     "paths": {
       "@/domain/*": ["src/domain/*"],
       "@/app/*": ["src/app/*"],
       "@/infrastructure/*": ["src/infrastructure/*"],
       "@/config/*": ["src/config/*"],
-      "@/shared/*": ["src/shared/*"]
+      "@/shared/*": ["src/shared/*"],
+      "@/handlers/*": ["src/handlers/*"],
+      "@/services/*": ["src/services/*"],
+      "@/models/*": ["src/models/*"],
+      "@/utils/*": ["src/utils/*"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "**/*.spec.ts", "**/*.test.ts"]
 }
