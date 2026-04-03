@@ -97,3 +97,15 @@ yarn.lock
 *.zip
 *.tar.gz
 *.rar
+
+# Documentación (se comparte aparte)
+BAILEYS_INTEGRATION_GUIDE.ts
+CREAR_REPO_GITHUB.md
+EXAMPLES.ts
+GITHUB_SETUP_STATUS.md
+GIT_MANAGEMENT_GUIDE.md
+INTELLIJ_GIT_SETUP.md
+INTELLIJ_VISUAL_GUIDE.md
+QUICK_START.md
+setup-github.ps1
+
