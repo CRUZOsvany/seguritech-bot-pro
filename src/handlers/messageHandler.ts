@@ -1,8 +1,7 @@
-import { WAMessage } from '@whiskeysockets/baileys';
 import logger from '@/config/logger';
 
 export interface MessageHandler {
-  handle(message: WAMessage, senderJid: string): Promise<string | null>;
+  handle(message: string, senderJid: string): Promise<string | null>;
 }
 
 /**
@@ -10,10 +9,8 @@ export interface MessageHandler {
  * Evalúa el contenido del mensaje y determina la respuesta
  */
 export class DefaultMessageHandler implements MessageHandler {
-  async handle(message: WAMessage, senderJid: string): Promise<string | null> {
+  async handle(messageBody: string, senderJid: string): Promise<string | null> {
     try {
-      const messageBody = message.message?.conversation ||
-                         message.message?.extendedTextMessage?.text || '';
 
       logger.info({ senderJid, messageBody }, 'Mensaje recibido');
 

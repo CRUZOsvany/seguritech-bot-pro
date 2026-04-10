@@ -31,7 +31,7 @@ export class BotController {
     this.notificationPort = notificationPort;
   }
 
-  async processMessage(from: string, content: string): Promise<void> {
+  async processMessage(from: string, content: string): Promise<string | null> {
     try {
       this.logger.info(`Mensaje recibido de ${from}: "${content}"`);
 
@@ -48,13 +48,14 @@ export class BotController {
 
       this.logger.info(`Respuesta generada para ${from}`);
 
-      // Aquí el adaptador de notificación enviaría la respuesta
-      // en una versión completa con Baileys
+      // Enviar respuesta via adaptador
       if (response.buttons && response.buttons.length > 0) {
         await this.notificationPort.sendButtons(from, response.message, response.buttons);
       } else {
         await this.notificationPort.sendMessage(from, response.message);
       }
+
+      return response.message;
     } catch (error) {
       this.logger.error(`Error procesando mensaje de ${from}:`, error);
       throw error;

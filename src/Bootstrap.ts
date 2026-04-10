@@ -2,65 +2,72 @@ import pino from 'pino';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
-import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
+import { SqliteUserRepository } from '@/infrastructure/repositories/SqliteUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
+import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
+import { ExpressServer } from '@/infrastructure/server/ExpressServer';
 
 /**
- * Bootstrap de la aplicación
- * Se encarga de:
+ * Bootstrap - API Oficial de WhatsApp (Sin Baileys)
  * - Validar configuración
  * - Crear logger
- * - Instanciar adaptadores
- * - Crear contenedor de DI
- * - Inicializar el bot
+ * - Iniciar Express Server (webhook)
+ * - Iniciar terminal interactiva (pruebas)
  */
 export class Bootstrap {
   private logger!: pino.Logger;
   private container: ApplicationContainer | null = null;
+  private expressServer: ExpressServer | null = null;
+  private readlineAdapter: ReadlineAdapter | null = null;
 
   async run(): Promise<void> {
     try {
-      // 1. Validar configuración
       validateConfig();
-
-      // 2. Crear logger
       this.logger = createLogger();
-      this.logger.info('🚀 SegurITech Bot Pro iniciando...');
-      this.logger.info(`Entorno: ${config.environment}`);
+      this.logger.info('🚀 SegurITech Bot Pro (API Oficial)');
+      this.logger.info(`Entorno: ${config.environment}\n`);
 
-      // 3. Crear adaptadores
-      this.logger.info('⚙️  Inicializando adaptadores...');
-      const userRepository = new InMemoryUserRepository();
+      this.logger.info('⚙️  Inicializando...');
+
+      // Inicializar repositorio SQLite
+      const userRepository = new SqliteUserRepository();
+      await userRepository.initialize();
+
       const notificationPort = new ConsoleNotificationAdapter();
 
-      // 4. Crear contenedor DI
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
         this.logger,
       );
-      this.logger.info('✅ Contenedor de DI creado');
+      this.logger.info('✅ Contenedor DI creado');
 
-      // 5. Inicializar bot
-      await this.initializeBot();
+      // Iniciar Express con webhook
+      this.expressServer = new ExpressServer(this.logger);
+      const botController = this.container.getBotController();
+      this.expressServer.setupRoutes(
+        async (phoneNumber: string, text: string): Promise<string | null> =>
+          await botController.processMessage(phoneNumber, text)
+      );
+      await this.expressServer.start();
 
-      this.logger.info('✅ Bot iniciado correctamente');
+      // Iniciar terminal interactiva
+      this.readlineAdapter = new ReadlineAdapter(this.logger);
+      this.logger.info('✅ Bot iniciado\n');
+      await this.readlineAdapter.start(
+        async (phoneNumber: string, text: string): Promise<string | null> =>
+          await botController.processMessage(phoneNumber, text)
+      );
     } catch (error) {
       if (this.logger) {
-        this.logger.error('❌ Error en el bootstrap:', error);
+        this.logger.error('❌ Error en bootstrap:', error);
       } else {
-        console.error('❌ Error en el bootstrap:', error);
+        console.error('❌ Error:', error);
       }
       process.exit(1);
     }
   }
 
-  private async initializeBot(): Promise<void> {
-    if (!this.container) {
-      throw new Error('Container no inicializado');
-    }
-
-    const botController = this.container.getBotController();
 
   getContainer(): ApplicationContainer {
     if (!this.container) {
