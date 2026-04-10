@@ -62,29 +62,6 @@ export class Bootstrap {
 
     const botController = this.container.getBotController();
 
-    // Simular mensajes de prueba
-    this.logger.info('📨 Simulando conversación de prueba...\n');
-
-    try {
-      // Test 1: Primer saludo
-      await botController.processMessage('+34123456789', 'Hola');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Test 2: Seleccionar opción de menú
-      await botController.processMessage('+34123456789', '1');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      // Test 3: Hacer pedido
-      await botController.processMessage('+34987654321', 'Hola');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await botController.processMessage('+34987654321', '3');
-      await new Promise((resolve) => setTimeout(resolve, 500));
-      await botController.processMessage('+34987654321', '2');
-    } catch (error) {
-      this.logger.error('Error en test de conversación:', error);
-    }
-  }
-
   getContainer(): ApplicationContainer {
     if (!this.container) {
       throw new Error('Container no inicializado');
