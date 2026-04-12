@@ -24,7 +24,7 @@
     "allowSyntheticDefaultImports": true,
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
-    "baseUrl": ".",
+    "baseUrl": "./src",
     "incremental": true,
     "tsBuildInfoFile": "./dist/.tsbuildinfo",
     "noUnusedLocals": false,
@@ -34,15 +34,15 @@
     "removeComments": false,
     "preserveConstEnums": true,
     "paths": {
-      "@/domain/*": ["src/domain/*"],
-      "@/app/*": ["src/app/*"],
-      "@/infrastructure/*": ["src/infrastructure/*"],
-      "@/config/*": ["src/config/*"],
-      "@/shared/*": ["src/shared/*"],
-      "@/handlers/*": ["src/handlers/*"],
-      "@/services/*": ["src/services/*"],
-      "@/models/*": ["src/models/*"],
-      "@/utils/*": ["src/utils/*"]
+      "@/domain/*": ["domain/*"],
+      "@/app/*": ["app/*"],
+      "@/infrastructure/*": ["infrastructure/*"],
+      "@/config/*": ["config/*"],
+      "@/shared/*": ["shared/*"],
+      "@/handlers/*": ["handlers/*"],
+      "@/services/*": ["services/*"],
+      "@/models/*": ["models/*"],
+      "@/utils/*": ["utils/*"]
     }
   },
   "include": ["src/**/*"],

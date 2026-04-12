@@ -46,8 +46,8 @@ export class Bootstrap {
       this.expressServer = new ExpressServer(this.logger);
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
-        async (phoneNumber: string, text: string): Promise<string | null> =>
-          await botController.processMessage(phoneNumber, text)
+        async (tenantId: string, phoneNumber: string, text: string): Promise<string | null> =>
+          await botController.processMessage(tenantId, phoneNumber, text)
       );
       await this.expressServer.start();
 
@@ -55,8 +55,8 @@ export class Bootstrap {
       this.readlineAdapter = new ReadlineAdapter(this.logger);
       this.logger.info('✅ Bot iniciado\n');
       await this.readlineAdapter.start(
-        async (phoneNumber: string, text: string): Promise<string | null> =>
-          await botController.processMessage(phoneNumber, text)
+        async (tenantId: string, phoneNumber: string, text: string): Promise<string | null> =>
+          await botController.processMessage(tenantId, phoneNumber, text)
       );
     } catch (error) {
       if (this.logger) {

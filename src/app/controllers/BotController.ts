@@ -31,13 +31,14 @@ export class BotController {
     this.notificationPort = notificationPort;
   }
 
-  async processMessage(from: string, content: string): Promise<string | null> {
+  async processMessage(tenantId: string, from: string, content: string): Promise<string | null> {
     try {
-      this.logger.info(`Mensaje recibido de ${from}: "${content}"`);
+      this.logger.info(`[Tenant: ${tenantId}] Mensaje recibido de ${from}: "${content}"`);
 
-      // Crear objeto del dominio
+      // Crear objeto del dominio con tenantId
       const message: Message = {
         id: this.generateId(),
+        tenantId, // IMPORTANTE: Incluir tenantId en el mensaje
         from,
         content,
         timestamp: new Date(),
@@ -46,7 +47,7 @@ export class BotController {
       // Ejecutar caso de uso
       const response: BotResponse = await this.handleMessageUseCase.execute(message);
 
-      this.logger.info(`Respuesta generada para ${from}`);
+      this.logger.info(`[Tenant: ${tenantId}] Respuesta generada para ${from}`);
 
       // Enviar respuesta via adaptador
       if (response.buttons && response.buttons.length > 0) {
@@ -57,7 +58,7 @@ export class BotController {
 
       return response.message;
     } catch (error) {
-      this.logger.error(`Error procesando mensaje de ${from}:`, error);
+      this.logger.error(`[Tenant: ${tenantId}] Error procesando mensaje de ${from}:`, error);
       throw error;
     }
   }

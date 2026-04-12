@@ -4,6 +4,7 @@
  */
 export interface Message {
   id: string;
+  tenantId: string;
   from: string;
   content: string;
   timestamp: Date;
@@ -11,10 +12,11 @@ export interface Message {
 
 /**
  * Representa un usuario del chatbot
- * Mantiene el estado conversacional
+ * Mantiene el estado conversacional y está siempre asociado a un tenant específico
  */
 export interface User {
   id: string;
+  tenantId: string;
   phoneNumber: string;
   currentState: UserState;
   createdAt: Date;
@@ -37,6 +39,7 @@ export enum UserState {
  */
 export interface Product {
   id: string;
+  tenantId: string;
   name: string;
   description: string;
   price: number;
@@ -48,6 +51,7 @@ export interface Product {
  */
 export interface Order {
   id: string;
+  tenantId: string;
   userId: string;
   productId: string;
   quantity: number;

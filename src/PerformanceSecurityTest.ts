@@ -110,7 +110,7 @@ export class PerformanceSecurityTest {
 
     try {
       const botController = this.container!.getBotController();
-      await botController.processMessage('+34123456789', 'Hola');
+      await botController.processMessage('test_tenant_01', '+34123456789', 'Hola');
 
       const endTime = process.hrtime.bigint();
       const executionTime = Number(endTime - startTime) / 1_000_000; // Convertir a ms
@@ -138,7 +138,7 @@ export class PerformanceSecurityTest {
 
     try {
       const botController = this.container!.getBotController();
-      await botController.processMessage('+34123456789', '1');
+      await botController.processMessage('test_tenant_01', '+34123456789', '1');
 
       const endTime = process.hrtime.bigint();
       const executionTime = Number(endTime - startTime) / 1_000_000;
@@ -169,7 +169,7 @@ export class PerformanceSecurityTest {
       const botController = this.container!.getBotController();
 
       for (const msg of messages) {
-        await botController.processMessage('+34987654321', msg);
+        await botController.processMessage('test_tenant_01', '+34987654321', msg);
       }
 
       const endTime = process.hrtime.bigint();
@@ -201,7 +201,7 @@ export class PerformanceSecurityTest {
       const botController = this.container!.getBotController();
 
       for (let i = 0; i < 10; i++) {
-        await botController.processMessage(`+34${100000000 + i}`, 'Hola');
+        await botController.processMessage('test_tenant_01', `+34${100000000 + i}`, 'Hola');
       }
 
       const endTime = process.hrtime.bigint();

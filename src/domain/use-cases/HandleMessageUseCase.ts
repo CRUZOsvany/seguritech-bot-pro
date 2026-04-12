@@ -6,9 +6,10 @@ import { UserRepository, NotificationPort } from '../ports';
  * Orquesta la lógica de negocio sin conocer detalles de implementación
  *
  * Responsabilidades:
- * - Procesar el mensaje
+ * - Procesar el mensaje dentro del contexto de un tenant específico
  * - Determinar el estado del usuario
  * - Generar respuesta apropiada
+ * - GARANTIZAR aislamiento: nunca mezclar datos de tenants
  */
 export class HandleMessageUseCase {
   constructor(
@@ -17,12 +18,16 @@ export class HandleMessageUseCase {
   ) {}
 
   async execute(message: Message): Promise<BotResponse> {
-    // Obtener o crear usuario
-    let user = await this.userRepository.findByPhoneNumber(message.from);
+    // CRÍTICO: message.tenantId viene desde el controlador y define el contexto
+    const tenantId = message.tenantId;
+
+    // Obtener o crear usuario dentro del contexto del tenant
+    let user = await this.userRepository.findByPhoneNumber(tenantId, message.from);
 
     if (!user) {
       user = {
         id: this.generateId(),
+        tenantId, // IMPORTANTE: tenantId es obligatorio
         phoneNumber: message.from,
         currentState: UserState.INITIAL,
         createdAt: new Date(),
