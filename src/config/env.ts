@@ -28,7 +28,7 @@ export const config = {
     phoneNumber: process.env.WHATSAPP_PHONE_NUMBER || '',
     sessionName: process.env.WHATSAPP_SESSION_NAME || 'seguritech-session',
     qrTimeout: parseInt(process.env.WHATSAPP_QR_TIMEOUT || '30000', 10),
-    webhookPort: process.env.WEBHOOK_PORT || '3000',
+    webhookPort: process.env.WEBHOOK_PORT || '3001',
     webhookToken: process.env.WEBHOOK_TOKEN || 'tu_token_secreto',
   },
 

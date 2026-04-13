@@ -130,7 +130,7 @@ export class ExpressServer {
   }
 
   async start(port?: number): Promise<void> {
-    const PORT = port || parseInt(config.whatsapp.webhookPort || '3000', 10);
+    const PORT = port || parseInt(config.whatsapp.webhookPort || '3001', 10);
 
     return new Promise((resolve) => {
       this.server = this.app.listen(PORT, () => {
