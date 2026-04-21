@@ -1,0 +1,46 @@
+🧪 FASE 2: VALIDACIÓN FUNCIONAL
+Inicio: 11:02:40 p.m.
+================================
+
+
+> seguritech-bot-pro@1.0.0 dev
+> ts-node src/index.ts
+
+
+╔════════════════════════════════════════════════════════╗
+║         🚀 SIMULADOR MULTI-TENANT LOCAL v2.0 🚀        ║
+║                SegurITech Bot Pro                       ║
+╚════════════════════════════════════════════════════════╝
+
+📋 INFORMACIÓN DEL CONTEXTO:
+   👥 Tenant Actual: papeleria_01
+   📱 Cliente Actual: +56912345678
+
+⌨️  COMANDOS ESPECIALES:
+   /tenant <id>     - Cambiar tenant (ej: /tenant ferreteria_01)
+   /phone <número>  - Cambiar número (ej: /phone +56912345679)
+   /tenants         - Listar tenants utilizados
+   /history         - Ver historial del tenant actual
+   /help            - Mostrar esta ayuda
+   exit             - Salir del simulador
+
+💬 Escribe mensajes y presiona Enter para enviar:
+
+[papeleria_01|+56912345678] Tú: [2026-04-20 23:02:41.630 -0600] [32mINFO[39m: [36m📦 Base de datos SQLite inicializada con aislamiento multi-tenant[39m
+[2026-04-20 23:02:41.627 -0600] [32mINFO[39m: [36m🚀 SegurITech Bot Pro (API Oficial)[39m
+[2026-04-20 23:02:41.627 -0600] [32mINFO[39m: [36mEntorno: development
+[39m
+[2026-04-20 23:02:41.627 -0600] [32mINFO[39m: [36m⚙️  Inicializando...[39m
+[2026-04-20 23:02:41.630 -0600] [32mINFO[39m: [36m✅ Contenedor DI creado[39m
+[2026-04-20 23:02:41.634 -0600] [32mINFO[39m: [36m🚀 Servidor Express escuchando en puerto 3001[39m
+[2026-04-20 23:02:41.634 -0600] [32mINFO[39m: [36m📍 Webhooks disponibles:[39m
+[2026-04-20 23:02:41.634 -0600] [32mINFO[39m: [36m   POST http://localhost:3001/webhook/:tenantId[39m
+[2026-04-20 23:02:41.634 -0600] [32mINFO[39m: [36m   POST http://localhost:3001/webhook (con tenantId en body)[39m
+[2026-04-20 23:02:41.634 -0600] [32mINFO[39m: [36m   GET  http://localhost:3001/health[39m
+[2026-04-20 23:02:41.635 -0600] [32mINFO[39m: [36m✅ Bot iniciado
+[39m
+[2026-04-20 23:02:48.876 -0600] [32mINFO[39m: [36m👋 Terminal cerrada[39m
+
+================================
+Fin: 11:02:50 p.m.
+Duración: 10.10 segundos

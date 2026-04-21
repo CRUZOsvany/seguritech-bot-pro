@@ -234,7 +234,7 @@ DOCUMENTACIÓN:
 ## 📞 REFERENCIAS
 
 - Documentación: `ESTADO_GITHUB_Y_PLAN_TESTING.md`
-- Repositorio: https://github.com/CRUZOsvany/seguritech-bot-pro
+  - Repositorio: https://github.com/CRUZOsvany/seguritech-bot-pro
 - Rama: `main`
 - Versión: 1.0
-
+        
