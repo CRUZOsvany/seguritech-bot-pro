@@ -26,7 +26,10 @@
   "dependencies": {
     "@hapi/boom": "^10.0.1",
     "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.3.1",
+    "express": "^5.2.1",
+    "morgan": "^1.10.1",
     "node-cache": "^5.1.2",
     "pino": "^8.21.0",
     "pino-pretty": "^10.2.3",
