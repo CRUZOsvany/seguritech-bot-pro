@@ -127,7 +127,7 @@ export class ReadlineAdapter {
     const command = parts[0].toLowerCase();
 
     switch (command) {
-    case '/tenant':
+    case '/tenant': {
       if (parts.length < 2) {
         console.log('❌ Uso: /tenant <id>');
         console.log('   Ejemplo: /tenant ferreteria_01\n');
@@ -139,8 +139,9 @@ export class ReadlineAdapter {
       this.currentPhoneNumber = '+56912345678'; // Reset teléfono por defecto
       console.log(`📱 Teléfono resetado a: ${this.currentPhoneNumber}\n`);
       break;
+    }
 
-    case '/phone':
+    case '/phone': {
       if (parts.length < 2) {
         console.log('❌ Uso: /phone <número>');
         console.log('   Ejemplo: /phone +56912345679\n');
@@ -149,6 +150,7 @@ export class ReadlineAdapter {
       this.currentPhoneNumber = parts.slice(1).join('');
       console.log(`\n✅ Cliente cambiado a: ${this.currentPhoneNumber}\n`);
       break;
+    }
 
     case '/tenants':
       this.showTenantList();
@@ -192,7 +194,7 @@ export class ReadlineAdapter {
       console.log('│ (Sin historial)');
     } else {
       history.forEach((entry, index) => {
-        console.log(`│`);
+        console.log('│');
         console.log(`│ [${index + 1}] 📱 ${entry.phone}`);
         console.log(`│     👤 Tú: ${entry.message}`);
         console.log(`│     🤖 Bot: ${entry.response.substring(0, 60)}${entry.response.length > 60 ? '...' : ''}`);

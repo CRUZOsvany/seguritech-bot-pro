@@ -135,7 +135,7 @@ export class ExpressServer {
     return new Promise((resolve) => {
       this.server = this.app.listen(PORT, () => {
         this.logger.info(`🚀 Servidor Express escuchando en puerto ${PORT}`);
-        this.logger.info(`📍 Webhooks disponibles:`);
+        this.logger.info('📍 Webhooks disponibles:');
         this.logger.info(`   POST http://localhost:${PORT}/webhook/:tenantId`);
         this.logger.info(`   POST http://localhost:${PORT}/webhook (con tenantId en body)`);
         this.logger.info(`   GET  http://localhost:${PORT}/health`);

@@ -1,3 +1,4 @@
+
 import { User, UserState } from '@/domain/entities';
 import { UserRepository } from '@/domain/ports';
 import sqlite3 from 'sqlite3';
@@ -13,29 +14,61 @@ export class SqliteUserRepository implements UserRepository {
 
   // Inicializa la conexión y crea la tabla si no existe
   async initialize(): Promise<void> {
-    this.db = new sqlite3.Database('./database.sqlite', (err) => {
-      if (err) {
-        logger.error('Error abriendo DB:', err);
-        throw err;
-      }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    return new Promise((resolve, reject) => {
+      this.db = new sqlite3.Database('./database.sqlite', (err: Error | null) => {
+        if (err) {
+          logger.error('Error abriendo DB:', err);
+          reject(err);
+        } else {
+          this.db.exec(`
+            CREATE TABLE IF NOT EXISTS users (
+              id TEXT,
+              tenant_id TEXT NOT NULL,
+              phone_number TEXT NOT NULL,
+              current_state TEXT,
+              created_at DATETIME,
+              updated_at DATETIME,
+              PRIMARY KEY (tenant_id, id),
+              UNIQUE (tenant_id, phone_number)
+            );
+            CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
+            CREATE INDEX IF NOT EXISTS idx_users_tenant_phone ON users(tenant_id, phone_number);
+          `, (execErr: Error | null) => {
+            if (execErr) {
+              logger.error('Error creando tabla:', execErr);
+              reject(execErr);
+            } else {
+              logger.info('📦 Base de datos SQLite inicializada con aislamiento multi-tenant');
+              resolve();
+            }
+          });
+        }
+      });
     });
-
-    await this.db.exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT,
-        tenant_id TEXT NOT NULL,
-        phone_number TEXT NOT NULL,
-        current_state TEXT,
-        created_at DATETIME,
-        updated_at DATETIME,
-        PRIMARY KEY (tenant_id, id),
-        UNIQUE (tenant_id, phone_number)
-      );
-      CREATE INDEX IF NOT EXISTS idx_users_tenant_id ON users(tenant_id);
-      CREATE INDEX IF NOT EXISTS idx_users_tenant_phone ON users(tenant_id, phone_number);
-    `);
-
-    logger.info('📦 Base de datos SQLite inicializada con aislamiento multi-tenant');
   }
 
   async save(user: User): Promise<void> {
@@ -71,7 +104,7 @@ export class SqliteUserRepository implements UserRepository {
   }
 
   // Helper para convertir el registro de la DB a tu Entidad de Dominio
-  private mapRowToUser(row: any): User {
+  private mapRowToUser(row: Record<string, any>): User {
     return {
       id: row.id,
       tenantId: row.tenant_id,
