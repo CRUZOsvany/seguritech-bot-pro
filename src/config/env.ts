@@ -32,6 +32,14 @@ export const config = {
     webhookToken: process.env.WEBHOOK_TOKEN || 'tu_token_secreto',
   },
 
+  // Meta Cloud API (WhatsApp oficial)
+  meta: {
+    verifyToken: process.env.META_VERIFY_TOKEN || 'tu_token_secreto',
+    phoneNumberId: process.env.META_PHONE_NUMBER_ID || '',
+    accessToken: process.env.META_ACCESS_TOKEN || '',
+    apiUrl: process.env.META_API_URL || 'https://graph.instagram.com/v19.0',
+  },
+
   // Bot
   bot: {
     name: process.env.BOT_NAME || 'SegurITech Bot',
@@ -61,13 +69,17 @@ export const config = {
  * Se ejecuta al iniciar la aplicación
  */
 export function validateConfig(): void {
-  const required = ['WHATSAPP_PHONE_NUMBER'];
+  const requiredDev = ['WHATSAPP_PHONE_NUMBER'];
+  const requiredMeta = ['META_PHONE_NUMBER_ID', 'META_ACCESS_TOKEN', 'META_VERIFY_TOKEN'];
 
   if (config.isProduction) {
-    const missing = required.filter((key) => !process.env[key]);
-    if (missing.length > 0) {
+    const missingDev = requiredDev.filter((key) => !process.env[key]);
+    const missingMeta = requiredMeta.filter((key) => !process.env[key]);
+
+    const allMissing = [...missingDev, ...missingMeta];
+    if (allMissing.length > 0) {
       throw new Error(
-        `Configuración incompleta. Variables faltantes: ${missing.join(', ')}`,
+        `Configuración incompleta. Variables faltantes: ${allMissing.join(', ')}`,
       );
     }
   }

@@ -1,3 +1,5 @@
+/* eslint-disable no-console */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Test Visualization Helpers
  * Proporciona funciones para imprimir tests de manera visual y clara

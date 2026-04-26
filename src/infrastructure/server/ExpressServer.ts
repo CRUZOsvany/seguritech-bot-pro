@@ -1,25 +1,41 @@
 import express, { Express, Request, Response } from 'express';
 import pino from 'pino';
 import { config } from '@/config/env';
+import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 
 /**
  * Servidor Express con webhook para WhatsApp Cloud API
  * POST /webhook - Recibe mensajes de WhatsApp o pruebas locales
+ *
+ * Integración con MetaWhatsAppAdapter:
+ * - Verifywebhook (GET) → Handshake con Meta
+ * - parseIncomingMessage (POST) → Traducir payload de Meta a formato interno
  */
 export class ExpressServer {
   private app: Express;
   private logger: pino.Logger;
   private server: any;
+  private metaAdapter?: MetaWhatsAppAdapter;
 
-  constructor(logger: pino.Logger) {
+  constructor(logger: pino.Logger, metaAdapter?: MetaWhatsAppAdapter) {
     this.logger = logger;
     this.app = express();
+    this.metaAdapter = metaAdapter;
     this.setupMiddleware();
   }
 
   private setupMiddleware(): void {
     this.app.use(express.json());
     this.app.use(express.urlencoded({ extended: true }));
+  }
+
+  /**
+   * Inyectar MetaWhatsAppAdapter después de la construcción
+   * Útil si se crea ExpressServer antes de tener el adaptador disponible
+   */
+  setMetaAdapter(adapter: MetaWhatsAppAdapter): void {
+    this.metaAdapter = adapter;
+    this.logger.info('✅ MetaWhatsAppAdapter inyectado en ExpressServer');
   }
 
   setupRoutes(
@@ -29,6 +45,29 @@ export class ExpressServer {
     this.app.post('/webhook/:tenantId', async (req: Request, res: Response): Promise<void> => {
       try {
         const tenantId = String(req.params.tenantId);
+
+        // Si hay un metadata de Meta, parsear usando MetaWhatsAppAdapter
+        if (this.metaAdapter && req.body.entry) {
+          const parsed = this.metaAdapter.parseIncomingMessage(req.body);
+          if (!parsed) {
+            this.logger.debug({ tenantId }, 'ℹ️  Webhook de Meta recibido pero sin mensajes (probablemente delivery receipt)');
+            res.json({ success: true, message: 'Webhook recibido' });
+            return;
+          }
+
+          const { from, content } = parsed;
+          const response = await processMessage(tenantId, from, content);
+
+          res.json({
+            success: true,
+            tenantId,
+            response: response || null,
+            timestamp: new Date().toISOString(),
+          });
+          return;
+        }
+
+        // Fallback: formato simplificado para pruebas locales
         const { phoneNumber, message } = req.body;
 
         if (!tenantId || !phoneNumber || !message) {
@@ -40,7 +79,7 @@ export class ExpressServer {
 
         this.logger.info(
           { tenantId, phoneNumber, message },
-          '📨 Mensaje recibido via webhook'
+          '📨 Mensaje recibido via webhook (formato local)'
         );
 
         const response = await processMessage(tenantId, phoneNumber, message);
@@ -61,6 +100,24 @@ export class ExpressServer {
     // NOTA: En producción, requerir siempre tenantId
     this.app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
       try {
+        // Si hay metadata de Meta, parsear usando MetaWhatsAppAdapter
+        if (this.metaAdapter && req.body.entry) {
+          const parsed = this.metaAdapter.parseIncomingMessage(req.body);
+          if (!parsed) {
+            this.logger.debug('ℹ️  Webhook de Meta recibido pero sin mensajes (probablemente delivery receipt)');
+            res.json({ success: true, message: 'Webhook recibido' });
+            return;
+          }
+
+          const { from, content } = parsed;
+          // Sin tenantId explícito, retornar error
+          res.status(400).json({
+            error: 'Webhook de Meta recibido pero sin tenantId. Use POST /webhook/:tenantId',
+          });
+          return;
+        }
+
+        // Fallback: formato simplificado para pruebas locales
         const { tenantId, phoneNumber, message } = req.body;
 
         if (!tenantId || !phoneNumber || !message) {
@@ -94,37 +151,27 @@ export class ExpressServer {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // GET /webhook - Verificación de Webhook de Meta (requerido)
-    // Soporta verificación tanto en /webhook como en /webhook/:tenantId
+    // GET /webhook - Verificación de Webhook de Meta (Handshake)
+    // Delegado a MetaWhatsAppAdapter.verifyWebhook()
     this.app.get('/webhook', (req: Request, res: Response) => {
-      const mode = req.query['hub.mode'];
-      const token = req.query['hub.verify_token'];
-      const challenge = req.query['hub.challenge'];
-
-      // En producción, verificar contra variable de entorno
-      if (mode === 'subscribe' && token === 'tu_token_secreto') {
-        this.logger.info('✅ Webhook verificado por Meta');
-        res.status(200).send(String(challenge));
+      if (this.metaAdapter) {
+        this.metaAdapter.verifyWebhook(req, res);
       } else {
-        this.logger.warn('❌ Token de verificación incorrecto');
-        res.sendStatus(403);
+        this.logger.warn('⚠️  MetaWhatsAppAdapter no inyectado. Verificación fallará.');
+        res.sendStatus(503);
       }
     });
 
     // GET /webhook/:tenantId - Verificación de Webhook de Meta (multi-tenant)
+    // Nota: Meta no envía tenantId en el handshake, así que lo ignoramos
     this.app.get('/webhook/:tenantId', (req: Request, res: Response) => {
       const tenantId = String(req.params.tenantId);
-      const mode = req.query['hub.mode'];
-      const token = req.query['hub.verify_token'];
-      const challenge = req.query['hub.challenge'];
-
-      // En producción, verificar contra variable de entorno
-      if (mode === 'subscribe' && token === 'tu_token_secreto') {
-        this.logger.info(`✅ Webhook verificado por Meta para tenant: ${tenantId}`);
-        res.status(200).send(String(challenge));
+      if (this.metaAdapter) {
+        this.logger.debug({ tenantId }, 'ℹ️  Handshake recibido en /webhook/:tenantId (Meta ignora tenantId)');
+        this.metaAdapter.verifyWebhook(req, res);
       } else {
-        this.logger.warn(`❌ Token de verificación incorrecto para tenant: ${tenantId}`);
-        res.sendStatus(403);
+        this.logger.warn('⚠️  MetaWhatsAppAdapter no inyectado. Verificación fallará.');
+        res.sendStatus(503);
       }
     });
   }

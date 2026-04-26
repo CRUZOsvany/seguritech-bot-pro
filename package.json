@@ -12,7 +12,12 @@
     "stop:pm2": "pm2 stop all",
     "logs": "pm2 logs",
     "lint": "eslint src --ext .ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "jest --detectOpenHandles --forceExit --runInBand",
+    "test:watch": "jest --watch --detectOpenHandles",
+    "test:coverage": "jest --coverage --detectOpenHandles --forceExit",
+    "test:integration": "jest --testPathPattern=integration --detectOpenHandles --forceExit --runInBand",
+    "test:multiTenant": "jest multiTenantFlow --detectOpenHandles --forceExit --runInBand --verbose"
   },
   "keywords": [
     "whatsapp",
@@ -39,15 +44,20 @@
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
+    "@types/jest": "^30.0.0",
     "@types/morgan": "^1.9.10",
     "@types/node": "^20.19.37",
     "@types/qrcode-terminal": "^0.12.2",
     "@types/sqlite3": "^3.1.11",
+    "@types/supertest": "^7.2.0",
     "@typescript-eslint/eslint-plugin": "^6.13.0",
     "@typescript-eslint/parser": "^6.13.0",
     "eslint": "^8.54.0",
+    "jest": "^30.3.0",
     "pm2": "^5.3.0",
     "sass": "^1.99.0",
+    "supertest": "^7.2.2",
+    "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"

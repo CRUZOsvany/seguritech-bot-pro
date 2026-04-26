@@ -322,20 +322,28 @@ describe('🏢 Multi-Tenant Isolation Test Suite', () => {
     console.log('\n');
     printInfo('Validando integridad de datos...');
 
-    // Debe haber exactamente 4 registros
-    expect(allUsers).toHaveLength(4);
-    printTestResult('Cantidad de registros correcta', true, '4 registros esperados');
+    // Verificamos que hay AT LEAST 4 registros (por los tests anteriores puede haber más)
+    expect(allUsers.length).toBeGreaterThanOrEqual(4);
+    printTestResult('Base de datos contiene registros', true, `${allUsers.length} registros totales`);
+
+    // Contar solo los usuarios de los 2 tenants de este test
+    const test3Users = allUsers.filter(u => 
+      (u.tenant_id === tenantA || u.tenant_id === tenantB)
+    );
+    
+    expect(test3Users).toHaveLength(4);
+    printTestResult('Cantidad de registros en TEST 3', true, '4 registros esperados');
 
     // Cada combinación (tenant, phone) debe ser única
     const uniqueKeys = new Set(
-      allUsers.map(u => `${u.tenant_id}#${u.phone_number}`)
+      test3Users.map(u => `${u.tenant_id}#${u.phone_number}`)
     );
     expect(uniqueKeys.size).toBe(4);
     printTestResult('No hay duplicados', true, '4 combinaciones únicas');
 
     // Verificar que cada tenant vea solo sus datos
-    const usersInTenantA = allUsers.filter(u => u.tenant_id === tenantA);
-    const usersInTenantB = allUsers.filter(u => u.tenant_id === tenantB);
+    const usersInTenantA = test3Users.filter(u => u.tenant_id === tenantA);
+    const usersInTenantB = test3Users.filter(u => u.tenant_id === tenantB);
 
     expect(usersInTenantA).toHaveLength(2);
     expect(usersInTenantB).toHaveLength(2);
@@ -343,10 +351,10 @@ describe('🏢 Multi-Tenant Isolation Test Suite', () => {
       `TenantA: 2 usuarios, TenantB: 2 usuarios`
     );
 
-    // Tabla final
+    // Tabla final (solo los de este test)
     console.log('\n');
-    printTable('📊 Estado final de BD (todas las transacciones)', 
-      allUsers.map(u => ({
+    printTable('📊 Estado final de BD (TEST 3)', 
+      test3Users.map(u => ({
         tenant: u.tenant_id,
         phone: u.phone_number,
         state: u.current_state,
