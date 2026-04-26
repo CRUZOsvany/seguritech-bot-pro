@@ -1,26 +1,45 @@
 {
   "name": "securitech-bot-pro",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "next": "16.2.3",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "next-auth": "^4.24.0",
+    "react-hook-form": "^7.52.0",
+    "zod": "^3.22.4",
+    "@hookform/resolvers": "^3.3.4",
+    "@supabase/supabase-js": "^2.45.0",
+    "axios": "^1.7.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "date-fns": "^3.0.0",
+    "lucide-react": "^0.408.0",
+    "tailwind-merge": "^2.3.0",
+    "tailwindcss-animate": "^1.0.6",
+    "pdfjs-dist": "^4.0.0",
+    "uuid": "^9.0.1",
+    "js-cookie": "^3.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/js-cookie": "^3.0.6",
+    "@types/uuid": "^9.0.7",
     "eslint": "^9",
     "eslint-config-next": "16.2.3",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "postcss": "^8"
   }
 }
