@@ -2,6 +2,7 @@ import express, { Express, Request, Response } from 'express';
 import pino from 'pino';
 import { config } from '@/config/env';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
+import { tenantLookupService } from '@/infrastructure/services/TenantLookupService';
 
 /**
  * Servidor Express con webhook para WhatsApp Cloud API
@@ -97,7 +98,8 @@ export class ExpressServer {
     });
 
     // POST /webhook - Compatibilidad con llamadas sin tenantId
-    // NOTA: En producción, requerir siempre tenantId
+    // Intenta resolver tenantId usando number->tenant mapping de Supabase
+    // Meta SIEMPRE recibe HTTP 200, nunca 400 o 500
     this.app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
       try {
         // Si hay metadata de Meta, parsear usando MetaWhatsAppAdapter
@@ -110,9 +112,36 @@ export class ExpressServer {
           }
 
           const { from, content } = parsed;
-          // Sin tenantId explícito, retornar error
-          res.status(400).json({
-            error: 'Webhook de Meta recibido pero sin tenantId. Use POST /webhook/:tenantId',
+
+          // Intentar resolver tenantId usando el número de teléfono (businessNumber)
+          const resolvedTenantId = await tenantLookupService.lookupTenantByPhone(from);
+
+          if (!resolvedTenantId) {
+            // No se encontró mapping - loguear warning pero retornar 200 a Meta
+            this.logger.warn(
+              { phoneNumber: from },
+              '⚠️  Webhook de Meta sin tenantId resolvible. '
+              + 'Configura phone_tenant_map con este número de teléfono.',
+            );
+            res.json({
+              success: true,
+              message: 'Webhook recibido pero sin tenant mapping para este número',
+            });
+            return;
+          }
+
+          this.logger.info(
+            { tenantId: resolvedTenantId, phoneNumber: from, content },
+            '📨 Mensaje de Meta procesado (tenantId resuelto vía phone_tenant_map)',
+          );
+
+          const response = await processMessage(resolvedTenantId, from, content);
+
+          res.json({
+            success: true,
+            tenantId: resolvedTenantId,
+            response: response || null,
+            timestamp: new Date().toISOString(),
           });
           return;
         }
@@ -142,7 +171,8 @@ export class ExpressServer {
         });
       } catch (error) {
         this.logger.error({ error }, '❌ Error en webhook');
-        res.status(500).json({ error: 'Internal server error' });
+        // Meta SIEMPRE recibe 200, incluso si hay error interno
+        res.json({ success: false, message: 'Error procesando webhook' });
       }
     });
 

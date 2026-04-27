@@ -98,6 +98,12 @@ yarn.lock
 *.tar.gz
 *.rar
 
-# Carpetas duplicadas
+# Carpetas duplicadas y temporales
 seguritech-bot-pro/
+OLD_securitech-bot-pro_backup/
+.temp_subcarpeta/
+.temp_migration/
 
+
+# Variables de frontend con secretos
+env_frontend.local

@@ -1,68 +1,43 @@
 {
-  "name": "seguritech-bot-pro",
+  "name": "seguritech-bot-pro-monorepo",
   "version": "1.0.0",
-  "description": "Professional WhatsApp Chatbot with Hexagonal Architecture",
+  "description": "SegurITech Bot Pro - Monorepo with Backend (Node.js) and Frontend (Next.js)",
   "private": true,
-  "main": "dist/index.js",
+  "workspaces": [
+    "backend",
+    "frontend"
+  ],
   "scripts": {
-    "dev": "ts-node src/index.ts",
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "start:pm2": "pm2 start ecosystem.config.js",
-    "stop:pm2": "pm2 stop all",
-    "logs": "pm2 logs",
-    "lint": "eslint src --ext .ts",
-    "type-check": "tsc --noEmit",
-    "test": "jest --detectOpenHandles --forceExit --runInBand",
-    "test:watch": "jest --watch --detectOpenHandles",
-    "test:coverage": "jest --coverage --detectOpenHandles --forceExit",
-    "test:integration": "jest --testPathPattern=integration --detectOpenHandles --forceExit --runInBand",
-    "test:multiTenant": "jest multiTenantFlow --detectOpenHandles --forceExit --runInBand --verbose"
+    "dev": "npm run --workspace backend dev",
+    "dev:frontend": "npm run --workspace frontend dev",
+    "dev:both": "concurrently \"npm run --workspace backend dev\" \"npm run --workspace frontend dev\"",
+    "build": "npm run --workspace backend build && npm run --workspace frontend build",
+    "build:backend": "npm run --workspace backend build",
+    "build:frontend": "npm run --workspace frontend build",
+    "start": "npm run --workspace backend start",
+    "start:frontend": "npm run --workspace frontend start",
+    "lint": "npm run --workspace backend lint",
+    "test": "npm run --workspace backend test",
+    "test:multiTenant": "npm run --workspace backend test:multiTenant",
+    "test:coverage": "npm run --workspace backend test:coverage",
+    "install:all": "npm install && npm install --workspace backend && npm install --workspace frontend"
   },
   "keywords": [
     "whatsapp",
     "chatbot",
-    "baileys",
     "typescript",
-    "hexagonal"
+    "next.js",
+    "hexagonal",
+    "monorepo",
+    "saas"
   ],
   "author": "SegurITech",
   "license": "MIT",
-  "dependencies": {
-    "@hapi/boom": "^10.0.1",
-    "@whiskeysockets/baileys": "^7.0.0-rc.9",
-    "cookie-parser": "^1.4.7",
-    "dotenv": "^16.3.1",
-    "express": "^5.2.1",
-    "morgan": "^1.10.1",
-    "node-cache": "^5.1.2",
-    "pino": "^8.21.0",
-    "pino-pretty": "^10.2.3",
-    "qrcode-terminal": "^0.12.0",
-    "sqlite3": "^6.0.1"
-  },
   "devDependencies": {
-    "@types/cookie-parser": "^1.4.10",
-    "@types/express": "^5.0.6",
-    "@types/jest": "^30.0.0",
-    "@types/morgan": "^1.9.10",
-    "@types/node": "^20.19.37",
-    "@types/qrcode-terminal": "^0.12.2",
-    "@types/sqlite3": "^3.1.11",
-    "@types/supertest": "^7.2.0",
-    "@typescript-eslint/eslint-plugin": "^6.13.0",
-    "@typescript-eslint/parser": "^6.13.0",
-    "eslint": "^8.54.0",
-    "jest": "^30.3.0",
-    "pm2": "^5.3.0",
-    "sass": "^1.99.0",
-    "supertest": "^7.2.2",
-    "ts-jest": "^29.4.9",
-    "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
-    "typescript": "^5.9.3"
+    "concurrently": "^8.2.2"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   }
 }
