@@ -52,6 +52,10 @@ export class HandleMessageUseCase {
       response = await this.handleMakingOrderState(message, user);
       break;
 
+    case UserState.CONFIRMING_ORDER:
+      response = await this.handleConfirmingOrderState(message, user);
+      break;
+
     default:
       response = this.getDefaultResponse();
     }
@@ -66,7 +70,7 @@ export class HandleMessageUseCase {
     return response;
   }
 
-  private async handleInitialState(message: Message, user: User): Promise<BotResponse> {
+  private async handleInitialState(message: Message, _user: User): Promise<BotResponse> {
     const content = message.content.toLowerCase().trim();
 
     // Detectar saludo
@@ -81,7 +85,7 @@ export class HandleMessageUseCase {
     return this.getDefaultResponse();
   }
 
-  private async handleMenuState(message: Message, user: User): Promise<BotResponse> {
+  private async handleMenuState(message: Message, _user: User): Promise<BotResponse> {
     const content = message.content.trim();
 
     switch (content) {
@@ -114,7 +118,7 @@ export class HandleMessageUseCase {
     }
   }
 
-  private async handleMakingOrderState(message: Message, user: User): Promise<BotResponse> {
+  private async handleMakingOrderState(message: Message, _user: User): Promise<BotResponse> {
     const content = message.content.trim();
 
     const productMap: { [key: string]: string } = {
@@ -134,6 +138,35 @@ export class HandleMessageUseCase {
     return {
       message: 'Por favor, elige una opción válida.',
       buttons: ['1. Básico', '2. Premium', '3. Enterprise'],
+    };
+  }
+
+  private async handleConfirmingOrderState(message: Message, _user: User): Promise<BotResponse> {
+    const content = message.content.toLowerCase().trim();
+
+    // Validar respuesta: sí/confirmar
+    if (content === 'sí' || content === 'si' || content.includes('confirmar')) {
+      const orderId = this.generateId();
+      return {
+        message: `✅ ¡Pedido confirmado!\n\nNúmero de pedido: #${orderId}\n\nTe contacteremos pronto con los detalles de entrega. ¿Hay algo más en lo que pueda ayudarte?`,
+        buttons: ['Volver al menú', 'Salir'],
+        nextState: UserState.MENU,
+      };
+    }
+
+    // Validar respuesta: no/cancelar
+    if (content === 'no' || content.includes('cancelar')) {
+      return {
+        message: '❌ Pedido cancelado. Volviendo al menú principal...',
+        buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
+        nextState: UserState.MENU,
+      };
+    }
+
+    // Respuesta inválida: pedir confirmación de nuevo
+    return {
+      message: '⚠️ No entiendo tu respuesta. Por favor, responde con "Sí, confirmar" o "No, cancelar".',
+      buttons: ['Sí, confirmar', 'No, cancelar'],
     };
   }
 
