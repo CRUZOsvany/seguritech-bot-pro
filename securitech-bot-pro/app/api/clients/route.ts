@@ -18,7 +18,7 @@ import { UserRole, CreateClientPayload } from '@/lib/types';
  */
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
+    const session = await getServerSession(authConfig) as any;
 
     if (!session?.user) {
       return NextResponse.json(
@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
+    const session = await getServerSession(authConfig) as any;
 
     if (!session?.user) {
       return NextResponse.json(
@@ -254,4 +254,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

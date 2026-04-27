@@ -10,10 +10,10 @@ import { LoginSchema, LoginFormData } from '@/lib/validators';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import { useForm } from 'react-hook-form';
 
-export default function LoginPage() {
+function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
@@ -118,6 +118,14 @@ export default function LoginPage() {
         © 2025 SegurITech. Todos los derechos reservados.
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Cargando...</div>}>
+      <LoginContent />
+    </Suspense>
   );
 }
 

@@ -133,7 +133,7 @@ export const CatalogUploadSchema = z.object({
 });
 
 // ===== SECCIÓN 5: ALERTAS Y SERVICIO URGENTE =====
-export const UrgentServiceSchema = z.object({
+const UrgentServiceBaseSchema = z.object({
   tiene_servicio_urgente: z.boolean().default(false),
   
   whatsapp_alertas_urgentes: phoneNumberSchema.optional().or(z.literal('')),
@@ -147,7 +147,9 @@ export const UrgentServiceSchema = z.object({
     .max(50, 'El tiempo no puede exceder 50 caracteres')
     .optional()
     .default(''),
-}).refine(
+});
+
+export const UrgentServiceSchema = UrgentServiceBaseSchema.refine(
   (data) => !data.tiene_servicio_urgente || data.whatsapp_alertas_urgentes,
   {
     message: 'Se requiere número de WhatsApp para alertas urgentes',
@@ -167,8 +169,14 @@ export const CreateClientFormSchema = z.object({
   ...BotConfigSchema.shape,
   
   // Sección 5
-  ...UrgentServiceSchema.shape,
-});
+  ...UrgentServiceBaseSchema.shape,
+}).refine(
+  (data: any) => !data.tiene_servicio_urgente || data.whatsapp_alertas_urgentes,
+  {
+    message: 'Se requiere número de WhatsApp para alertas urgentes',
+    path: ['whatsapp_alertas_urgentes'],
+  }
+);
 
 // Tipo inferido del esquema para TypeScript
 export type CreateClientFormData = z.infer<typeof CreateClientFormSchema>;

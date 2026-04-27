@@ -6,9 +6,9 @@
 
 import { Button } from '@/components/ui/Button';
 import { useRouter, useSearchParams } from 'next/navigation';
-import React from 'react';
+import React, { Suspense } from 'react';
 
-export default function AuthErrorPage() {
+function AuthErrorContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const error = searchParams.get('error') || 'Ocurrió un error';
@@ -36,6 +36,14 @@ export default function AuthErrorPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function AuthErrorPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <AuthErrorContent />
+    </Suspense>
   );
 }
 

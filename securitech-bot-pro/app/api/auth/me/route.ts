@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession(authConfig);
+    const session = await getServerSession(authConfig) as any;
 
     if (!session) {
       return NextResponse.json(
@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       status: 'success',
-      data: session.user,
+      data: session?.user,
     });
   } catch (error) {
     console.error('Error en /api/auth/me:', error);

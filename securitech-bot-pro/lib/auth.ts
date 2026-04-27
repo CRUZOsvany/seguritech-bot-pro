@@ -3,7 +3,7 @@
  * Soporta MultiTenant con roles (SuperAdmin, AdminOperador)
  */
 
-import type { NextAuthConfig } from 'next-auth';
+import NextAuthConfig from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
 import { createServiceClient } from './supabase';
 import { UserRole } from './types';
@@ -54,33 +54,33 @@ async function authenticateUser(email: string, password: string) {
   }
 }
 
-export const authConfig: NextAuthConfig = {
+export const authConfig = {
   // Usar JWT para sesiones sin estado
   session: {
-    strategy: 'jwt',
+    strategy: 'jwt' as const,
     maxAge: 24 * 60 * 60, // 24 horas
   },
 
   // Configurar cookies
   cookies: {
     sessionToken: {
-      name: 'next-auth.session-token',
-      options: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-      },
-    },
-    callbackUrl: {
-      name: 'next-auth.callback-url',
-      options: {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        path: '/',
-      },
-    },
+       name: 'next-auth.session-token',
+       options: {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === 'production',
+         sameSite: 'lax' as const,
+         path: '/',
+       },
+     },
+     callbackUrl: {
+       name: 'next-auth.callback-url',
+       options: {
+         httpOnly: true,
+         secure: process.env.NODE_ENV === 'production',
+         sameSite: 'lax' as const,
+         path: '/',
+       },
+     },
   },
 
   // Providers
@@ -119,7 +119,7 @@ export const authConfig: NextAuthConfig = {
 
   // Callbacks
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: any) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
@@ -130,18 +130,18 @@ export const authConfig: NextAuthConfig = {
       return token;
     },
 
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
-        session.user.name = token.name as string;
-        session.user.role = token.role as UserRole;
-        session.user.tenantId = token.tenantId as string | undefined;
+    async session({ session, token }: any) {
+      if ((session as any)?.user) {
+        (session as any).user.id = token.id as string;
+        (session as any).user.email = token.email as string;
+        (session as any).user.name = token.name as string;
+        (session as any).user.role = token.role as UserRole;
+        (session as any).user.tenantId = token.tenantId as string | undefined;
       }
       return session;
     },
 
-    async redirect({ url, baseUrl }) {
+    async redirect({ url, baseUrl }: any) {
       // Permitir redirecciones relativas
       if (url.startsWith('/')) return `${baseUrl}${url}`;
 
