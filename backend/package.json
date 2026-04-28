@@ -6,6 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node src/index.ts",
+    "admin": "ts-node -r tsconfig-paths/register src/infrastructure/cli/admin.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "start:pm2": "pm2 start ecosystem.config.js",

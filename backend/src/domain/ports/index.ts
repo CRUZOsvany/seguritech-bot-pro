@@ -11,6 +11,7 @@ export interface UserRepository {
   findById(tenantId: string, id: string): Promise<User | null>;
   findByPhoneNumber(tenantId: string, phoneNumber: string): Promise<User | null>;
   update(user: User): Promise<void>;
+  resetUserState(tenantId: string, phoneNumber: string): Promise<void>;
 }
 
 /**

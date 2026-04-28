@@ -100,6 +100,20 @@ export class InMemoryTestRepository implements UserRepository {
     });
   }
 
+  async resetUserState(tenantId: string, phoneNumber: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const now = new Date().toISOString();
+      this.db.run(
+        'UPDATE users SET current_state = ?, updated_at = ? WHERE tenant_id = ? AND phone_number = ?',
+        ['initial', now, tenantId, phoneNumber],
+        (err: Error | null) => {
+          if (err) reject(err);
+          else resolve();
+        }
+      );
+    });
+  }
+
   private mapRowToUser(row: Record<string, any>): User {
     return {
       id: row.id,

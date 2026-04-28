@@ -1,4 +1,4 @@
-import { User } from '@/domain/entities';
+import { User, UserState } from '@/domain/entities';
 import { UserRepository } from '@/domain/ports';
 
 /**
@@ -14,13 +14,14 @@ export class InMemoryUserRepository implements UserRepository {
     console.log(`[UserRepository] Usuario guardado: ${user.phoneNumber}`);
   }
 
-  async findById(id: string): Promise<User | null> {
-    return this.users.get(id) || null;
+  async findById(tenantId: string, id: string): Promise<User | null> {
+    const user = this.users.get(id);
+    return user && user.tenantId === tenantId ? user : null;
   }
 
-  async findByPhoneNumber(phoneNumber: string): Promise<User | null> {
+  async findByPhoneNumber(tenantId: string, phoneNumber: string): Promise<User | null> {
     for (const user of this.users.values()) {
-      if (user.phoneNumber === phoneNumber) {
+      if (user.tenantId === tenantId && user.phoneNumber === phoneNumber) {
         return user;
       }
     }
@@ -32,5 +33,22 @@ export class InMemoryUserRepository implements UserRepository {
       this.users.set(user.id, user);
       console.log(`[UserRepository] Usuario actualizado: ${user.phoneNumber} -> ${user.currentState}`);
     }
+  }
+
+  async resetUserState(tenantId: string, phoneNumber: string): Promise<void> {
+    for (const user of this.users.values()) {
+      if (user.tenantId === tenantId && user.phoneNumber === phoneNumber) {
+        user.currentState = UserState.INITIAL;
+        user.updatedAt = new Date();
+        this.users.set(user.id, user);
+        console.log(`[UserRepository] Estado reseteado: ${phoneNumber} -> initial`);
+        return;
+      }
+    }
+  }
+
+  // Para tests: limpiar todos los datos
+  clear(): void {
+    this.users.clear();
   }
 }

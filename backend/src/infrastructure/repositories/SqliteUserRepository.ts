@@ -103,6 +103,15 @@ export class SqliteUserRepository implements UserRepository {
     logger.debug(`[SqliteRepo] Usuario actualizado en tenant ${user.tenantId}: ${user.phoneNumber} -> ${user.currentState}`);
   }
 
+  async resetUserState(tenantId: string, phoneNumber: string): Promise<void> {
+    const now = new Date().toISOString();
+    await this.db.run(
+      'UPDATE users SET current_state = ?, updated_at = ? WHERE tenant_id = ? AND phone_number = ?',
+      ['initial', now, tenantId, phoneNumber]
+    );
+    logger.debug(`[SqliteRepo] Estado reseteado para usuario en tenant ${tenantId}: ${phoneNumber} -> initial`);
+  }
+
   // Helper para convertir el registro de la DB a tu Entidad de Dominio
   private mapRowToUser(row: Record<string, any>): User {
     return {

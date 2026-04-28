@@ -36,6 +36,13 @@ export class HandleMessageUseCase {
       await this.userRepository.save(user);
     }
 
+    // RUTA GLOBAL DE ESCAPE: palabras clave para resetear estado
+    const ESCAPE_WORDS = ['menu', 'salir', 'cancelar', 'inicio'];
+    if (ESCAPE_WORDS.includes(message.content.toLowerCase().trim())) {
+      await this.userRepository.resetUserState(tenantId, message.from);
+      return this.getWelcomeMessage(tenantId);
+    }
+
     // Procesar según estado actual
     let response: BotResponse;
 
@@ -178,6 +185,14 @@ export class HandleMessageUseCase {
   private getDefaultResponse(): BotResponse {
     return {
       message: 'Escribe "hola" para empezar.',
+    };
+  }
+
+  private getWelcomeMessage(tenantId: string): BotResponse {
+    return {
+      message: '¡Hola! Bienvenido a SegurITech Bot Pro. ¿Qué deseas hacer?',
+      buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
+      nextState: UserState.MENU,
     };
   }
 
