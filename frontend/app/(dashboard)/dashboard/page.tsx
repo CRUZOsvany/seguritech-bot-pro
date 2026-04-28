@@ -97,10 +97,12 @@ export default function DashboardPage() {
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-gray-600 mt-1">Bienvenido, {user?.name}</p>
         </div>
-        <Link href="/clients/new">
-          <Button variant="primary" size="lg">
-            + Nuevo Cliente
-          </Button>
+        <Link href="/clients/new" passHref legacyBehavior>
+          <a role="button">
+            <Button variant="primary" size="lg">
+              + Nuevo Cliente
+            </Button>
+          </a>
         </Link>
       </div>
 
@@ -138,8 +140,10 @@ export default function DashboardPage() {
         {clients.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-gray-500 mb-4">No hay clientes aún</p>
-            <Link href="/clients/new">
-              <Button variant="primary">Crear Primer Cliente</Button>
+            <Link href="/clients/new" passHref legacyBehavior>
+              <a role="button">
+                <Button variant="primary">Crear Primer Cliente</Button>
+              </a>
             </Link>
           </div>
         ) : (
@@ -184,10 +188,12 @@ export default function DashboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link href={`/clients/${client.id}`}>
-                        <Button variant="ghost" size="sm">
-                          Editar
-                        </Button>
+                      <Link href={`/clients/${client.id}`} passHref legacyBehavior>
+                        <a role="button">
+                          <Button variant="ghost" size="sm">
+                            Editar
+                          </Button>
+                        </a>
                       </Link>
                     </td>
                   </tr>

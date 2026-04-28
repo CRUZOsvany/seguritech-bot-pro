@@ -67,14 +67,19 @@ export const Sidebar: React.FC = () => {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-blue-600 text-white font-semibold'
-                    : 'text-gray-300 hover:bg-gray-800'
-                }`}
+                passHref
+                legacyBehavior
               >
-                <span className="text-xl">{item.icon}</span>
-                <span>{item.label}</span>
+                <a
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-blue-600 text-white font-semibold'
+                      : 'text-gray-300 hover:bg-gray-800'
+                  }`}
+                >
+                  <span className="text-xl">{item.icon}</span>
+                  <span>{item.label}</span>
+                </a>
               </Link>
             );
           })}

@@ -1,8 +1,7 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  turbopack: {
-    root: __dirname,
+const nextConfig = {
+  // Next.js v9 configuration
+  experimental: {
+    esmExternals: true,
   },
 };
 
