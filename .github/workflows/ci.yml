@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies (root)
+        run: npm ci
+
+      - name: Install dependencies (backend)
+        run: cd backend && npm ci
+
+      - name: Install dependencies (frontend)
+        run: cd frontend && npm ci
+
+      - name: Lint backend
+        run: cd backend && npm run lint
+        continue-on-error: true
+
+      - name: Type check backend
+        run: cd backend && npm run type-check
+
+      - name: Type check frontend
+        run: cd frontend && npm run type-check
+
+      - name: Run backend tests
+        run: cd backend && npm test -- --coverage
+
+      - name: Build backend
+        run: cd backend && npm run build
+
+      - name: Build frontend
+        run: cd frontend && npm run build
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: ./backend/coverage/coverage-final.json
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
+
