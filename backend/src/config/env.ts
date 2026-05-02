@@ -1,6 +1,5 @@
 import dotenv from 'dotenv';
 import { z } from 'zod';
-import logger from './logger';
 
 dotenv.config();
 
@@ -131,7 +130,7 @@ export function validateConfig(): void {
         `❌ Configuración incompleta en PRODUCCIÓN. Variables faltantes: ${missing.join(', ')}`
       );
     }
-    logger.info('✅ Configuración de producción validada correctamente');
+    console.log('✅ Configuración de producción validada correctamente');
   }
 }
 
