@@ -118,7 +118,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     this.logger = logger;
     this.phoneNumberId = phoneNumberId || process.env.META_PHONE_NUMBER_ID || '';
     this.accessToken = accessToken || process.env.META_ACCESS_TOKEN || '';
-    this.metaApiUrl = metaApiUrl || 'https://graph.instagram.com/v19.0';
+    this.metaApiUrl = metaApiUrl || 'https://graph.facebook.com/v21.0';
 
     this.validateConfiguration();
   }

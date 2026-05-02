@@ -31,7 +31,7 @@ const NAV_ITEMS: NavItem[] = [
     roles: [UserRole.SUPER_ADMIN, UserRole.ADMIN_OPERATOR],
   },
   {
-    label: 'Facturaciónción',
+    label: 'Facturación',
     href: '/admin/billing',
     icon: '💳',
     roles: [UserRole.SUPER_ADMIN],

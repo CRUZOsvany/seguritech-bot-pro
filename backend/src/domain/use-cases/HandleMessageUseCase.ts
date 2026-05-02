@@ -155,7 +155,7 @@ export class HandleMessageUseCase {
     if (content === 'sí' || content === 'si' || content.includes('confirmar')) {
       const orderId = this.generateId();
       return {
-        message: `✅ ¡Pedido confirmado!\n\nNúmero de pedido: #${orderId}\n\nTe contacteremos pronto con los detalles de entrega. ¿Hay algo más en lo que pueda ayudarte?`,
+        message: `✅ ¡Pedido confirmado!\n\nNúmero de pedido: #${orderId}\n\nTe contactaremos pronto con los detalles de entrega. ¿Hay algo más en lo que pueda ayudarte?`,
         buttons: ['Volver al menú', 'Salir'],
         nextState: UserState.MENU,
       };

@@ -1,108 +1,58 @@
-# SegurITech Bot Pro - .gitignore
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.yarn/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+.nyc_output/
 
 # Environment
 .env
 .env.local
-.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
 
-# Node
-node_modules/
-npm-debug.log
-yarn-error.log
-yarn.lock
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
 
-# Build
-dist/
-**/dist/
-build/
-*.tsbuildinfo
+# Databases
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
 
 # IDE
 .vscode/
 .idea/
-*.iml
 *.swp
 *.swo
-*.swn
 .DS_Store
-*.sublime-project
-*.sublime-workspace
-
-# Testing
-coverage/
-.nyc_output/
-.jest/
-
-# Logs
-logs/
-*.log
-pids/
-*.pid
-*.seed
-
-# Runtime
-sessions/
-.sessions/
-
-# Temporary files
-*.tmp
-*.temp
-tmp/
-
-# Database
-*.sqlite
-*.sqlite-*
-*.sqlite3
-*.db
+Thumbs.db
 
 # OS
-Thumbs.db
 .DS_Store
+*.pid
+*.seed
+*.pid.lock
 
-# Security
-.ssh/
-.gpg/
-secrets/
-private/
-
-# Editor backup files
-*~
-*.orig
-*.bak
-
-# PM2
-ecosystem-production.config.js
+# Misc
+*.tgz
+.cache/
+.npm/
 .pm2/
-
-# Docker
-.dockerignore
-Dockerfile
-docker-compose.yml
-
-# CI/CD
-.github/workflows/*.log
-
-# Compiled TypeScript
-**/*.js
-**/*.js.map
-**/*.d.ts
-!node_modules/**
-
-
-# IDE settings (usar editorconfig)
-.editorconfig
-
-# Archivos grandes
-*.zip
-*.tar.gz
-*.rar
-
-# Carpetas duplicadas y temporales
-seguritech-bot-pro/
-OLD_securitech-bot-pro_backup/
-.temp_subcarpeta/
-.temp_migration/
-
-
-# Variables de frontend con secretos
-env_frontend.local
