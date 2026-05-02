@@ -1,66 +1,119 @@
 import dotenv from 'dotenv';
+import { z } from 'zod';
+import logger from './logger';
 
 dotenv.config();
 
 /**
+ * Schema de validación para variables de entorno con Zod
+ */
+const envSchema = z.object({
+  // Entorno
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  LOG_LEVEL: z.string().default('info'),
+
+  // Webhook
+  WEBHOOK_PORT: z.string().default('3001'),
+
+  // Meta Cloud API (WhatsApp oficial)
+  META_API_URL: z.string().url().default('https://graph.facebook.com/v21.0'),
+  META_PHONE_NUMBER_ID: z.string().optional(),
+  META_ACCESS_TOKEN: z.string().optional(),
+  META_VERIFY_TOKEN: z.string().min(32).optional(),
+  META_APP_SECRET: z.string().min(32).optional(),
+
+  // Bot
+  BOT_NAME: z.string().default('SegurITech Bot'),
+
+  // Database
+  DATABASE_URL: z.string().default('./database.sqlite'),
+
+  // Supabase
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
+  // CORS
+  ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
+});
+
+type EnvType = z.infer<typeof envSchema>;
+
+/**
+ * Parsear y validar variables de entorno
+ */
+function parseEnv(): EnvType {
+  const result = envSchema.safeParse(process.env);
+
+  if (!result.success) {
+    const errors = result.error.flatten().fieldErrors;
+    const errorMessages = Object.entries(errors)
+      .map(([key, msgs]) => `${key}: ${msgs?.join(', ')}`)
+      .join('\n');
+
+    if (process.env.NODE_ENV === 'production') {
+      // No podemos usar logger aquí porque causaría dependencia cíclica
+      console.error(`❌ Configuración incompleta:\n${errorMessages}`);
+      throw new Error(`Configuración incompleta: ${Object.keys(errors).join(', ')}`);
+    } else {
+      // En desarrollo, permitir pero advertir
+      console.warn(`⚠️ Variables de entorno no validadas:\n${errorMessages}`);
+      console.warn('⚠️ Continuando en modo desarrollo con valores por defecto');
+    }
+  }
+
+  // Devolver datos parseados O valores por defecto del schema
+  return result.data ?? envSchema.parse({});
+}
+
+const envVars = parseEnv();
+
+/**
  * Configuración centralizada de la aplicación
- * Todos los valores de ambiente se cargan aquí y se validan
- *
- * Beneficios:
- * - Single source of truth para configuración
- * - Validación de variables requeridas
- * - Tipado seguro
- * - Fácil de testear
  */
 export const config = {
   // Entorno
-  environment: process.env.NODE_ENV || 'development',
-  isDevelopment: process.env.NODE_ENV === 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  environment: envVars.NODE_ENV,
+  isDevelopment: envVars.NODE_ENV === 'development',
+  isProduction: envVars.NODE_ENV === 'production',
 
   // Logger
   log: {
-    level: process.env.LOG_LEVEL || 'info',
+    level: envVars.LOG_LEVEL,
   },
 
-  // WhatsApp
-  whatsapp: {
-    phoneNumber: process.env.WHATSAPP_PHONE_NUMBER || '',
-    sessionName: process.env.WHATSAPP_SESSION_NAME || 'seguritech-session',
-    qrTimeout: parseInt(process.env.WHATSAPP_QR_TIMEOUT || '30000', 10),
-    webhookPort: process.env.WEBHOOK_PORT || '3001',
-    webhookToken: process.env.WEBHOOK_TOKEN || 'tu_token_secreto',
+  // Webhook
+  webhook: {
+    port: envVars.WEBHOOK_PORT,
   },
 
   // Meta Cloud API (WhatsApp oficial)
   meta: {
-    verifyToken: process.env.META_VERIFY_TOKEN || 'tu_token_secreto',
-    phoneNumberId: process.env.META_PHONE_NUMBER_ID || '',
-    accessToken: process.env.META_ACCESS_TOKEN || '',
-    apiUrl: process.env.META_API_URL || 'https://graph.instagram.com/v19.0',
+    apiUrl: envVars.META_API_URL,
+    phoneNumberId: envVars.META_PHONE_NUMBER_ID || '',
+    accessToken: envVars.META_ACCESS_TOKEN || '',
+    verifyToken: envVars.META_VERIFY_TOKEN || '',
+    appSecret: envVars.META_APP_SECRET || '',
   },
 
   // Bot
   bot: {
-    name: process.env.BOT_NAME || 'SegurITech Bot',
-    prefix: process.env.BOT_PREFIX || '',
-    autoReplyEnabled: process.env.BOT_AUTO_REPLY_ENABLED === 'true',
+    name: envVars.BOT_NAME,
   },
 
   // Database
   database: {
-    url: process.env.DATABASE_URL || '',
+    url: envVars.DATABASE_URL,
   },
 
-  // API
-  api: {
-    key: process.env.API_KEY || '',
-    url: process.env.API_URL || '',
+  // Supabase
+  supabase: {
+    url: envVars.SUPABASE_URL || '',
+    serviceRoleKey: envVars.SUPABASE_SERVICE_ROLE_KEY || '',
   },
 
-  // PM2
-  pm2: {
-    instanceName: process.env.PM2_INSTANCE_NAME || 'seguritech-bot-pro',
+  // CORS
+  cors: {
+    allowedOrigins: envVars.ALLOWED_ORIGINS,
   },
 };
 
@@ -69,18 +122,17 @@ export const config = {
  * Se ejecuta al iniciar la aplicación
  */
 export function validateConfig(): void {
-  const requiredDev = ['WHATSAPP_PHONE_NUMBER'];
-  const requiredMeta = ['META_PHONE_NUMBER_ID', 'META_ACCESS_TOKEN', 'META_VERIFY_TOKEN'];
+  const criticalVars = ['META_PHONE_NUMBER_ID', 'META_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'META_APP_SECRET'];
 
   if (config.isProduction) {
-    const missingDev = requiredDev.filter((key) => !process.env[key]);
-    const missingMeta = requiredMeta.filter((key) => !process.env[key]);
-
-    const allMissing = [...missingDev, ...missingMeta];
-    if (allMissing.length > 0) {
+    const missing = criticalVars.filter((key) => !process.env[key]);
+    if (missing.length > 0) {
       throw new Error(
-        `Configuración incompleta. Variables faltantes: ${allMissing.join(', ')}`,
+        `❌ Configuración incompleta en PRODUCCIÓN. Variables faltantes: ${missing.join(', ')}`
       );
     }
+    logger.info('✅ Configuración de producción validada correctamente');
   }
 }
+
+
