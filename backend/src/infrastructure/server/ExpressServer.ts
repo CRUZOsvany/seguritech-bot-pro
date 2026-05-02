@@ -1,6 +1,9 @@
 import express, { Express, Request, Response } from 'express';
 import pino from 'pino';
 import crypto from 'crypto';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
 import { config } from '@/config/env';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { tenantLookupService } from '@/infrastructure/services/TenantLookupService';
@@ -46,6 +49,39 @@ export class ExpressServer {
   }
 
   private setupMiddleware(): void {
+    // Helmet para seguridad de headers HTTP
+    this.app.use(helmet());
+
+    // CORS configurable
+    const allowedOrigins = config.cors.allowedOrigins.split(',').map(o => o.trim());
+    this.app.use(cors({
+      origin: allowedOrigins,
+      credentials: true,
+      optionsSuccessStatus: 200,
+    }));
+
+    // Rate limiting global (100 req/min por IP)
+    const globalLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 100,
+      message: 'Demasiadas solicitudes, intenta más tarde',
+      standardHeaders: true,
+      legacyHeaders: false,
+    });
+    this.app.use(globalLimiter);
+
+    // Rate limiting específico para webhook (1000 req/min por IP)
+    const webhookLimiter = rateLimit({
+      windowMs: 60 * 1000,
+      max: 1000,
+      skip: (req) => {
+        // Solo aplicar limiter a /webhook
+        return !req.path.startsWith('/webhook');
+      },
+    });
+    this.app.use(webhookLimiter);
+
+    // Middleware para capturar raw body ANTES de parsear JSON
     this.app.use(express.raw({ type: 'application/json', limit: '64kb' }), (req: Request, res: Response, next) => {
       (req as any).rawBody = req.body;
       if (req.body && req.body.length > 0) {
@@ -60,6 +96,14 @@ export class ExpressServer {
 
     this.app.use(express.json({ limit: '64kb' }));
     this.app.use(express.urlencoded({ extended: true }));
+
+    // Timeout middleware (15 segundos)
+    this.app.use((req: Request, res: Response, next) => {
+      req.setTimeout(15000, () => {
+        res.status(504).json({ error: 'Gateway timeout' });
+      });
+      next();
+    });
   }
 
   setMetaAdapter(adapter: MetaWhatsAppAdapter): void {
