@@ -1,16 +1,36 @@
 import express, { Express, Request, Response } from 'express';
 import pino from 'pino';
+import crypto from 'crypto';
 import { config } from '@/config/env';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { tenantLookupService } from '@/infrastructure/services/TenantLookupService';
 
 /**
+ * Verificar firma HMAC-SHA256 de Meta
+ */
+function verifyMetaSignature(req: Request): boolean {
+  const signature = req.headers['x-hub-signature-256'] as string | undefined;
+  const appSecret = config.meta.appSecret;
+
+  if (!appSecret || !signature || !signature.startsWith('sha256=')) {
+    return !appSecret;
+  }
+
+  const rawBody = (req as any).rawBody as string | undefined;
+  if (!rawBody) return false;
+
+  const hash = crypto.createHmac('sha256', appSecret).update(rawBody).digest('hex');
+  const expectedSignature = `sha256=${hash}`;
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
+  } catch (_err) {
+    return false;
+  }
+}
+
+/**
  * Servidor Express con webhook para WhatsApp Cloud API
- * POST /webhook - Recibe mensajes de WhatsApp o pruebas locales
- *
- * Integración con MetaWhatsAppAdapter:
- * - Verifywebhook (GET) → Handshake con Meta
- * - parseIncomingMessage (POST) → Traducir payload de Meta a formato interno
  */
 export class ExpressServer {
   private app: Express;
@@ -26,196 +46,129 @@ export class ExpressServer {
   }
 
   private setupMiddleware(): void {
-    this.app.use(express.json());
+    this.app.use(express.raw({ type: 'application/json', limit: '64kb' }), (req: Request, res: Response, next) => {
+      (req as any).rawBody = req.body;
+      if (req.body && req.body.length > 0) {
+        try {
+          (req as any).body = JSON.parse(req.body.toString());
+        } catch (_err) {
+          // Body no es JSON válido
+        }
+      }
+      next();
+    });
+
+    this.app.use(express.json({ limit: '64kb' }));
     this.app.use(express.urlencoded({ extended: true }));
   }
 
-  /**
-   * Inyectar MetaWhatsAppAdapter después de la construcción
-   * Útil si se crea ExpressServer antes de tener el adaptador disponible
-   */
   setMetaAdapter(adapter: MetaWhatsAppAdapter): void {
     this.metaAdapter = adapter;
-    this.logger.info('✅ MetaWhatsAppAdapter inyectado en ExpressServer');
+    this.logger.info('✅ MetaWhatsAppAdapter inyectado');
   }
 
-  setupRoutes(
-    processMessage: (tenantId: string, phoneNumber: string, text: string) => Promise<string | null>
-  ): void {
-    // POST /webhook/:tenantId - Recibe mensajes de WhatsApp (Cloud API) para un tenant específico
-    this.app.post('/webhook/:tenantId', async (req: Request, res: Response): Promise<void> => {
+  setupRoutes(processMessage: (tenantId: string, phoneNumber: string, text: string) => Promise<string | null>): void {
+    this.app.post('/webhook/:tenantId', async (req: Request, res: Response) => {
       try {
         const tenantId = String(req.params.tenantId);
 
-        // Si hay un metadata de Meta, parsear usando MetaWhatsAppAdapter
-        if (this.metaAdapter && req.body.entry) {
-          const parsed = this.metaAdapter.parseIncomingMessage(req.body);
-          if (!parsed) {
-            this.logger.debug({ tenantId }, 'ℹ️  Webhook de Meta recibido pero sin mensajes (probablemente delivery receipt)');
-            res.json({ success: true, message: 'Webhook recibido' });
-            return;
+        if (req.body && req.body.entry) {
+          if (!verifyMetaSignature(req)) {
+            this.logger.warn({ tenantId }, '🔐 Firma HMAC inválida');
+            if (config.isProduction) {
+              res.status(401).json({ error: 'Invalid signature' });
+              return;
+            }
           }
 
-          const { from, content } = parsed;
-          const response = await processMessage(tenantId, from, content);
-
-          res.json({
-            success: true,
-            tenantId,
-            response: response || null,
-            timestamp: new Date().toISOString(),
-          });
-          return;
+          if (this.metaAdapter) {
+            const parsed = this.metaAdapter.parseIncomingMessage(req.body);
+            if (!parsed) {
+              res.json({ success: true });
+              return;
+            }
+            const { from, content } = parsed;
+            const response = await processMessage(tenantId, from, content);
+            res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
+            return;
+          }
         }
 
-        // Fallback: formato simplificado para pruebas locales
         const { phoneNumber, message } = req.body;
-
         if (!tenantId || !phoneNumber || !message) {
-          res.status(400).json({
-            error: 'Missing tenantId (URL param), phoneNumber or message (body)',
-          });
+          res.status(400).json({ error: 'Missing parameters' });
           return;
         }
-
-        this.logger.info(
-          { tenantId, phoneNumber, message },
-          '📨 Mensaje recibido via webhook (formato local)'
-        );
 
         const response = await processMessage(tenantId, phoneNumber, message);
-
-        res.json({
-          success: true,
-          tenantId,
-          response: response || null,
-          timestamp: new Date().toISOString(),
-        });
+        res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
       } catch (error) {
         this.logger.error({ error }, '❌ Error en webhook');
         res.status(500).json({ error: 'Internal server error' });
       }
     });
 
-    // POST /webhook - Compatibilidad con llamadas sin tenantId
-    // Intenta resolver tenantId usando number->tenant mapping de Supabase
-    // Meta SIEMPRE recibe HTTP 200, nunca 400 o 500
-    this.app.post('/webhook', async (req: Request, res: Response): Promise<void> => {
+    this.app.post('/webhook', async (req: Request, res: Response) => {
       try {
-        // Si hay metadata de Meta, parsear usando MetaWhatsAppAdapter
-        if (this.metaAdapter && req.body.entry) {
+        if (req.body && req.body.entry && this.metaAdapter) {
+          if (!verifyMetaSignature(req)) {
+            this.logger.warn('🔐 Firma HMAC inválida');
+            if (config.isProduction) {
+              res.json({ success: false });
+              return;
+            }
+          }
+
           const parsed = this.metaAdapter.parseIncomingMessage(req.body);
           if (!parsed) {
-            this.logger.debug('ℹ️  Webhook de Meta recibido pero sin mensajes (probablemente delivery receipt)');
-            res.json({ success: true, message: 'Webhook recibido' });
+            res.json({ success: true });
             return;
           }
 
           const { from, content } = parsed;
-
-          // Intentar resolver tenantId usando el número de teléfono (businessNumber)
-          const resolvedTenantId = await tenantLookupService.lookupTenantByPhone(from);
-
-          if (!resolvedTenantId) {
-            // No se encontró mapping - loguear warning pero retornar 200 a Meta
-            this.logger.warn(
-              { phoneNumber: from },
-              '⚠️  Webhook de Meta sin tenantId resolvible. '
-              + 'Configura phone_tenant_map con este número de teléfono.',
-            );
-            res.json({
-              success: true,
-              message: 'Webhook recibido pero sin tenant mapping para este número',
-            });
+          const tenantId = await tenantLookupService.lookupTenantByPhone(from);
+          if (!tenantId) {
+            res.json({ success: true });
             return;
           }
 
-          this.logger.info(
-            { tenantId: resolvedTenantId, phoneNumber: from, content },
-            '📨 Mensaje de Meta procesado (tenantId resuelto vía phone_tenant_map)',
-          );
-
-          const response = await processMessage(resolvedTenantId, from, content);
-
-          res.json({
-            success: true,
-            tenantId: resolvedTenantId,
-            response: response || null,
-            timestamp: new Date().toISOString(),
-          });
+          const response = await processMessage(tenantId, from, content);
+          res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
           return;
         }
 
-        // Fallback: formato simplificado para pruebas locales
         const { tenantId, phoneNumber, message } = req.body;
-
         if (!tenantId || !phoneNumber || !message) {
-          res.status(400).json({
-            error: 'Missing tenantId, phoneNumber or message. Use POST /webhook/:tenantId',
-          });
+          res.status(400).json({ error: 'Missing parameters' });
           return;
         }
-
-        this.logger.info(
-          { tenantId, phoneNumber, message },
-          '📨 Mensaje recibido via webhook (body)'
-        );
 
         const response = await processMessage(tenantId, phoneNumber, message);
-
-        res.json({
-          success: true,
-          tenantId,
-          response: response || null,
-          timestamp: new Date().toISOString(),
-        });
+        res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
       } catch (error) {
-        this.logger.error({ error }, '❌ Error en webhook');
-        // Meta SIEMPRE recibe 200, incluso si hay error interno
-        res.json({ success: false, message: 'Error procesando webhook' });
+        this.logger.error({ error }, '❌ Error');
+        res.json({ success: false });
       }
     });
 
-    // GET /health - Health check
-    this.app.get('/health', (req: Request, res: Response) => {
+    this.app.get('/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: new Date().toISOString() });
     });
 
-    // GET /webhook - Verificación de Webhook de Meta (Handshake)
-    // Delegado a MetaWhatsAppAdapter.verifyWebhook()
     this.app.get('/webhook', (req: Request, res: Response) => {
-      if (this.metaAdapter) {
-        this.metaAdapter.verifyWebhook(req, res);
-      } else {
-        this.logger.warn('⚠️  MetaWhatsAppAdapter no inyectado. Verificación fallará.');
-        res.sendStatus(503);
-      }
+      this.metaAdapter?.verifyWebhook(req, res) || res.sendStatus(503);
     });
 
-    // GET /webhook/:tenantId - Verificación de Webhook de Meta (multi-tenant)
-    // Nota: Meta no envía tenantId en el handshake, así que lo ignoramos
     this.app.get('/webhook/:tenantId', (req: Request, res: Response) => {
-      const tenantId = String(req.params.tenantId);
-      if (this.metaAdapter) {
-        this.logger.debug({ tenantId }, 'ℹ️  Handshake recibido en /webhook/:tenantId (Meta ignora tenantId)');
-        this.metaAdapter.verifyWebhook(req, res);
-      } else {
-        this.logger.warn('⚠️  MetaWhatsAppAdapter no inyectado. Verificación fallará.');
-        res.sendStatus(503);
-      }
+      this.metaAdapter?.verifyWebhook(req, res) || res.sendStatus(503);
     });
   }
 
   async start(port?: number): Promise<void> {
     const PORT = port || parseInt(config.webhook.port || '3001', 10);
-
     return new Promise((resolve) => {
       this.server = this.app.listen(PORT, () => {
-        this.logger.info(`🚀 Servidor Express escuchando en puerto ${PORT}`);
-        this.logger.info('📍 Webhooks disponibles:');
-        this.logger.info(`   POST http://localhost:${PORT}/webhook/:tenantId`);
-        this.logger.info(`   POST http://localhost:${PORT}/webhook (con tenantId en body)`);
-        this.logger.info(`   GET  http://localhost:${PORT}/health`);
+        this.logger.info(`🚀 Express escuchando puerto ${PORT}`);
         resolve();
       });
     });
