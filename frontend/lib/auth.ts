@@ -5,12 +5,13 @@
 
 import NextAuthConfig from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
+import bcrypt from 'bcryptjs';
 import { createServiceClient } from './supabase';
 import { UserRole } from './types';
 import { LoginSchema } from './validators';
 
 /**
- * Validar credenciales contra Supabase
+ * Validar credenciales contra Supabase con bcrypt
  */
 async function authenticateUser(email: string, password: string) {
   try {
@@ -28,14 +29,15 @@ async function authenticateUser(email: string, password: string) {
       return null;
     }
 
-    // Aquí iría validación de password con bcrypt
-    // Por ahora es un placeholder - en producción usar bcrypt.compare()
-    // const isPasswordValid = await bcrypt.compare(password, adminUser.password_hash);
-    // 
-    // TEMPORAL: Para desarrollo, si es igual devolvemos true
-    // EN PRODUCCIÓN IMPLEMENTAR BCRYPT PROPERLY
-    const isPasswordValid = password === adminUser.password_hash; // TEMPORAL
-    
+    // Validar que el hash sea un bcrypt válido
+    if (!adminUser.password_hash.match(/^\$2[aby]\$/)) {
+      console.warn('⚠️ Hash de password no es bcrypt válido para:', email);
+      return null;
+    }
+
+    // Comparar password con bcrypt
+    const isPasswordValid = await bcrypt.compare(password, adminUser.password_hash);
+
     if (!isPasswordValid) {
       console.warn('Contraseña inválida para:', email);
       return null;
