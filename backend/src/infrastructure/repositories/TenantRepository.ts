@@ -155,27 +155,26 @@ export class TenantRepository {
    * Actualizar un tenant
    */
   async update(id: string, updates: Partial<Omit<Tenant, 'id' | 'created_at'>>): Promise<Tenant | null> {
+    const set: string[] = [];
+    const values: any[] = [];
+
+    // Construir dinámicamente el SET
+    for (const [key, value] of Object.entries(updates)) {
+      if (value !== undefined) {
+        set.push(`${key} = ?`);
+        values.push(value);
+      }
+    }
+
+    if (set.length === 0) {
+      return this.getById(id);
+    }
+
+    set.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(id);
+
     return new Promise((resolve, reject) => {
-      const set: string[] = [];
-      const values: any[] = [];
-
-      // Construir dinámicamente el SET
-      for (const [key, value] of Object.entries(updates)) {
-        if (value !== undefined) {
-          set.push(`${key} = ?`);
-          values.push(value);
-        }
-      }
-
-      if (set.length === 0) {
-        resolve(await this.getById(id));
-        return;
-      }
-
-      set.push('updated_at = ?');
-      values.push(new Date().toISOString());
-      values.push(id);
-
       this.db.run(
         `UPDATE tenants SET ${set.join(', ')} WHERE id = ?`,
         values,
