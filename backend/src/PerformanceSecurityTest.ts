@@ -11,6 +11,7 @@ import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
+import { TenantConfigPort } from '@/domain/ports';
 
 /**
  * INTERFACE: Resultado de test
@@ -342,10 +343,15 @@ export class PerformanceSecurityTest {
   private initializeContainer(): void {
     const userRepository = new InMemoryUserRepository();
     const notificationPort = new ConsoleNotificationAdapter();
+    const tenantConfigPort: TenantConfigPort = {
+      getConfig: async () => null,
+      invalidate: () => {},
+    };
 
     this.container = new ApplicationContainer(
       userRepository,
       notificationPort,
+      tenantConfigPort,
       this.logger,
     );
   }

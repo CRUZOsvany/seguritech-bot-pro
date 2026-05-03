@@ -15,6 +15,7 @@ import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { SqliteUserRepository } from '@/infrastructure/repositories/SqliteUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
+import { TenantConfigPort } from '@/domain/ports';
 
 // ─── Chalk dinámico compatible con ESM y CJS ─────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -358,7 +359,11 @@ class CommandRoom {
       const userRepo = new SqliteUserRepository();
       await userRepo.initialize();
       const notif = new ConsoleNotificationAdapter();
-      this.container = new ApplicationContainer(userRepo, notif, logger);
+      const tenantConfig: TenantConfigPort = {
+        getConfig: async () => null,
+        invalidate: () => {},
+      };
+      this.container = new ApplicationContainer(userRepo, notif, tenantConfig, logger);
     } catch {
       console.log(C.warn('  ⚠ ApplicationContainer no disponible. Simulador limitado.'));
     }
