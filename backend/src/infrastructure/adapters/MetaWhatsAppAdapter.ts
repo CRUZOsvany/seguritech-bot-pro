@@ -286,6 +286,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
         content: message.text.body,
         businessNumber,
         timestamp: message.timestamp || new Date().toISOString(),
+        messageId: (message as any).id,
       };
 
       this.logger.info(
@@ -311,7 +312,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
    * Envía un mensaje de texto simple a un número WhatsApp
    * Implementa la interfaz NotificationPort
    *
-   * POST https://graph.instagram.com/v19.0/{phoneNumberId}/messages
+   * POST https://graph.facebook.com/v21.0/{phoneNumberId}/messages
    * {
    *   "messaging_product": "whatsapp",
    *   "to": "34612345678",

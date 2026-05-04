@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node src/index.ts",
-    "admin": "ts-node -r tsconfig-paths/register src/app/CommandRoom.ts",
+      "admin": "ts-node -r tsconfig-paths/register src/app/CommandRoom.ts",
     "build": "tsc",
     "start": "node dist/index.js",
     "start:pm2": "pm2 start ecosystem.config.js",
@@ -18,7 +18,11 @@
     "test:watch": "jest --watch --detectOpenHandles",
     "test:coverage": "jest --coverage --detectOpenHandles --forceExit",
     "test:integration": "jest --testPathPattern=integration --detectOpenHandles --forceExit --runInBand",
-    "test:multiTenant": "jest multiTenantFlow --detectOpenHandles --forceExit --runInBand --verbose"
+    "test:multiTenant": "jest multiTenantFlow --detectOpenHandles --forceExit --runInBand --verbose",
+    "supabase:start": "supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:types": "supabase gen types typescript --local > src/infrastructure/services/supabase.types.ts",
+    "supabase:reset": "supabase db reset && npm run supabase:types"
   },
   "keywords": [
     "whatsapp",
@@ -44,6 +48,7 @@
     "node-cache": "^5.1.2",
     "pino": "^8.21.0",
     "pino-pretty": "^10.2.3",
+    "tsconfig-paths": "^4.2.0",
     "zod": "^3.25.76"
   },
   "devDependencies": {
@@ -64,7 +69,6 @@
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.9",
     "ts-node": "^10.9.2",
-    "tsconfig-paths": "^4.2.0",
     "typescript": "^5.9.3"
   },
   "engines": {

@@ -16,12 +16,13 @@ coverage/
 .nyc_output/
 
 # Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
+**/.env
+**/.env.local
+**/.env.development.local
+**/.env.test.local
+**/.env.production.local
 !.env.example
+!**/.env.example
 
 # Logs
 *.log
@@ -44,6 +45,9 @@ logs/
 *.swo
 .DS_Store
 Thumbs.db
+
+# Claude Code (configuración local + prompts internos)
+.claude/
 
 # OS
 .DS_Store

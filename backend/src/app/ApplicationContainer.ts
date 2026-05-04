@@ -1,54 +1,33 @@
 import pino from 'pino';
 import { BotController } from './controllers/BotController';
-import { UserRepository, NotificationPort } from '@/domain/ports';
-import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
-import { config } from '@/config/env';
+import { UserRepository, NotificationPort, TenantConfigPort } from '@/domain/ports';
 
 /**
- * Contenedor de inyección de dependencias
- * Gestiona la creación e inyección de todas las dependencias
+ * Contenedor de inyección de dependencias.
  *
- * Ventajas:
- * - Centraliza la configuración
- * - Facilita testing (mock de dependencias)
- * - Desacopla clases
- * - Fácil de mantener
+ * Recibe todos los puertos del dominio ya construidos por Bootstrap
+ * y arma el árbol de objetos de la capa de aplicación.
+ *
+ * No conoce nada de infraestructura concreta — solo interfaces.
  */
 export class ApplicationContainer {
-  private botController: BotController;
-  private metaWhatsAppAdapter: MetaWhatsAppAdapter;
+  private readonly botController: BotController;
 
   constructor(
-    private userRepository: UserRepository,
-    private notificationPort: NotificationPort,
-    private logger: pino.Logger,
+    userRepository: UserRepository,
+    notificationPort: NotificationPort,
+    tenantConfigPort: TenantConfigPort,
+    logger: pino.Logger,
   ) {
-    // Inicializar adaptador Meta para traducir webhooks de Meta Cloud API
-    this.metaWhatsAppAdapter = new MetaWhatsAppAdapter(
-      logger,
-      config.meta.phoneNumberId,
-      config.meta.accessToken,
-      config.meta.apiUrl,
-    );
-
     this.botController = new BotController(
       userRepository,
       notificationPort,
+      tenantConfigPort,
       logger,
     );
   }
 
   getBotController(): BotController {
     return this.botController;
-  }
-
-  /**
-   * Obtener el adaptador Meta para procesar webhooks y enviar mensajes
-   * Uso típico:
-   *   const adapter = container.getMetaWhatsAppAdapter();
-   *   const parsed = adapter.parseIncomingMessage(req.body);
-   */
-  getMetaWhatsAppAdapter(): MetaWhatsAppAdapter {
-    return this.metaWhatsAppAdapter;
   }
 }

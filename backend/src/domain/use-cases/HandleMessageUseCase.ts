@@ -1,33 +1,32 @@
-import { Message, BotResponse, User, UserState } from '../entities';
-import { UserRepository, NotificationPort } from '../ports';
+import {
+  Message,
+  BotResponse,
+  User,
+  UserState,
+  TenantConfig,
+} from '../entities';
+import { UserRepository } from '../ports';
 
 /**
- * Caso de uso: Manejar mensaje entrante
- * Orquesta la lógica de negocio sin conocer detalles de implementación
+ * Caso de uso: Manejar mensaje entrante.
  *
- * Responsabilidades:
- * - Procesar el mensaje dentro del contexto de un tenant específico
- * - Determinar el estado del usuario
- * - Generar respuesta apropiada
- * - GARANTIZAR aislamiento: nunca mezclar datos de tenants
+ * Capa de dominio pura — sin dependencias de infraestructura.
+ * Recibe la TenantConfig precargada por el controller, así no necesita
+ * conocer cómo se carga (Supabase, caché, etc.).
  */
 export class HandleMessageUseCase {
-  constructor(
-    private userRepository: UserRepository,
-    private notificationPort: NotificationPort,
-  ) {}
+  constructor(private readonly userRepository: UserRepository) {}
 
-  async execute(message: Message): Promise<BotResponse> {
-    // CRÍTICO: message.tenantId viene desde el controlador y define el contexto
+  async execute(message: Message, config: TenantConfig): Promise<BotResponse> {
     const tenantId = message.tenantId;
 
-    // Obtener o crear usuario dentro del contexto del tenant
+    // 1. Obtener o crear usuario
     let user = await this.userRepository.findByPhoneNumber(tenantId, message.from);
 
     if (!user) {
       user = {
         id: this.generateId(),
-        tenantId, // IMPORTANTE: tenantId es obligatorio
+        tenantId,
         phoneNumber: message.from,
         currentState: UserState.INITIAL,
         createdAt: new Date(),
@@ -36,38 +35,34 @@ export class HandleMessageUseCase {
       await this.userRepository.save(user);
     }
 
-    // RUTA GLOBAL DE ESCAPE: palabras clave para resetear estado
+    // 2. Ruta global de escape: palabras clave que resetean el estado
     const ESCAPE_WORDS = ['menu', 'salir', 'cancelar', 'inicio'];
     if (ESCAPE_WORDS.includes(message.content.toLowerCase().trim())) {
       await this.userRepository.resetUserState(tenantId, message.from);
-      return this.getWelcomeMessage(tenantId);
+      return this.welcomeResponse(config);
     }
 
-    // Procesar según estado actual
+    // 3. Procesar según estado actual
     let response: BotResponse;
 
     switch (user.currentState) {
-    case UserState.INITIAL:
-      response = await this.handleInitialState(message, user);
-      break;
-
-    case UserState.MENU:
-      response = await this.handleMenuState(message, user);
-      break;
-
-    case UserState.MAKING_ORDER:
-      response = await this.handleMakingOrderState(message, user);
-      break;
-
-    case UserState.CONFIRMING_ORDER:
-      response = await this.handleConfirmingOrderState(message, user);
-      break;
-
-    default:
-      response = this.getDefaultResponse();
+      case UserState.INITIAL:
+        response = this.handleInitial(message, config);
+        break;
+      case UserState.MENU:
+        response = this.handleMenu(message, config);
+        break;
+      case UserState.MAKING_ORDER:
+        response = this.handleMakingOrder(message, config);
+        break;
+      case UserState.CONFIRMING_ORDER:
+        response = this.handleConfirmingOrder(message, config);
+        break;
+      default:
+        response = { message: config.notUnderstoodMessage };
     }
 
-    // Actualizar estado del usuario si cambia
+    // 4. Persistir cambio de estado si aplica
     if (response.nextState && response.nextState !== user.currentState) {
       user.currentState = response.nextState;
       user.updatedAt = new Date();
@@ -77,126 +72,151 @@ export class HandleMessageUseCase {
     return response;
   }
 
-  private async handleInitialState(message: Message, _user: User): Promise<BotResponse> {
+  private handleInitial(message: Message, config: TenantConfig): BotResponse {
     const content = message.content.toLowerCase().trim();
-
-    // Detectar saludo
     if (this.isGreeting(content)) {
-      return {
-        message: '¡Hola! Bienvenido a SegurITech Bot Pro. ¿Qué deseas hacer?',
-        buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
-        nextState: UserState.MENU,
-      };
+      return this.welcomeResponse(config);
     }
-
-    return this.getDefaultResponse();
+    return {
+      message: `${config.notUnderstoodMessage}\n\nEscribe "hola" para empezar.`,
+    };
   }
 
-  private async handleMenuState(message: Message, _user: User): Promise<BotResponse> {
+  private handleMenu(message: Message, config: TenantConfig): BotResponse {
     const content = message.content.trim();
 
     switch (content) {
-    case '1':
-      return {
-        message: 'Productos disponibles:\n\n1. Seguro Básico - $10/mes\n2. Seguro Premium - $25/mes\n3. Seguro Enterprise - $50/mes\n\n¿Deseas conocer más detalles?',
-        buttons: ['Sí', 'No'],
-        nextState: UserState.VIEWING_PRODUCTS,
-      };
+      case '1': // Productos
+        return {
+          message: this.formatCatalog(config),
+          buttons: ['Volver al menú'],
+          nextState: UserState.VIEWING_PRODUCTS,
+        };
 
-    case '2':
+      case '2': // Precios
+        return {
+          message: this.formatPriceList(config),
+          buttons: ['Volver al menú'],
+          nextState: UserState.MENU,
+        };
+
+      case '3': // Hacer pedido
+        if (config.catalog.length === 0) {
+          return {
+            message:
+              'Aún no hay productos en el catálogo. Por favor contacta directamente.',
+            buttons: ['Volver al menú'],
+            nextState: UserState.MENU,
+          };
+        }
+        return {
+          message: this.formatProductChoice(config),
+          buttons: this.makeProductButtons(config),
+          nextState: UserState.MAKING_ORDER,
+        };
+
+      default:
+        return {
+          message: config.notUnderstoodMessage + '\n\n' + config.menuMessage,
+          buttons: ['1', '2', '3'],
+        };
+    }
+  }
+
+  private handleMakingOrder(message: Message, config: TenantConfig): BotResponse {
+    const content = message.content.trim();
+    const idx = parseInt(content, 10) - 1;
+
+    if (Number.isNaN(idx) || idx < 0 || idx >= config.catalog.length) {
       return {
-        message: 'Nuestros precios:\n\n• Básico: $10/mes\n• Premium: $25/mes (20% desc. anual)\n• Enterprise: $50/mes (30% desc. anual)',
+        message: 'Por favor elige un número válido de la lista.',
+        buttons: this.makeProductButtons(config),
+      };
+    }
+
+    const item = config.catalog[idx];
+    return {
+      message: `Has seleccionado: *${item.name}* — $${item.price.toFixed(2)}\n\n¿Confirmas el pedido?`,
+      buttons: ['Sí, confirmar', 'No, cancelar'],
+      nextState: UserState.CONFIRMING_ORDER,
+    };
+  }
+
+  private handleConfirmingOrder(message: Message, config: TenantConfig): BotResponse {
+    const content = message.content.toLowerCase().trim();
+
+    if (content === 'sí' || content === 'si' || content.includes('confirmar')) {
+      const orderId = this.generateId().slice(-8).toUpperCase();
+      return {
+        message: `${config.orderConfirmationMessage}\n\nNúmero de pedido: #${orderId}`,
         buttons: ['Volver al menú'],
         nextState: UserState.MENU,
       };
-
-    case '3':
-      return {
-        message: 'Bien, vamos a hacer un pedido. ¿Cuál producto deseas?',
-        buttons: ['1. Básico', '2. Premium', '3. Enterprise'],
-        nextState: UserState.MAKING_ORDER,
-      };
-
-    default:
-      return {
-        message: 'No entiendo tu opción. Por favor, elige una opción válida.',
-        buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
-      };
-    }
-  }
-
-  private async handleMakingOrderState(message: Message, _user: User): Promise<BotResponse> {
-    const content = message.content.trim();
-
-    const productMap: { [key: string]: string } = {
-      '1': 'Básico',
-      '2': 'Premium',
-      '3': 'Enterprise',
-    };
-
-    if (productMap[content]) {
-      return {
-        message: `Perfecto. Has seleccionado: ${productMap[content]}\n\n¿Deseas confirmar este pedido?`,
-        buttons: ['Sí, confirmar', 'No, cancelar'],
-        nextState: UserState.CONFIRMING_ORDER,
-      };
     }
 
-    return {
-      message: 'Por favor, elige una opción válida.',
-      buttons: ['1. Básico', '2. Premium', '3. Enterprise'],
-    };
-  }
-
-  private async handleConfirmingOrderState(message: Message, _user: User): Promise<BotResponse> {
-    const content = message.content.toLowerCase().trim();
-
-    // Validar respuesta: sí/confirmar
-    if (content === 'sí' || content === 'si' || content.includes('confirmar')) {
-      const orderId = this.generateId();
-      return {
-        message: `✅ ¡Pedido confirmado!\n\nNúmero de pedido: #${orderId}\n\nTe contactaremos pronto con los detalles de entrega. ¿Hay algo más en lo que pueda ayudarte?`,
-        buttons: ['Volver al menú', 'Salir'],
-        nextState: UserState.MENU,
-      };
-    }
-
-    // Validar respuesta: no/cancelar
     if (content === 'no' || content.includes('cancelar')) {
       return {
-        message: '❌ Pedido cancelado. Volviendo al menú principal...',
-        buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
+        message: '❌ Pedido cancelado.',
+        buttons: ['Volver al menú'],
         nextState: UserState.MENU,
       };
     }
 
-    // Respuesta inválida: pedir confirmación de nuevo
     return {
-      message: '⚠️ No entiendo tu respuesta. Por favor, responde con "Sí, confirmar" o "No, cancelar".',
+      message: 'Responde "Sí, confirmar" o "No, cancelar".',
       buttons: ['Sí, confirmar', 'No, cancelar'],
     };
   }
 
-  private isGreeting(content: string): boolean {
-    const greetings = ['hola', 'hi', 'hey', 'buenos días', 'buenas noches', 'buenas tardes', 'holá'];
-    return greetings.some((g) => content.includes(g));
-  }
-
-  private getDefaultResponse(): BotResponse {
+  private welcomeResponse(config: TenantConfig): BotResponse {
     return {
-      message: 'Escribe "hola" para empezar.',
-    };
-  }
-
-  private getWelcomeMessage(tenantId: string): BotResponse {
-    return {
-      message: '¡Hola! Bienvenido a SegurITech Bot Pro. ¿Qué deseas hacer?',
-      buttons: ['1. Productos', '2. Precios', '3. Hacer pedido'],
+      message: `${config.welcomeMessage}\n\n${config.menuMessage}`,
+      buttons: ['1', '2', '3'],
       nextState: UserState.MENU,
     };
   }
 
+  private formatCatalog(config: TenantConfig): string {
+    if (config.catalog.length === 0) {
+      return 'Aún no hay productos en el catálogo.';
+    }
+    const lines = config.catalog
+      .slice(0, 10)
+      .map((p, i) => `${i + 1}. ${p.name} — $${p.price.toFixed(2)}`);
+    return 'Productos disponibles:\n\n' + lines.join('\n');
+  }
+
+  private formatPriceList(config: TenantConfig): string {
+    if (config.catalog.length === 0) {
+      return 'Aún no hay productos cargados.';
+    }
+    return this.formatCatalog(config);
+  }
+
+  private formatProductChoice(config: TenantConfig): string {
+    return (
+      'Elige el producto que deseas pedir:\n\n' +
+      config.catalog
+        .slice(0, 10)
+        .map((p, i) => `${i + 1}. ${p.name}`)
+        .join('\n')
+    );
+  }
+
+  private makeProductButtons(config: TenantConfig): string[] {
+    return config.catalog
+      .slice(0, 3)
+      .map((_, i) => String(i + 1));
+  }
+
+  private isGreeting(content: string): boolean {
+    const greetings = [
+      'hola', 'hi', 'hey', 'buenos días', 'buenas noches', 'buenas tardes', 'holá',
+    ];
+    return greetings.some((g) => content.includes(g));
+  }
+
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   }
 }

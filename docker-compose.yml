@@ -1,0 +1,60 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=info
+      - WEBHOOK_PORT=3001
+      - META_API_URL=https://graph.facebook.com/v21.0
+      - META_PHONE_NUMBER_ID=${META_PHONE_NUMBER_ID}
+      - META_ACCESS_TOKEN=${META_ACCESS_TOKEN}
+      - META_VERIFY_TOKEN=${META_VERIFY_TOKEN}
+      - META_APP_SECRET=${META_APP_SECRET}
+      - BOT_NAME=SegurITech Bot Pro
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - ALLOWED_ORIGINS=http://localhost:3000
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
+    networks:
+      - seguritech-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
+      - NEXTAUTH_URL=http://localhost:3000
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - BACKEND_API_URL=http://backend:3001
+      - BACKEND_API_KEY=${BACKEND_API_KEY}
+    networks:
+      - seguritech-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (r) => {if (r.statusCode !== 200) throw new Error(r.statusCode)})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  seguritech-network:
+    driver: bridge

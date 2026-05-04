@@ -1,69 +1,95 @@
 import pino from 'pino';
 import { Message, BotResponse } from '@/domain/entities';
 import { HandleMessageUseCase } from '@/domain/use-cases/HandleMessageUseCase';
-import { NotificationPort } from '@/domain/ports';
+import { NotificationPort, UserRepository, TenantConfigPort } from '@/domain/ports';
 
 /**
- * Controlador del bot
- * Orquesta los casos de uso y adapta entre infraestructura y dominio
+ * Controlador del bot.
+ * Orquesta los casos de uso y adapta entre infraestructura y dominio.
  *
  * Responsabilidades:
- * - Recibir eventos de WhatsApp
- * - Convertir a objetos del dominio
- * - Ejecutar casos de uso
- * - Enviar respuestas
+ * - Cargar configuración del tenant
+ * - Convertir mensaje a entidad de dominio
+ * - Ejecutar caso de uso
+ * - Enviar respuesta via NotificationPort
  */
 export class BotController {
-  private handleMessageUseCase: HandleMessageUseCase;
-  private logger: pino.Logger;
-  private notificationPort: NotificationPort;
+  private readonly handleMessageUseCase: HandleMessageUseCase;
 
   constructor(
-    userRepository: any,
-    notificationPort: NotificationPort,
-    logger: pino.Logger,
+    private readonly userRepository: UserRepository,
+    private readonly notificationPort: NotificationPort,
+    private readonly tenantConfigPort: TenantConfigPort,
+    private readonly logger: pino.Logger,
   ) {
-    this.handleMessageUseCase = new HandleMessageUseCase(
-      userRepository,
-      notificationPort,
-    );
-    this.logger = logger;
-    this.notificationPort = notificationPort;
+    this.handleMessageUseCase = new HandleMessageUseCase(userRepository);
   }
 
-  async processMessage(tenantId: string, from: string, content: string): Promise<string | null> {
+  async processMessage(
+    tenantId: string,
+    from: string,
+    content: string,
+    metaMessageId?: string,
+  ): Promise<string | null> {
     try {
-      this.logger.info(`[Tenant: ${tenantId}] Mensaje recibido de ${from}: "${content}"`);
+      this.logger.info(
+        { tenantId, from, contentPreview: content.slice(0, 80) },
+        'Mensaje recibido',
+      );
 
-      // Crear objeto del dominio con tenantId
+      // 1. Cargar configuración del tenant (con caché)
+      const config = await this.tenantConfigPort.getConfig(tenantId);
+      if (!config) {
+        this.logger.error(
+          { tenantId },
+          'No hay bot_configuration para este tenant — ignorando mensaje',
+        );
+        return null;
+      }
+
+      // 2. Construir entidad del dominio
       const message: Message = {
         id: this.generateId(),
-        tenantId, // IMPORTANTE: Incluir tenantId en el mensaje
+        tenantId,
         from,
         content,
         timestamp: new Date(),
+        metaMessageId,
       };
 
-      // Ejecutar caso de uso
-      const response: BotResponse = await this.handleMessageUseCase.execute(message);
+      // 3. Ejecutar caso de uso (lógica de negocio pura)
+      const response: BotResponse = await this.handleMessageUseCase.execute(
+        message,
+        config,
+      );
 
-      this.logger.info(`[Tenant: ${tenantId}] Respuesta generada para ${from}`);
+      this.logger.info(
+        { tenantId, from, hasButtons: !!response.buttons?.length },
+        'Respuesta generada',
+      );
 
-      // Enviar respuesta via adaptador
+      // 4. Enviar respuesta
       if (response.buttons && response.buttons.length > 0) {
-        await this.notificationPort.sendButtons(from, response.message, response.buttons);
+        await this.notificationPort.sendButtons(
+          from,
+          response.message,
+          response.buttons,
+        );
       } else {
         await this.notificationPort.sendMessage(from, response.message);
       }
 
       return response.message;
     } catch (error) {
-      this.logger.error(`[Tenant: ${tenantId}] Error procesando mensaje de ${from}:`, error);
+      this.logger.error(
+        { error, tenantId, from },
+        'Error procesando mensaje',
+      );
       throw error;
     }
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
   }
 }

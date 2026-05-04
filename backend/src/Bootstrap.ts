@@ -2,17 +2,24 @@ import pino from 'pino';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
-import { SqliteUserRepository } from '@/infrastructure/repositories/SqliteUserRepository';
+import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
+import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
 import { ExpressServer } from '@/infrastructure/server/ExpressServer';
+import { getSupabaseClient } from '@/infrastructure/services/SupabaseClientFactory';
+import { SupabaseTenantConfigService } from '@/infrastructure/services/SupabaseTenantConfigService';
+import { MessageLogService } from '@/infrastructure/services/MessageLogService';
+import { NotificationPort } from '@/domain/ports';
 
 /**
- * Bootstrap - API Oficial de WhatsApp (Sin Baileys)
- * - Validar configuración
- * - Crear logger
- * - Iniciar Express Server (webhook)
- * - Iniciar terminal interactiva (pruebas)
+ * Bootstrap — arma todo el grafo de objetos.
+ *
+ * Sprint 2:
+ * - Persistencia: Supabase (vía SupabaseUserRepository).
+ * - Notificación: MetaWhatsAppAdapter si hay credenciales, sino Console (dev).
+ * - Config por tenant: SupabaseTenantConfigService con caché de 5 min.
+ * - Idempotencia de webhook: MessageLogService chequea meta_message_id.
  */
 export class Bootstrap {
   private logger!: pino.Logger;
@@ -24,50 +31,75 @@ export class Bootstrap {
     try {
       validateConfig();
       this.logger = createLogger();
-      this.logger.info('🚀 SegurITech Bot Pro (API Oficial)');
+      this.logger.info('🚀 SegurITech Bot Pro');
       this.logger.info(`Entorno: ${config.environment}\n`);
-
       this.logger.info('⚙️  Inicializando...');
 
-      // Inicializar repositorio SQLite
-      const userRepository = new SqliteUserRepository();
-      await userRepository.initialize();
+      // === Capa de infraestructura ===
+      const supabase = getSupabaseClient();
+      const userRepository = new SupabaseUserRepository(supabase, this.logger);
+      const tenantConfigService = new SupabaseTenantConfigService(supabase, this.logger);
+      const messageLogService = new MessageLogService(supabase, this.logger);
 
-      const notificationPort = new ConsoleNotificationAdapter();
+      // === Notification port: Meta si hay credenciales, sino Console ===
+      let notificationPort: NotificationPort;
+      let metaAdapter: MetaWhatsAppAdapter | undefined;
 
+      if (config.meta.phoneNumberId && config.meta.accessToken) {
+        metaAdapter = new MetaWhatsAppAdapter(
+          this.logger,
+          config.meta.phoneNumberId,
+          config.meta.accessToken,
+          config.meta.apiUrl,
+        );
+        notificationPort = metaAdapter;
+        this.logger.info('✅ MetaWhatsAppAdapter activo (envío real a WhatsApp)');
+      } else {
+        this.logger.warn(
+          '⚠️  META_PHONE_NUMBER_ID/META_ACCESS_TOKEN no configurados. ' +
+          'Usando ConsoleNotificationAdapter (dev mode).',
+        );
+        notificationPort = new ConsoleNotificationAdapter();
+      }
+
+      // === Capa de aplicación ===
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
+        tenantConfigService,
         this.logger,
       );
-      this.logger.info('✅ Contenedor DI creado');
+      this.logger.info('✅ Contenedor DI listo');
 
-      // Iniciar Express con webhook
-      this.expressServer = new ExpressServer(this.logger);
+      // === Servidor Express con webhook ===
+      this.expressServer = new ExpressServer(
+        this.logger,
+        metaAdapter,
+        messageLogService,
+      );
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
-        async (tenantId: string, phoneNumber: string, text: string): Promise<string | null> =>
-          await botController.processMessage(tenantId, phoneNumber, text)
+        async (tenantId, phoneNumber, text, metaMessageId) =>
+          botController.processMessage(tenantId, phoneNumber, text, metaMessageId),
       );
       await this.expressServer.start();
 
-      // Iniciar terminal interactiva
+      // === CLI interactiva (útil en dev) ===
       this.readlineAdapter = new ReadlineAdapter(this.logger);
       this.logger.info('✅ Bot iniciado\n');
       await this.readlineAdapter.start(
-        async (tenantId: string, phoneNumber: string, text: string): Promise<string | null> =>
-          await botController.processMessage(tenantId, phoneNumber, text)
+        async (tenantId, phoneNumber, text) =>
+          botController.processMessage(tenantId, phoneNumber, text),
       );
     } catch (error) {
       if (this.logger) {
-        this.logger.error('❌ Error en bootstrap:', error);
+        this.logger.error({ err: error }, '❌ Error en bootstrap');
       } else {
-        console.error('❌ Error:', error);
+        console.error('❌ Error en bootstrap:', error);
       }
       process.exit(1);
     }
   }
-
 
   getContainer(): ApplicationContainer {
     if (!this.container) {

@@ -1,10 +1,8 @@
-
-import { User } from '../entities';
+import { User, TenantConfig } from '../entities';
 
 /**
- * Puerto para persistencia de usuario
- * Define el contrato que cualquier adaptador de base de datos debe cumplir
- * IMPORTANTE: Todos los métodos deben aceptar tenantId para garantizar aislamiento
+ * Puerto para persistencia de usuario.
+ * IMPORTANTE: Todos los métodos aceptan tenantId para garantizar aislamiento.
  */
 export interface UserRepository {
   save(user: User): Promise<void>;
@@ -31,10 +29,18 @@ export interface OrderRepository {
 }
 
 /**
- * Puerto para notificaciones
- * Permite enviar notificaciones sin acoplarse a un medio específico
+ * Puerto para notificaciones (envío de mensajes al usuario final)
  */
 export interface NotificationPort {
   sendMessage(phoneNumber: string, message: string): Promise<void>;
   sendButtons(phoneNumber: string, message: string, buttons: string[]): Promise<void>;
+}
+
+/**
+ * Puerto para cargar configuración por tenant.
+ * El adapter de infraestructura (SupabaseTenantConfigService) implementa caché.
+ */
+export interface TenantConfigPort {
+  getConfig(tenantId: string): Promise<TenantConfig | null>;
+  invalidate(tenantId: string): void;
 }

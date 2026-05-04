@@ -1,0 +1,15 @@
+{
+  "_comment": "Usado solo en runtime dentro del container Docker. tsconfig-paths lo lee para resolver @/* a dist/* (no a src/* como el tsconfig.json de build).",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["dist/*"],
+      "@/domain/*": ["dist/domain/*"],
+      "@/app/*": ["dist/app/*"],
+      "@/infrastructure/*": ["dist/infrastructure/*"],
+      "@/config/*": ["dist/config/*"],
+      "@/shared/*": ["dist/shared/*"],
+      "@/utils/*": ["dist/utils/*"]
+    }
+  }
+}

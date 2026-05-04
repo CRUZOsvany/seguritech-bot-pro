@@ -41,7 +41,12 @@ type EnvType = z.infer<typeof envSchema>;
  * Parsear y validar variables de entorno
  */
 function parseEnv(): EnvType {
-  const result = envSchema.safeParse(process.env);
+  // Compose pasa ${VAR} vacío como '', no como ausente. Tratamos '' como undefined
+  // para que las vars .optional() del schema funcionen correctamente.
+  const cleaned = Object.fromEntries(
+    Object.entries(process.env).map(([k, v]) => [k, v === '' ? undefined : v]),
+  );
+  const result = envSchema.safeParse(cleaned);
 
   if (!result.success) {
     const errors = result.error.flatten().fieldErrors;
@@ -121,7 +126,9 @@ export const config = {
  * Se ejecuta al iniciar la aplicación
  */
 export function validateConfig(): void {
-  const criticalVars = ['META_PHONE_NUMBER_ID', 'META_ACCESS_TOKEN', 'META_VERIFY_TOKEN', 'META_APP_SECRET'];
+  // Meta credentials son opcionales: Bootstrap degrada a ConsoleNotificationAdapter
+  // si faltan. No bloqueamos el boot por su ausencia.
+  const criticalVars: string[] = [];
 
   if (config.isProduction) {
     const missing = criticalVars.filter((key) => !process.env[key]);

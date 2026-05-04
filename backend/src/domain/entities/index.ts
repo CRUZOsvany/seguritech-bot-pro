@@ -8,6 +8,7 @@ export interface Message {
   from: string;
   content: string;
   timestamp: Date;
+  metaMessageId?: string;
 }
 
 /**
@@ -35,7 +36,44 @@ export enum UserState {
 }
 
 /**
- * Representa un producto disponible
+ * Tono del bot, usado para ajustar la formalidad de respuestas
+ */
+export enum BotTone {
+  FORMAL = 'formal',
+  AMIGABLE = 'amigable',
+  DIRECTO = 'directo',
+}
+
+/**
+ * Item del catálogo de productos del tenant
+ */
+export interface CatalogItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  category: string;
+  available: boolean;
+}
+
+/**
+ * Configuración del bot por tenant.
+ * Cargada desde bot_configurations + catalog_items en Supabase.
+ */
+export interface TenantConfig {
+  tenantId: string;
+  botName: string;
+  tone: BotTone;
+  welcomeMessage: string;
+  menuMessage: string;
+  outOfHoursMessage: string;
+  notUnderstoodMessage: string;
+  orderConfirmationMessage: string;
+  catalog: CatalogItem[];
+}
+
+/**
+ * Representa un producto disponible (legacy — usar CatalogItem)
  */
 export interface Product {
   id: string;

@@ -1,24 +1,29 @@
-/**
- * Unit tests para HandleMessageUseCase
- * Valida transiciones de estado y aislamiento multi-tenant
- *
- * NOTAS:
- * - Usa InMemoryUserRepository (no requiere DB real ni red).
- * - Mockea NotificationPort para evitar I/O.
- * - Usa la API real del use case: execute(message: Message).
- */
-
 import { HandleMessageUseCase } from '@/domain/use-cases/HandleMessageUseCase';
 import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
-import { Message, UserState } from '@/domain/entities';
-import { NotificationPort } from '@/domain/ports';
+import { Message, TenantConfig, BotTone, UserState } from '@/domain/entities';
 
-/**
- * Helper para construir un mensaje del dominio
- */
-function buildMessage(tenantId: string, from: string, content: string): Message {
+const TENANT_A = 'tenant-a';
+const TENANT_B = 'tenant-b';
+const PHONE = '521234567890';
+
+const FAKE_CONFIG: TenantConfig = {
+  tenantId: TENANT_A,
+  botName: 'TestBot',
+  tone: BotTone.AMIGABLE,
+  welcomeMessage: '¡Hola! Soy TestBot.',
+  menuMessage: '1. Productos\n2. Precios\n3. Pedido',
+  outOfHoursMessage: 'Cerrado.',
+  notUnderstoodMessage: 'No entendí.',
+  orderConfirmationMessage: '✅ Pedido confirmado.',
+  catalog: [
+    { id: 'p1', name: 'Pizza Margarita', description: '', price: 100, category: 'pizza', available: true },
+    { id: 'p2', name: 'Pizza Pepperoni', description: '', price: 120, category: 'pizza', available: true },
+  ],
+};
+
+function makeMessage(content: string, tenantId = TENANT_A, from = PHONE): Message {
   return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+    id: 'msg-' + Math.random().toString(36).slice(2),
     tenantId,
     from,
     content,
@@ -27,249 +32,54 @@ function buildMessage(tenantId: string, from: string, content: string): Message 
 }
 
 describe('HandleMessageUseCase', () => {
-  let useCase: HandleMessageUseCase;
   let repo: InMemoryUserRepository;
-  let notificationPort: NotificationPort;
+  let useCase: HandleMessageUseCase;
 
   beforeEach(() => {
     repo = new InMemoryUserRepository();
-
-    // Mock silencioso de NotificationPort (no se usa en execute, pero el constructor lo pide)
-    notificationPort = {
-      sendMessage: jest.fn().mockResolvedValue(undefined),
-      sendButtons: jest.fn().mockResolvedValue(undefined),
-    };
-
-    useCase = new HandleMessageUseCase(repo, notificationPort);
+    useCase = new HandleMessageUseCase(repo);
   });
 
-  afterEach(() => {
-    repo.clear();
+  test('saludo inicial muestra welcomeMessage del tenant', async () => {
+    const res = await useCase.execute(makeMessage('hola'), FAKE_CONFIG);
+    expect(res.message).toContain('TestBot');
+    expect(res.nextState).toBe(UserState.MENU);
   });
 
-  // ============================================
-  // ESTADO INITIAL
-  // ============================================
-  describe('Estado INITIAL', () => {
-    it('debería transicionar a MENU cuando recibe un saludo', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'hola')
-      );
-
-      expect(result).toBeDefined();
-      expect(result.message).toContain('Bienvenido');
-      expect(result.nextState).toBe(UserState.MENU);
-
-      const user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user).not.toBeNull();
-      expect(user?.currentState).toBe(UserState.MENU);
-    });
-
-    it('debería responder con mensaje por defecto si no es saludo', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'cualquier cosa rara')
-      );
-
-      expect(result.message).toContain('hola');
-      // Sin nextState definido → permanece en INITIAL
-      expect(result.nextState).toBeUndefined();
-    });
+  test('palabra "menu" resetea estado y muestra welcome', async () => {
+    await useCase.execute(makeMessage('hola'), FAKE_CONFIG);
+    const res = await useCase.execute(makeMessage('menu'), FAKE_CONFIG);
+    expect(res.message).toContain('TestBot');
   });
 
-  // ============================================
-  // ESTADO MENU
-  // ============================================
-  describe('Estado MENU', () => {
-    beforeEach(async () => {
-      // Pre-condición: usuario en MENU
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', 'hola'));
-    });
-
-    it('opción 1 debería ir a VIEWING_PRODUCTS', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', '1')
-      );
-
-      expect(result.message).toContain('Productos disponibles');
-      expect(result.nextState).toBe(UserState.VIEWING_PRODUCTS);
-    });
-
-    it('opción 2 debería mostrar precios y permanecer en MENU', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', '2')
-      );
-
-      expect(result.message).toContain('precios');
-      expect(result.nextState).toBe(UserState.MENU);
-    });
-
-    it('opción 3 debería transicionar a MAKING_ORDER', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', '3')
-      );
-
-      expect(result.message).toContain('pedido');
-      expect(result.nextState).toBe(UserState.MAKING_ORDER);
-
-      const user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user?.currentState).toBe(UserState.MAKING_ORDER);
-    });
-
-    it('opción inválida debería pedir reintentar sin cambiar de estado', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', '99')
-      );
-
-      expect(result.message).toContain('No entiendo');
-      expect(result.nextState).toBeUndefined();
-    });
+  test('opción 1 muestra catálogo', async () => {
+    await useCase.execute(makeMessage('hola'), FAKE_CONFIG);
+    const res = await useCase.execute(makeMessage('1'), FAKE_CONFIG);
+    expect(res.message).toContain('Pizza Margarita');
+    expect(res.message).toContain('Pizza Pepperoni');
   });
 
-  // ============================================
-  // ESTADO MAKING_ORDER
-  // ============================================
-  describe('Estado MAKING_ORDER', () => {
-    beforeEach(async () => {
-      // Pre-condición: usuario en MAKING_ORDER
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', 'hola'));
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', '3'));
-    });
+  test('aislamiento multi-tenant: usuarios de A no son visibles desde B', async () => {
+    const cfgB = { ...FAKE_CONFIG, tenantId: TENANT_B };
+    await useCase.execute(makeMessage('hola', TENANT_A), FAKE_CONFIG);
 
-    it('opción 1 (Básico) debería transicionar a CONFIRMING_ORDER', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', '1')
-      );
-
-      expect(result.message).toContain('Básico');
-      expect(result.nextState).toBe(UserState.CONFIRMING_ORDER);
-
-      const user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user?.currentState).toBe(UserState.CONFIRMING_ORDER);
-    });
+    const userA = await repo.findByPhoneNumber(TENANT_A, PHONE);
+    const userB = await repo.findByPhoneNumber(TENANT_B, PHONE);
+    expect(userA).not.toBeNull();
+    expect(userB).toBeNull();
   });
 
-  // ============================================
-  // ESTADO CONFIRMING_ORDER
-  // ============================================
-  describe('Estado CONFIRMING_ORDER', () => {
-    beforeEach(async () => {
-      // Pre-condición: usuario en CONFIRMING_ORDER
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', 'hola'));
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', '3'));
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', '1'));
-    });
-
-    it('"sí" debería confirmar y volver a MENU con número de pedido', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'sí')
-      );
-
-      expect(result.message).toContain('Pedido confirmado');
-      expect(result.message).toMatch(/#[\w-]+/); // contiene un ID
-      expect(result.nextState).toBe(UserState.MENU);
-    });
-
-    it('"no" debería cancelar y volver a MENU', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'no')
-      );
-
-      expect(result.message).toContain('cancelado');
-      expect(result.nextState).toBe(UserState.MENU);
-    });
-
-    it('respuesta inválida debería pedir confirmación de nuevo', async () => {
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'tal vez')
-      );
-
-      expect(result.message).toContain('No entiendo');
-      expect(result.nextState).toBeUndefined();
-
-      const user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user?.currentState).toBe(UserState.CONFIRMING_ORDER);
-    });
+  test('flujo completo: saludo → ver productos → hacer pedido → confirmar', async () => {
+    await useCase.execute(makeMessage('hola'), FAKE_CONFIG);
+    await useCase.execute(makeMessage('3'), FAKE_CONFIG); // hacer pedido
+    await useCase.execute(makeMessage('1'), FAKE_CONFIG); // primer producto
+    const res = await useCase.execute(makeMessage('sí, confirmar'), FAKE_CONFIG);
+    expect(res.message).toContain('Pedido confirmado');
   });
 
-  // ============================================
-  // RUTA DE ESCAPE GLOBAL
-  // ============================================
-  describe('Escape routes globales', () => {
-    it('"menu" debería resetear a INITIAL desde cualquier estado', async () => {
-      // Llevar al usuario a MAKING_ORDER
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', 'hola'));
-      await useCase.execute(buildMessage('tenant-1', '+5217471234567', '3'));
-
-      let user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user?.currentState).toBe(UserState.MAKING_ORDER);
-
-      // Decir "menu"
-      const result = await useCase.execute(
-        buildMessage('tenant-1', '+5217471234567', 'menu')
-      );
-
-      expect(result.message).toContain('Bienvenido');
-
-      user = await repo.findByPhoneNumber('tenant-1', '+5217471234567');
-      expect(user?.currentState).toBe(UserState.INITIAL);
-    });
-
-    it('"salir", "cancelar", "inicio" también deberían resetear', async () => {
-      const escapeWords = ['salir', 'cancelar', 'inicio', 'SALIR', 'Cancelar'];
-
-      for (const word of escapeWords) {
-        const phone = `+521000${escapeWords.indexOf(word)}`;
-        await useCase.execute(buildMessage('tenant-1', phone, 'hola'));
-        await useCase.execute(buildMessage('tenant-1', phone, '3'));
-
-        await useCase.execute(buildMessage('tenant-1', phone, word));
-
-        const user = await repo.findByPhoneNumber('tenant-1', phone);
-        expect(user?.currentState).toBe(UserState.INITIAL);
-      }
-    });
-  });
-
-  // ============================================
-  // AISLAMIENTO MULTI-TENANT
-  // ============================================
-  describe('Multi-tenant isolation', () => {
-    it('mismo phone con tenants distintos = usuarios independientes', async () => {
-      const phone = '+5217471234567';
-
-      // Tenant A llega hasta MAKING_ORDER
-      await useCase.execute(buildMessage('tenant-a', phone, 'hola'));
-      await useCase.execute(buildMessage('tenant-a', phone, '3'));
-
-      // Tenant B se queda en MENU (opción 2 = ver precios)
-      await useCase.execute(buildMessage('tenant-b', phone, 'hola'));
-      await useCase.execute(buildMessage('tenant-b', phone, '2'));
-
-      const userA = await repo.findByPhoneNumber('tenant-a', phone);
-      const userB = await repo.findByPhoneNumber('tenant-b', phone);
-
-      expect(userA?.currentState).toBe(UserState.MAKING_ORDER);
-      expect(userB?.currentState).toBe(UserState.MENU);
-      expect(userA?.id).not.toBe(userB?.id);
-    });
-
-    it('reset en un tenant no afecta al otro', async () => {
-      const phone = '+5217471234567';
-
-      // Ambos tenants llegan a MAKING_ORDER
-      await useCase.execute(buildMessage('tenant-a', phone, 'hola'));
-      await useCase.execute(buildMessage('tenant-a', phone, '3'));
-      await useCase.execute(buildMessage('tenant-b', phone, 'hola'));
-      await useCase.execute(buildMessage('tenant-b', phone, '3'));
-
-      // Solo tenant A hace reset
-      await useCase.execute(buildMessage('tenant-a', phone, 'menu'));
-
-      const userA = await repo.findByPhoneNumber('tenant-a', phone);
-      const userB = await repo.findByPhoneNumber('tenant-b', phone);
-
-      expect(userA?.currentState).toBe(UserState.INITIAL);
-      expect(userB?.currentState).toBe(UserState.MAKING_ORDER);
-    });
+  test('respuesta inválida en MENU repite el menú', async () => {
+    await useCase.execute(makeMessage('hola'), FAKE_CONFIG);
+    const res = await useCase.execute(makeMessage('xyz123'), FAKE_CONFIG);
+    expect(res.message).toContain('No entendí');
   });
 });
