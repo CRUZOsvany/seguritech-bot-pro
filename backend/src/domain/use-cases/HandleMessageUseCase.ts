@@ -46,20 +46,20 @@ export class HandleMessageUseCase {
     let response: BotResponse;
 
     switch (user.currentState) {
-      case UserState.INITIAL:
-        response = this.handleInitial(message, config);
-        break;
-      case UserState.MENU:
-        response = this.handleMenu(message, config);
-        break;
-      case UserState.MAKING_ORDER:
-        response = this.handleMakingOrder(message, config);
-        break;
-      case UserState.CONFIRMING_ORDER:
-        response = this.handleConfirmingOrder(message, config);
-        break;
-      default:
-        response = { message: config.notUnderstoodMessage };
+    case UserState.INITIAL:
+      response = this.handleInitial(message, config);
+      break;
+    case UserState.MENU:
+      response = this.handleMenu(message, config);
+      break;
+    case UserState.MAKING_ORDER:
+      response = this.handleMakingOrder(message, config);
+      break;
+    case UserState.CONFIRMING_ORDER:
+      response = this.handleConfirmingOrder(message, config);
+      break;
+    default:
+      response = { message: config.notUnderstoodMessage };
     }
 
     // 4. Persistir cambio de estado si aplica
@@ -86,40 +86,40 @@ export class HandleMessageUseCase {
     const content = message.content.trim();
 
     switch (content) {
-      case '1': // Productos
-        return {
-          message: this.formatCatalog(config),
-          buttons: ['Volver al menú'],
-          nextState: UserState.VIEWING_PRODUCTS,
-        };
+    case '1': // Productos
+      return {
+        message: this.formatCatalog(config),
+        buttons: ['Volver al menú'],
+        nextState: UserState.VIEWING_PRODUCTS,
+      };
 
-      case '2': // Precios
+    case '2': // Precios
+      return {
+        message: this.formatPriceList(config),
+        buttons: ['Volver al menú'],
+        nextState: UserState.MENU,
+      };
+
+    case '3': // Hacer pedido
+      if (config.catalog.length === 0) {
         return {
-          message: this.formatPriceList(config),
+          message:
+              'Aún no hay productos en el catálogo. Por favor contacta directamente.',
           buttons: ['Volver al menú'],
           nextState: UserState.MENU,
         };
+      }
+      return {
+        message: this.formatProductChoice(config),
+        buttons: this.makeProductButtons(config),
+        nextState: UserState.MAKING_ORDER,
+      };
 
-      case '3': // Hacer pedido
-        if (config.catalog.length === 0) {
-          return {
-            message:
-              'Aún no hay productos en el catálogo. Por favor contacta directamente.',
-            buttons: ['Volver al menú'],
-            nextState: UserState.MENU,
-          };
-        }
-        return {
-          message: this.formatProductChoice(config),
-          buttons: this.makeProductButtons(config),
-          nextState: UserState.MAKING_ORDER,
-        };
-
-      default:
-        return {
-          message: config.notUnderstoodMessage + '\n\n' + config.menuMessage,
-          buttons: ['1', '2', '3'],
-        };
+    default:
+      return {
+        message: config.notUnderstoodMessage + '\n\n' + config.menuMessage,
+        buttons: ['1', '2', '3'],
+      };
     }
   }
 

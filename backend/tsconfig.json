@@ -33,6 +33,7 @@
     "removeComments": false,
     "preserveConstEnums": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "5.0",
     "paths": {
       "@/*": ["src/*"],
       "@/domain/*": ["src/domain/*"],

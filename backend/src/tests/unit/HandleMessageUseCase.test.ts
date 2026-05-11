@@ -9,6 +9,7 @@ const PHONE = '521234567890';
 const FAKE_CONFIG: TenantConfig = {
   tenantId: TENANT_A,
   botName: 'TestBot',
+  nombreNegocio: 'TestNegocio',
   tone: BotTone.AMIGABLE,
   welcomeMessage: '¡Hola! Soy TestBot.',
   menuMessage: '1. Productos\n2. Precios\n3. Pedido',

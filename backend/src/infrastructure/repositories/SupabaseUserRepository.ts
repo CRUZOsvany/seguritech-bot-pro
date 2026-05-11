@@ -5,10 +5,13 @@ import { UserRepository } from '@/domain/ports';
 
 /**
  * Adaptador Supabase de UserRepository.
- * Persiste usuarios del bot en la tabla `bot_users` (schema 002).
+ * Persiste usuarios del bot en la tabla `bot_users` (schema 001 + 002).
  *
- * Reemplaza a SqliteUserRepository en runtime (Sprint 2).
  * Aislamiento multi-tenant garantizado por filtros explícitos en cada query.
+ *
+ * Sprint 1.5: incluye mapeo de current_node_id y context (Sprint B). Los
+ * usuarios nuevos arrancan con currentNodeId undefined; el FlowInterpreter
+ * (Sprint 4) decidirá cómo poblarlos cuando se cablee al BotController.
  */
 export class SupabaseUserRepository implements UserRepository {
   constructor(
@@ -22,6 +25,8 @@ export class SupabaseUserRepository implements UserRepository {
       tenant_id: user.tenantId,
       phone_number: user.phoneNumber,
       current_state: user.currentState,
+      current_node_id: user.currentNodeId ?? null,
+      context: user.context ?? {},
     });
 
     if (error) {
@@ -74,7 +79,11 @@ export class SupabaseUserRepository implements UserRepository {
   async update(user: User): Promise<void> {
     const { error } = await this.supabase
       .from('bot_users')
-      .update({ current_state: user.currentState })
+      .update({
+        current_state: user.currentState,
+        current_node_id: user.currentNodeId ?? null,
+        context: user.context ?? {},
+      })
       .eq('tenant_id', user.tenantId)
       .eq('id', user.id);
 
@@ -95,7 +104,11 @@ export class SupabaseUserRepository implements UserRepository {
   async resetUserState(tenantId: string, phoneNumber: string): Promise<void> {
     const { error } = await this.supabase
       .from('bot_users')
-      .update({ current_state: 'initial' })
+      .update({
+        current_state: 'initial',
+        current_node_id: null,
+        context: {},
+      })
       .eq('tenant_id', tenantId)
       .eq('phone_number', phoneNumber);
 
@@ -114,6 +127,8 @@ export class SupabaseUserRepository implements UserRepository {
       tenantId: row.tenant_id,
       phoneNumber: row.phone_number,
       currentState: row.current_state as UserState,
+      currentNodeId: row.current_node_id ?? undefined,
+      context: (row.context as Record<string, unknown> | null) ?? undefined,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };

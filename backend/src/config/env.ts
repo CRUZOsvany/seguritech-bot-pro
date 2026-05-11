@@ -4,7 +4,8 @@ import { z } from 'zod';
 dotenv.config();
 
 /**
- * Schema de validación para variables de entorno con Zod
+ * Schema de validación para variables de entorno con Zod.
+ * Toda la persistencia vive en Supabase — no hay base de datos local.
  */
 const envSchema = z.object({
   // Entorno
@@ -24,10 +25,7 @@ const envSchema = z.object({
   // Bot
   BOT_NAME: z.string().default('SegurITech Bot'),
 
-  // Database
-  DATABASE_URL: z.string().default('./database.sqlite'),
-
-  // Supabase
+  // Supabase (única persistencia)
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
@@ -38,11 +36,11 @@ const envSchema = z.object({
 type EnvType = z.infer<typeof envSchema>;
 
 /**
- * Parsear y validar variables de entorno
+ * Parsear y validar variables de entorno.
+ * Compose pasa ${VAR} vacío como '', no como ausente. Tratamos '' como undefined
+ * para que las vars .optional() del schema funcionen correctamente.
  */
 function parseEnv(): EnvType {
-  // Compose pasa ${VAR} vacío como '', no como ausente. Tratamos '' como undefined
-  // para que las vars .optional() del schema funcionen correctamente.
   const cleaned = Object.fromEntries(
     Object.entries(process.env).map(([k, v]) => [k, v === '' ? undefined : v]),
   );
@@ -55,42 +53,36 @@ function parseEnv(): EnvType {
       .join('\n');
 
     if (process.env.NODE_ENV === 'production') {
-      // No podemos usar logger aquí porque causaría dependencia cíclica
       console.error(`❌ Configuración incompleta:\n${errorMessages}`);
       throw new Error(`Configuración incompleta: ${Object.keys(errors).join(', ')}`);
     } else {
-      // En desarrollo, permitir pero advertir
       console.warn(`⚠️ Variables de entorno no validadas:\n${errorMessages}`);
       console.warn('⚠️ Continuando en modo desarrollo con valores por defecto');
     }
   }
 
-  // Devolver datos parseados O valores por defecto del schema
   return result.data ?? envSchema.parse({});
 }
 
 const envVars = parseEnv();
 
 /**
- * Configuración centralizada de la aplicación
+ * Configuración centralizada de la aplicación.
+ * NOTA: No hay sección `database` — toda persistencia es Supabase.
  */
 export const config = {
-  // Entorno
   environment: envVars.NODE_ENV,
   isDevelopment: envVars.NODE_ENV === 'development',
   isProduction: envVars.NODE_ENV === 'production',
 
-  // Logger
   log: {
     level: envVars.LOG_LEVEL,
   },
 
-  // Webhook
   webhook: {
     port: envVars.WEBHOOK_PORT,
   },
 
-  // Meta Cloud API (WhatsApp oficial)
   meta: {
     apiUrl: envVars.META_API_URL,
     phoneNumberId: envVars.META_PHONE_NUMBER_ID || '',
@@ -99,46 +91,40 @@ export const config = {
     appSecret: envVars.META_APP_SECRET || '',
   },
 
-  // Bot
   bot: {
     name: envVars.BOT_NAME,
   },
 
-  // Database
-  database: {
-    url: envVars.DATABASE_URL,
-  },
-
-  // Supabase
   supabase: {
     url: envVars.SUPABASE_URL || '',
     serviceRoleKey: envVars.SUPABASE_SERVICE_ROLE_KEY || '',
   },
 
-  // CORS
   cors: {
     allowedOrigins: envVars.ALLOWED_ORIGINS,
   },
 };
 
 /**
- * Validar configuración crítica
- * Se ejecuta al iniciar la aplicación
+ * Validar configuración crítica al iniciar la aplicación.
+ * Meta credentials son opcionales en dev: Bootstrap degrada a ConsoleNotificationAdapter
+ * si faltan. En producción, sí son críticas.
  */
 export function validateConfig(): void {
-  // Meta credentials son opcionales: Bootstrap degrada a ConsoleNotificationAdapter
-  // si faltan. No bloqueamos el boot por su ausencia.
-  const criticalVars: string[] = [];
-
   if (config.isProduction) {
-    const missing = criticalVars.filter((key) => !process.env[key]);
+    const missing: string[] = [];
+    if (!config.supabase.url) missing.push('SUPABASE_URL');
+    if (!config.supabase.serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+    if (!config.meta.phoneNumberId) missing.push('META_PHONE_NUMBER_ID');
+    if (!config.meta.accessToken) missing.push('META_ACCESS_TOKEN');
+    if (!config.meta.appSecret) missing.push('META_APP_SECRET');
+    if (!config.meta.verifyToken) missing.push('META_VERIFY_TOKEN');
+
     if (missing.length > 0) {
       throw new Error(
-        `❌ Configuración incompleta en PRODUCCIÓN. Variables faltantes: ${missing.join(', ')}`
+        `❌ Configuración incompleta en PRODUCCIÓN. Variables faltantes: ${missing.join(', ')}`,
       );
     }
     console.log('✅ Configuración de producción validada correctamente');
   }
 }
-
-

@@ -7,11 +7,14 @@ import { TenantConfigPort } from '@/domain/ports';
 const TTL_SECONDS = 5 * 60; // 5 minutos
 
 /**
- * Carga configuración del bot + catálogo desde Supabase y cachea por tenant.
- * Implementa TenantConfigPort (puerto del dominio).
+ * Carga configuración del bot + catálogo + nombre de negocio desde Supabase
+ * y cachea por tenant. Implementa TenantConfigPort (puerto del dominio).
  *
  * Si bot_configurations no existe para el tenant, retorna null (el caller
  * decide qué hacer — típicamente loguear y no responder).
+ *
+ * Sprint 1.5: incluye nombreNegocio cargado desde tabla tenants (necesario
+ * para VariableResolver de Sprint B).
  */
 export class SupabaseTenantConfigService implements TenantConfigPort {
   private cache: NodeCache;
@@ -32,7 +35,12 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
 
     this.logger.debug({ tenantId }, 'TenantConfig cache MISS — cargando');
 
-    const [configRes, catalogRes] = await Promise.all([
+    const [tenantRes, configRes, catalogRes] = await Promise.all([
+      this.supabase
+        .from('tenants')
+        .select('nombre_negocio')
+        .eq('id', tenantId)
+        .maybeSingle(),
       this.supabase
         .from('bot_configurations')
         .select('*')
@@ -61,6 +69,13 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       return null;
     }
 
+    if (tenantRes.error) {
+      this.logger.warn(
+        { error: tenantRes.error, tenantId },
+        'Error cargando tenants.nombre_negocio — usando fallback',
+      );
+    }
+
     if (catalogRes.error) {
       this.logger.warn(
         { error: catalogRes.error, tenantId },
@@ -69,6 +84,8 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     }
 
     const c = configRes.data;
+    const nombreNegocio = (tenantRes.data?.nombre_negocio as string | undefined) ?? '';
+
     const catalog: CatalogItem[] = (catalogRes.data || []).map((row: any) => ({
       id: row.id,
       name: row.nombre_producto,
@@ -81,6 +98,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     const config: TenantConfig = {
       tenantId,
       botName: c.nombre_bot ?? 'Asistente',
+      nombreNegocio,
       tone: (c.tono_bot ?? 'amigable') as BotTone,
       welcomeMessage: c.mensaje_bienvenida ?? '¡Hola! ¿En qué puedo ayudarte?',
       menuMessage:
@@ -99,7 +117,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
 
     this.cache.set(tenantId, config);
     this.logger.info(
-      { tenantId, catalogSize: catalog.length },
+      { tenantId, catalogSize: catalog.length, nombreNegocio },
       'TenantConfig cargado',
     );
     return config;

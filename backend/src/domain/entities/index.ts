@@ -12,20 +12,30 @@ export interface Message {
 }
 
 /**
- * Representa un usuario del chatbot
- * Mantiene el estado conversacional y está siempre asociado a un tenant específico
+ * Representa un usuario del chatbot.
+ * Mantiene el estado conversacional y siempre asociado a un tenant.
+ *
+ * Campos legacy (Sprint A): currentState. Se mantiene por backwards-compat
+ * con HandleMessageUseCase mientras FlowInterpreter no esté cableado.
+ *
+ * Campos de Sprint B: currentNodeId y context. Mapean a las columnas
+ * current_node_id y context jsonb de bot_users (migración 002). Quedan
+ * opcionales porque usuarios pre-Sprint-B pueden no tenerlos hasta que
+ * la migración 003 los rellene.
  */
 export interface User {
   id: string;
   tenantId: string;
   phoneNumber: string;
   currentState: UserState;
+  currentNodeId?: string;
+  context?: Record<string, unknown>;
   createdAt: Date;
   updatedAt: Date;
 }
 
 /**
- * Estados posibles del usuario en la conversación
+ * Estados posibles de la conversación
  */
 export enum UserState {
   INITIAL = 'initial',
@@ -63,6 +73,7 @@ export interface CatalogItem {
 export interface TenantConfig {
   tenantId: string;
   botName: string;
+  nombreNegocio: string;
   tone: BotTone;
   welcomeMessage: string;
   menuMessage: string;
@@ -117,3 +128,10 @@ export interface BotResponse {
   buttons?: string[];
   nextState?: UserState;
 }
+
+// ============================================================================
+// Flow types (Sprint A — re-export desde flow.ts)
+// Convención: entidades nuevas viven en archivos separados; las viejas
+// permanecen inline en este archivo por backwards-compat.
+// ============================================================================
+export * from './flow';

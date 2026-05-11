@@ -1,55 +1,23 @@
 /**
- * Servicio para búsqueda de tenant por número de teléfono
- * Consulta tabla phone_tenant_map en Supabase
- * Usado por webhook POST /webhook para resolver tenantId desde businessNumber de Meta
+ * Servicio para búsqueda de tenant por número de teléfono.
+ * Consulta tabla phone_tenant_map en Supabase.
+ * Usado por webhook POST /webhook para resolver tenantId desde businessNumber de Meta.
+ *
+ * Sprint 1: usa el singleton de SupabaseClientFactory en lugar de instanciar
+ * su propio cliente, eliminando duplicación de configuración.
  */
 
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SupabaseClient } from '@supabase/supabase-js';
 import logger from '@/config/logger';
+import { getSupabaseClient } from '@/infrastructure/services/SupabaseClientFactory';
 
 class TenantLookupService {
-  private supabaseClient: SupabaseClient | null = null;
-
   /**
-   * Inicializa el cliente de Supabase con service role
-   * Solo se ejecuta una vez
-   */
-  private initializeSupabase(): SupabaseClient {
-    if (this.supabaseClient) {
-      return this.supabaseClient;
-    }
-
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (!supabaseUrl || !serviceRoleKey) {
-      logger.warn(
-        '⚠️  Variables Supabase no configuradas (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY). '
-        + 'Webhook sin tenant mapping fallará gracefully.',
-      );
-      // Retornar un cliente dummy que siempre falla
-      return createClient(
-        supabaseUrl || 'https://placeholder.supabase.co',
-        serviceRoleKey || 'placeholder',
-      );
-    }
-
-    this.supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-      },
-    });
-
-    return this.supabaseClient;
-  }
-
-  /**
-   * Buscar tenantId por número de teléfono (businessNumber)
-   * Consulta tabla phone_tenant_map
+   * Buscar tenantId por número de teléfono (businessNumber).
+   * Consulta tabla phone_tenant_map.
    *
-   * @param phoneNumber - Número de teléfono formateado (ej: 573123456789)
-   * @returns tenantId si existe, null si no
+   * @param phoneNumber - Número de teléfono formateado (ej: 5217471234567)
+   * @returns tenantId si existe, null si no o si Supabase no está configurado
    */
   async lookupTenantByPhone(phoneNumber: string): Promise<string | null> {
     try {
@@ -58,7 +26,16 @@ class TenantLookupService {
         return null;
       }
 
-      const supabase = this.initializeSupabase();
+      let supabase: SupabaseClient;
+      try {
+        supabase = getSupabaseClient();
+      } catch (err) {
+        logger.warn(
+          { err },
+          '⚠️  Supabase no configurado; lookup de tenant por teléfono deshabilitado',
+        );
+        return null;
+      }
 
       const { data, error } = await supabase
         .from('phone_tenant_map')
@@ -107,4 +84,3 @@ class TenantLookupService {
 // Exportar singleton
 export const tenantLookupService = new TenantLookupService();
 export { TenantLookupService };
-
