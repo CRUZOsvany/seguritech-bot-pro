@@ -127,4 +127,36 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
     }
     return { id: data.id };
   }
+
+  async deactivateForTenant(tenantId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('bot_flows')
+      .update({ is_active: false })
+      .eq('tenant_id', tenantId)
+      .eq('is_active', true);
+
+    if (error) {
+      this.logger.error({ error, tenantId }, 'deactivateForTenant failed');
+      throw new Error(`deactivateForTenant failed: ${error.message}`);
+    }
+    this.logger.info({ tenantId }, '[SupabaseBotFlowRepository] flow desactivado');
+  }
+
+  async listTemplates(): Promise<Array<{
+    slug: string;
+    giro: string;
+    nombre: string;
+    descripcion: string | null;
+  }>> {
+    const { data, error } = await this.supabase
+      .from('flow_templates')
+      .select('slug, giro, nombre, descripcion')
+      .order('giro');
+
+    if (error) {
+      this.logger.error({ error }, 'listTemplates failed');
+      throw new Error(`listTemplates failed: ${error.message}`);
+    }
+    return data ?? [];
+  }
 }

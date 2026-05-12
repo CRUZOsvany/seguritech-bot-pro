@@ -31,6 +31,9 @@ const envSchema = z.object({
 
   // CORS
   ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
+
+  // Admin API
+  BACKEND_API_KEY: z.string().min(16).optional(),
 });
 
 type EnvType = z.infer<typeof envSchema>;
@@ -102,6 +105,10 @@ export const config = {
 
   cors: {
     allowedOrigins: envVars.ALLOWED_ORIGINS,
+  },
+
+  admin: {
+    apiKey: envVars.BACKEND_API_KEY || '',
   },
 };
 

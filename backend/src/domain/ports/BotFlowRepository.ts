@@ -32,4 +32,21 @@ export interface BotFlowRepository {
     flow: BotFlow;
     sourceTemplateId?: string | null;
   }): Promise<{ id: string }>;
+
+  /**
+   * Desactiva todos los bot_flows activos de un tenant (is_active = false).
+   * Llamar ANTES de cloneFromTemplate() para evitar el error de flow duplicado.
+   */
+  deactivateForTenant(tenantId: string): Promise<void>;
+
+  /**
+   * Lista todos los flow_templates disponibles para asignar a tenants.
+   * Ordenados por giro para facilitar el selector en el panel.
+   */
+  listTemplates(): Promise<Array<{
+    slug: string;
+    giro: string;
+    nombre: string;
+    descripcion: string | null;
+  }>>;
 }

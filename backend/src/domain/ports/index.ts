@@ -44,3 +44,14 @@ export interface TenantConfigPort {
   getConfig(tenantId: string): Promise<TenantConfig | null>;
   invalidate(tenantId: string): void;
 }
+
+/**
+ * Puerto para carga y persistencia de flujos conversacionales por tenant.
+ * Re-exportado desde BotFlowRepository.ts para mantener un solo punto de entrada.
+ */
+export { BotFlowRepository } from './BotFlowRepository';
+
+/**
+ * Puerto para operaciones CRUD de tenants (administración interna).
+ */
+export { TenantRepository } from './TenantRepository';

@@ -495,7 +495,7 @@ on conflict (slug) do update set
 
 
 -- ============================================================================
--- TEMPLATE 4/4: pizzeria_v1 (giro 'pizzeria')
+-- TEMPLATE 4/5: pizzeria_v1 (giro 'pizzeria')
 -- Foco: pedido a domicilio con captura de dirección y teléfono.
 -- ============================================================================
 insert into public.flow_templates (slug, giro, nombre, descripcion, json_definition, es_default, version)
@@ -648,6 +648,161 @@ values (
         "content": {
           "user_response": "Te conectamos con la pizzería. Te responderán en breve.",
           "owner_alert_template": "🍕 Cliente {{phone}} pidió hablar contigo en {{nombre_negocio}}.\nMensaje: {{last_message}}"
+        },
+        "transitions": [
+          {"condition": {"type": "default"}, "next_node_id": "end"}
+        ]
+      },
+      {
+        "id": "end",
+        "type": "end",
+        "content": {},
+        "transitions": []
+      }
+    ]
+  }'::jsonb,
+  false,
+  '1.0'
+)
+on conflict (slug) do update set
+  giro = excluded.giro,
+  nombre = excluded.nombre,
+  descripcion = excluded.descripcion,
+  json_definition = excluded.json_definition,
+  es_default = excluded.es_default,
+  version = excluded.version,
+  updated_at = now();
+
+-- ============================================================================
+-- TEMPLATE 5/5: ferreteria_v1 (giro 'ferreteria')
+-- Foco: catálogo de productos, pedidos y contacto directo con el dueño.
+-- ============================================================================
+insert into public.flow_templates (slug, giro, nombre, descripcion, json_definition, es_default, version)
+values (
+  'ferreteria_v1',
+  'ferreteria',
+  'Ferretería V1',
+  'Flujo para ferreterías: catálogo dinámico, pedido con confirmación y escape a humano.',
+  '{
+    "version": "1.0",
+    "start_node_id": "welcome_fer",
+    "nodes": [
+      {
+        "id": "welcome_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "🔧 {{nombre_negocio}}\n\n¿En qué te podemos ayudar?",
+          "buttons": [
+            {"id": "ver_productos", "title": "Ver productos"},
+            {"id": "hacer_pedido", "title": "Hacer pedido"},
+            {"id": "humano", "title": "Hablar con humano"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "button", "value": "ver_productos"}, "next_node_id": "ver_productos_fer"},
+          {"condition": {"type": "button", "value": "hacer_pedido"}, "next_node_id": "hacer_pedido_fer"},
+          {"condition": {"type": "button", "value": "humano"}, "next_node_id": "escalate_fer"},
+          {"condition": {"type": "default"}, "next_node_id": "no_entiendo_fer"}
+        ]
+      },
+      {
+        "id": "ver_productos_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "🔩 Nuestros productos:\n\n{{catalog_listing}}",
+          "buttons": [
+            {"id": "back", "title": "Volver al menú"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "default"}, "next_node_id": "welcome_fer"}
+        ]
+      },
+      {
+        "id": "hacer_pedido_fer",
+        "type": "send_list",
+        "content": {
+          "text": "Elige el producto que necesitas:",
+          "button_label": "Ver productos",
+          "sections": [
+            {
+              "type": "dynamic",
+              "title": "Productos",
+              "items_source": "catalog_items"
+            }
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "list_item_any", "save_to_context": "selected_product_id"}, "next_node_id": "confirmar_pedido_fer"},
+          {"condition": {"type": "default"}, "next_node_id": "no_entiendo_fer"}
+        ]
+      },
+      {
+        "id": "confirmar_pedido_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "Seleccionaste: *{{selected_product_name}}* — ${{selected_product_price}}\n\n¿Confirmas tu pedido?",
+          "buttons": [
+            {"id": "si", "title": "Sí, confirmar"},
+            {"id": "no", "title": "No, cancelar"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "button", "value": "si"}, "next_node_id": "pedido_confirmado_fer"},
+          {"condition": {"type": "button", "value": "no"}, "next_node_id": "pedido_cancelado_fer"},
+          {"condition": {"type": "default"}, "next_node_id": "confirmar_pedido_fer"}
+        ]
+      },
+      {
+        "id": "pedido_confirmado_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "✅ Pedido registrado. Te contactamos para coordinar la entrega.\n\n#{{order_id}}",
+          "buttons": [
+            {"id": "back", "title": "Volver al menú"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "default"}, "next_node_id": "welcome_fer"}
+        ]
+      },
+      {
+        "id": "pedido_cancelado_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "❌ Pedido cancelado.",
+          "buttons": [
+            {"id": "back", "title": "Volver al menú"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "default"}, "next_node_id": "welcome_fer"}
+        ]
+      },
+      {
+        "id": "no_entiendo_fer",
+        "type": "send_buttons",
+        "content": {
+          "text": "No te entendí. Elige una opción:",
+          "buttons": [
+            {"id": "ver_productos", "title": "Ver productos"},
+            {"id": "hacer_pedido", "title": "Hacer pedido"},
+            {"id": "humano", "title": "Hablar con humano"}
+          ]
+        },
+        "transitions": [
+          {"condition": {"type": "button", "value": "ver_productos"}, "next_node_id": "ver_productos_fer"},
+          {"condition": {"type": "button", "value": "hacer_pedido"}, "next_node_id": "hacer_pedido_fer"},
+          {"condition": {"type": "button", "value": "humano"}, "next_node_id": "escalate_fer"},
+          {"condition": {"type": "default"}, "next_node_id": "welcome_fer"}
+        ]
+      },
+      {
+        "id": "escalate_fer",
+        "type": "escape_to_human",
+        "content": {
+          "user_response": "Te conectamos con la ferretería. Te responderán en breve.",
+          "owner_alert_template": "🔧 Cliente {{phone}} pidió hablar contigo en {{nombre_negocio}}.\nMensaje: {{last_message}}"
         },
         "transitions": [
           {"condition": {"type": "default"}, "next_node_id": "end"}

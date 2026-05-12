@@ -3,6 +3,9 @@ import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUserRepository';
+import { SupabaseBotFlowRepository } from '@/infrastructure/repositories/SupabaseBotFlowRepository';
+import { SupabaseTenantRepository } from '@/infrastructure/repositories/SupabaseTenantRepository';
+import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
@@ -62,11 +65,20 @@ export class Bootstrap {
         notificationPort = new ConsoleNotificationAdapter();
       }
 
+      // === Repositorio de flows ===
+      const botFlowRepository = new SupabaseBotFlowRepository(supabase, this.logger);
+
+      // === Repositorio de tenants ===
+      const tenantRepository = new SupabaseTenantRepository(supabase, this.logger);
+
       // === Capa de aplicación ===
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
         tenantConfigService,
+        botFlowRepository,
+        tenantRepository,
+        supabase,
         this.logger,
       );
       this.logger.info('✅ Contenedor DI listo');
@@ -82,6 +94,18 @@ export class Bootstrap {
         async (tenantId, phoneNumber, text, metaMessageId) =>
           botController.processMessage(tenantId, phoneNumber, text, metaMessageId),
       );
+
+      // === API Admin (interna para el panel de SegurITech) ===
+      const adminRouter = createAdminRouter({
+        assignMoldeUseCase: this.container.getAssignMoldeUseCase(),
+        setTenantStatusUseCase: this.container.getSetTenantStatusUseCase(),
+        tenantRepository,
+        botFlowRepository,
+        logger: this.logger,
+      });
+      this.expressServer.setupAdminRoutes(adminRouter);
+      this.logger.info('✅ API Admin montada en /api/admin');
+
       await this.expressServer.start();
 
       // === CLI interactiva (útil en dev) ===

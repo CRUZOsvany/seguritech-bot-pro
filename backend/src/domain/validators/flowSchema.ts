@@ -94,27 +94,21 @@ const SendButtonsNodeSchema = z.object({
   transitions: z.array(TransitionSchema),
 });
 
-const SendListNodeSchema = z
-  .object({
-    id: z.string().min(1),
-    type: z.literal('send_list'),
-    content: z.object({
-      text: z.string().min(1),
-      button_label: z.string().min(1).max(20, 'Meta: button_label ≤ 20 chars'),
-      sections: z.array(ListSectionSchema).min(1),
-    }),
-    transitions: z.array(TransitionSchema),
-  })
-  .refine(
-    (node) => {
-      const totalStatic = node.content.sections.reduce((acc, s) => {
-        if (s.type === 'static') return acc + s.items.length;
-        return acc;
-      }, 0);
-      return totalStatic <= 10;
-    },
-    { message: 'Meta: máximo 10 items totales en static sections' },
-  );
+// IMPORTANTE: este schema NO debe usar `.refine()` directo — devolvería
+// ZodEffects<ZodObject> y `z.discriminatedUnion` exige ZodObject puro en cada
+// rama (lo evalúa leyendo `.shape[discriminator]` en runtime). La validación
+// "max 10 items totales en static sections" se aplica en el superRefine global
+// de FlowSchema.
+const SendListNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_list'),
+  content: z.object({
+    text: z.string().min(1),
+    button_label: z.string().min(1).max(20, 'Meta: button_label ≤ 20 chars'),
+    sections: z.array(ListSectionSchema).min(1),
+  }),
+  transitions: z.array(TransitionSchema),
+});
 
 const SendMediaNodeSchema = z.object({
   id: z.string().min(1),
@@ -166,9 +160,9 @@ const EndNodeSchema = z.object({
 // EndNodeSchema tipa `transitions` con .max(0), lo que produce una rama
 // estructuralmente más estrecha que las demás. TypeScript no infiere el
 // tuplo como `readonly [Option, ...Option[]]` requerido por
-// discriminatedUnion en zod 3.25+. El cast es seguro: en runtime todas
-// las ramas son ZodObject con `type: literal`, condición que zod valida
-// al evaluar el discriminated union.
+// discriminatedUnion en zod 3.25+. El cast es seguro: todas las ramas son
+// ZodObject directos (sin .refine) — condición que zod valida en runtime
+// leyendo `.shape[discriminator]`.
 const FlowNodeSchema = z.discriminatedUnion(
   'type',
   [
@@ -226,6 +220,27 @@ export const FlowSchema = z
         code: z.ZodIssueCode.custom,
         message: 'El flow debe tener al menos un nodo de tipo "end"',
       });
+    }
+
+    // Meta: max 10 items totales en static sections de cada send_list.
+    // Aplicado aquí (en vez de en SendListNodeSchema.refine) porque
+    // discriminatedUnion no acepta ZodEffects en sus ramas (ver nota arriba).
+    for (const node of flow.nodes) {
+      if (node.type === 'send_list') {
+        const totalStatic = node.content.sections.reduce(
+          (acc: number, s: { type: 'static' | 'dynamic'; items?: unknown[] }) => {
+            if (s.type === 'static' && Array.isArray(s.items)) return acc + s.items.length;
+            return acc;
+          },
+          0,
+        );
+        if (totalStatic > 10) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Nodo "${node.id}": Meta: máximo 10 items totales en static sections`,
+          });
+        }
+      }
     }
   });
 

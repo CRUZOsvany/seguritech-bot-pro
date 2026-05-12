@@ -1,4 +1,4 @@
-import express, { Express, Request, Response } from 'express';
+import express, { Express, Request, Response, Router } from 'express';
 import pino from 'pino';
 import crypto from 'crypto';
 import helmet from 'helmet';
@@ -219,6 +219,14 @@ export class ExpressServer {
     this.app.get('/webhook/:tenantId', (req: Request, res: Response) => {
       this.metaAdapter?.verifyWebhook(req, res) ?? res.sendStatus(503);
     });
+  }
+
+  /**
+   * Monta el router de administración interna bajo /api/admin.
+   * Llamar después de setupRoutes() en Bootstrap.
+   */
+  setupAdminRoutes(adminRouter: Router): void {
+    this.app.use('/api/admin', adminRouter);
   }
 
   /**

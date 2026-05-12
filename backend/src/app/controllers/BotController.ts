@@ -1,17 +1,23 @@
 import pino from 'pino';
-import { Message, BotResponse } from '@/domain/entities';
+import { Message, User, UserState } from '@/domain/entities';
 import { HandleMessageUseCase } from '@/domain/use-cases/HandleMessageUseCase';
-import { NotificationPort, UserRepository, TenantConfigPort } from '@/domain/ports';
+import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
+import {
+  NotificationPort,
+  UserRepository,
+  TenantConfigPort,
+  BotFlowRepository,
+} from '@/domain/ports';
 
 /**
- * Controlador del bot.
- * Orquesta los casos de uso y adapta entre infraestructura y dominio.
+ * Controlador del bot — Sprint 2.
  *
- * Responsabilidades:
- * - Cargar configuración del tenant
- * - Convertir mensaje a entidad de dominio
- * - Ejecutar caso de uso
- * - Enviar respuesta via NotificationPort
+ * Estrategia dual:
+ *  1. Intenta FlowInterpreter cuando el tenant tiene un bot_flow activo.
+ *  2. Si no hay flow (o falla la carga) → cae a HandleMessageUseCase (FSM legacy).
+ *
+ * El cliente de WhatsApp no nota la diferencia — ambas rutas envían mensajes
+ * por el mismo NotificationPort.
  */
 export class BotController {
   private readonly handleMessageUseCase: HandleMessageUseCase;
@@ -20,6 +26,8 @@ export class BotController {
     private readonly userRepository: UserRepository,
     private readonly notificationPort: NotificationPort,
     private readonly tenantConfigPort: TenantConfigPort,
+    private readonly botFlowRepository: BotFlowRepository,
+    private readonly flowInterpreter: FlowInterpreter,
     private readonly logger: pino.Logger,
   ) {
     this.handleMessageUseCase = new HandleMessageUseCase(userRepository);
@@ -57,36 +65,154 @@ export class BotController {
         metaMessageId,
       };
 
-      // 3. Ejecutar caso de uso (lógica de negocio pura)
-      const response: BotResponse = await this.handleMessageUseCase.execute(
-        message,
-        config,
-      );
+      // 3. Intentar cargar bot_flow activo
+      let flow = null;
+      try {
+        flow = await this.botFlowRepository.findActiveByTenant(tenantId);
+      } catch (err) {
+        this.logger.error(
+          { err, tenantId },
+          'Error cargando bot_flow — degradando a FSM legacy',
+        );
+      }
+
+      // 4. Ruta principal: FlowInterpreter
+      if (flow) {
+        const user = await this.getOrCreateUser(tenantId, from);
+        const result = await this.flowInterpreter.execute({
+          flow,
+          user,
+          message,
+          tenantConfig: config,
+        });
+
+        // Persistir nextNodeId + contextUpdates
+        const mergedContext = { ...(user.context ?? {}), ...result.contextUpdates };
+        await this.userRepository.update({
+          ...user,
+          currentNodeId: result.nextNodeId,
+          context: mergedContext,
+          updatedAt: new Date(),
+        });
+
+        // Enviar outputs
+        const lastText = await this.dispatchOutputs(from, result.outputs);
+
+        this.logger.info(
+          {
+            tenantId,
+            from,
+            nextNodeId: result.nextNodeId,
+            outputs: result.outputs.length,
+            flowEnded: result.flowEnded,
+          },
+          'Flow ejecutado',
+        );
+        return lastText;
+      }
+
+      // 5. Fallback: HandleMessageUseCase (FSM hardcodeada)
+      this.logger.debug({ tenantId }, 'Usando FSM legacy (sin bot_flow activo)');
+      const response = await this.handleMessageUseCase.execute(message, config);
 
       this.logger.info(
         { tenantId, from, hasButtons: !!response.buttons?.length },
-        'Respuesta generada',
+        'Respuesta FSM generada',
       );
 
-      // 4. Enviar respuesta
       if (response.buttons && response.buttons.length > 0) {
-        await this.notificationPort.sendButtons(
-          from,
-          response.message,
-          response.buttons,
-        );
+        await this.notificationPort.sendButtons(from, response.message, response.buttons);
       } else {
         await this.notificationPort.sendMessage(from, response.message);
       }
 
       return response.message;
     } catch (error) {
-      this.logger.error(
-        { error, tenantId, from },
-        'Error procesando mensaje',
-      );
+      this.logger.error({ error, tenantId, from }, 'Error procesando mensaje');
       throw error;
     }
+  }
+
+  private async getOrCreateUser(tenantId: string, from: string): Promise<User> {
+    const existing = await this.userRepository.findByPhoneNumber(tenantId, from);
+    if (existing) return existing;
+
+    const newUser: User = {
+      id: this.generateId(),
+      tenantId,
+      phoneNumber: from,
+      currentState: UserState.INITIAL,
+      currentNodeId: undefined,
+      context: {},
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    await this.userRepository.save(newUser);
+    return newUser;
+  }
+
+  /**
+   * Traduce InterpreterOutput[] a llamadas al NotificationPort.
+   * Devuelve el último texto enviado (o null si no se envió nada).
+   */
+  private async dispatchOutputs(
+    to: string,
+    outputs: InterpreterOutput[],
+  ): Promise<string | null> {
+    let lastText: string | null = null;
+
+    for (const output of outputs) {
+      switch (output.kind) {
+      case 'text':
+        await this.notificationPort.sendMessage(to, output.text);
+        lastText = output.text;
+        break;
+
+      case 'buttons':
+        await this.notificationPort.sendButtons(
+          to,
+          output.text,
+          output.buttons.map((b) => b.title),
+        );
+        lastText = output.text;
+        break;
+
+      case 'list': {
+        // NotificationPort no tiene sendList nativo todavía;
+        // serializamos a texto enumerado como fallback.
+        const lines: string[] = [output.text];
+        if (output.sections.length > 0) lines.push('');
+        for (const section of output.sections) {
+          if (section.title) lines.push(`*${section.title}*`);
+          section.items.forEach((item, i) => {
+            const desc = item.description ? ` — ${item.description}` : '';
+            lines.push(`${i + 1}. ${item.title}${desc}`);
+          });
+        }
+        const text = lines.join('\n');
+        await this.notificationPort.sendMessage(to, text);
+        lastText = text;
+        break;
+      }
+
+      case 'image':
+      case 'location':
+        // NotificationPort actual no tiene sendMedia; loguear y omitir.
+        this.logger.warn(
+          { kind: output.kind, to },
+          'send_media no soportado por NotificationPort — omitiendo output',
+        );
+        break;
+
+      case 'escape_to_human':
+        await this.notificationPort.sendMessage(to, output.userResponse);
+        lastText = output.userResponse;
+        // owner_alert se ignora en V1 — Sprint 5 lo enrutará al canal del operador.
+        break;
+      }
+    }
+
+    return lastText;
   }
 
   private generateId(): string {

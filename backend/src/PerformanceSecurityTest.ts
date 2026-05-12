@@ -6,12 +6,13 @@
 // ===================================================================
 
 import pino from 'pino';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
-import { TenantConfigPort } from '@/domain/ports';
+import { TenantConfigPort, BotFlowRepository, TenantRepository } from '@/domain/ports';
 
 /**
  * INTERFACE: Resultado de test
@@ -347,11 +348,29 @@ export class PerformanceSecurityTest {
       getConfig: async () => null,
       invalidate: () => {},
     };
+    // Stubs para el path de FlowInterpreter — este script ejerce solo la FSM legacy.
+    const botFlowRepository: BotFlowRepository = {
+      findActiveByTenant: async () => null,
+      cloneFromTemplate: async () => { throw new Error('not implemented in perf test'); },
+      upsert: async () => { throw new Error('not implemented in perf test'); },
+      deactivateForTenant: async () => { /* noop */ },
+      listTemplates: async () => [],
+    };
+    // Stub TenantRepository (no se ejerce el path admin en este script).
+    const tenantRepository: TenantRepository = {
+      findAll: async () => [],
+      findById: async () => null,
+      setStatus: async () => { /* noop */ },
+    };
+    const supabaseStub = {} as SupabaseClient;
 
     this.container = new ApplicationContainer(
       userRepository,
       notificationPort,
       tenantConfigPort,
+      botFlowRepository,
+      tenantRepository,
+      supabaseStub,
       this.logger,
     );
   }
