@@ -16,6 +16,8 @@ interface ClientWithMetrics extends Tenant {
   monto_mensual: number;
   fecha_proximo_pago: string | null;
   messages_this_month: number;
+  has_active_flow: boolean;
+  template_slug: string | null;
 }
 
 export default function DashboardPage() {
@@ -153,6 +155,7 @@ export default function DashboardPage() {
                 <tr>
                   <th className="px-6 py-3 text-left font-semibold text-gray-700">Nombre</th>
                   <th className="px-6 py-3 text-left font-semibold text-gray-700">Estado</th>
+                  <th className="px-6 py-3 text-left font-semibold text-gray-700">Molde</th>
                   <th className="px-6 py-3 text-center font-semibold text-gray-700">Mensajes/Mes</th>
                   <th className="px-6 py-3 text-center font-semibold text-gray-700">Próximo Pago</th>
                   <th className="px-6 py-3 text-right font-semibold text-gray-700">Acciones</th>
@@ -168,6 +171,17 @@ export default function DashboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4">{getStatusBadge(client.status)}</td>
+                    <td className="px-6 py-4">
+                      {client.has_active_flow ? (
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-semibold">
+                          ✅ {client.template_slug ?? 'Activo'}
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-orange-100 text-orange-700 rounded-full text-xs font-semibold">
+                          ⚠️ Sin molde
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-center">
                       <span className="font-semibold text-gray-900">{client.messages_this_month}</span>
                     </td>
@@ -188,12 +202,10 @@ export default function DashboardPage() {
                       </div>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <Link href={`/clients/${client.id}`} passHref legacyBehavior>
-                        <a role="button">
-                          <Button variant="ghost" size="sm">
-                            Editar
-                          </Button>
-                        </a>
+                      <Link href={`/clients/${client.id}`}>
+                        <Button variant="ghost" size="sm">
+                          Ver →
+                        </Button>
                       </Link>
                     </td>
                   </tr>

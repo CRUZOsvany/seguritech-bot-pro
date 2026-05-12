@@ -7,7 +7,6 @@
 import { getServerSession } from 'next-auth';
 import { authConfig } from '@/lib/auth';
 import { createServiceClient } from '@/lib/supabase';
-import { backendApi } from '@/lib/api-client';
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuid } from 'uuid';
 import { UserRole, CreateClientPayload } from '@/lib/types';
@@ -72,7 +71,7 @@ export async function GET(request: NextRequest) {
     for (const tenant of tenants || []) {
       const { data: owner } = await supabase
         .from('owner_data')
-        .select('monto_mensual, fecha_proximo_pago')
+        .select('nombre_dueno, whatsapp_dueno, monto_mensual, fecha_proximo_pago')
         .eq('tenant_id', tenant.id)
         .single();
 
@@ -85,11 +84,33 @@ export async function GET(request: NextRequest) {
         .eq('tenant_id', tenant.id)
         .gte('timestamp', startOfMonth.toISOString());
 
+      // Verificar flow activo (TODO: convertir a batch query cuando haya más de 20 tenants)
+      const { data: activeFlow } = await supabase
+        .from('bot_flows')
+        .select('source_template_id')
+        .eq('tenant_id', tenant.id)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      let templateSlug: string | null = null;
+      if (activeFlow?.source_template_id) {
+        const { data: tmpl } = await supabase
+          .from('flow_templates')
+          .select('slug')
+          .eq('id', activeFlow.source_template_id)
+          .maybeSingle();
+        templateSlug = tmpl?.slug ?? null;
+      }
+
       enrichedTenants.push({
         ...tenant,
         monto_mensual: owner?.monto_mensual || 0,
         fecha_proximo_pago: owner?.fecha_proximo_pago || null,
         messages_this_month: count || 0,
+        has_active_flow: !!activeFlow,
+        template_slug: templateSlug,
+        nombre_dueno: owner?.nombre_dueno ?? '',
+        whatsapp_dueno: owner?.whatsapp_dueno ?? '',
       });
     }
 
@@ -226,16 +247,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 6. Notificar al backend Node.js sobre el nuevo cliente
-    try {
-      await backendApi.notifyNewClient({
-        tenantId,
-        nombre_negocio: body.nombre_negocio,
-        numero_whatsapp_asignado: body.numero_whatsapp_asignado,
-      });
-    } catch (error) {
-      console.warn('Backend notification failed, pero cliente creado:', error);
-    }
+    // Nota: el backend Node.js lee los tenants desde Supabase on-demand,
+    // así que no hace falta notificarlo aquí (Sprint 4 retiró ese hop).
 
     return NextResponse.json({
       status: 'success',

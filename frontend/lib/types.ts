@@ -197,3 +197,21 @@ export interface PaginatedResponse<T> {
   totalPages: number;
 }
 
+// ===== ADMIN API (Sprint 3+) =====
+export interface TemplateSummary {
+  slug: string;
+  giro: string;
+  nombre: string;
+  descripcion: string | null;
+}
+
+export interface ClientWithFlow extends Tenant {
+  has_active_flow: boolean;
+  template_slug: string | null;
+  monto_mensual: number;
+  fecha_proximo_pago: string | null;
+  nombre_dueno: string;
+  whatsapp_dueno: string;
+  messages_this_month: number;
+}
+
