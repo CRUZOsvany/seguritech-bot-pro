@@ -13,6 +13,7 @@ import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
+import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 
 /**
  * Contenedor de inyección de dependencias.
@@ -25,6 +26,7 @@ export class ApplicationContainer {
   private readonly botController: BotController;
   private readonly assignMoldeUseCase: AssignMoldeUseCase;
   private readonly setTenantStatusUseCase: SetTenantStatusUseCase;
+  private readonly simulateMessageUseCase: SimulateMessageUseCase;
 
   constructor(
     userRepository: UserRepository,
@@ -62,6 +64,14 @@ export class ApplicationContainer {
       tenantRepository,
       logger,
     );
+
+    this.simulateMessageUseCase = new SimulateMessageUseCase(
+      userRepository,
+      tenantConfigPort,
+      botFlowRepository,
+      flowInterpreter,
+      logger,
+    );
   }
 
   getBotController(): BotController {
@@ -74,5 +84,9 @@ export class ApplicationContainer {
 
   getSetTenantStatusUseCase(): SetTenantStatusUseCase {
     return this.setTenantStatusUseCase;
+  }
+
+  getSimulateMessageUseCase(): SimulateMessageUseCase {
+    return this.simulateMessageUseCase;
   }
 }

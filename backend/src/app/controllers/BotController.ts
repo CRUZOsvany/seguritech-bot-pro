@@ -179,21 +179,23 @@ export class BotController {
         lastText = output.text;
         break;
 
-      case 'list': {
-        const lines: string[] = [output.text];
-        if (output.sections.length > 0) lines.push('');
-        for (const section of output.sections) {
-          if (section.title) lines.push(`*${section.title}*`);
-          section.items.forEach((item, i) => {
-            const desc = item.description ? ` — ${item.description}` : '';
-            lines.push(`${i + 1}. ${item.title}${desc}`);
-          });
-        }
-        const text = lines.join('\n');
-        await this.notificationPort.sendMessage(tenantId, to, text);
-        lastText = text;
+      case 'list':
+        await this.notificationPort.sendList(
+          tenantId,
+          to,
+          output.text,
+          output.buttonLabel,
+          output.sections.map((section) => ({
+            title: section.title,
+            rows: section.items.map((item) => ({
+              id: item.id,
+              title: item.title,
+              ...(item.description ? { description: item.description } : {}),
+            })),
+          })),
+        );
+        lastText = output.text;
         break;
-      }
 
       case 'image':
         await this.notificationPort.sendImage(
@@ -206,16 +208,32 @@ export class BotController {
         break;
 
       case 'location':
-        this.logger.warn(
-          { kind: output.kind, to },
-          'send_location aún no soportado por NotificationPort — omitiendo',
+        await this.notificationPort.sendLocation(
+          tenantId,
+          to,
+          output.latitude,
+          output.longitude,
+          output.name,
+          output.address,
         );
+        lastText = output.name ?? null;
+        break;
+
+      case 'document':
+        await this.notificationPort.sendDocument(
+          tenantId,
+          to,
+          output.url,
+          output.filename,
+          output.caption,
+        );
+        lastText = output.caption ?? output.filename;
         break;
 
       case 'escape_to_human':
         await this.notificationPort.sendMessage(tenantId, to, output.userResponse);
         lastText = output.userResponse;
-        // owner_alert se ignora en V1 — Sprint futuro lo enrutará al operador.
+        // owner_alert se ignora en V1
         break;
       }
     }

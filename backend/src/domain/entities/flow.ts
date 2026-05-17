@@ -140,6 +140,12 @@ export type SendMediaContent =
       longitude: number;
       name?: string;
       address?: string;
+    }
+  | {
+      media_type: 'document';
+      url: string;
+      filename: string; // <= 240 chars (Meta), aparece al lado del ícono PDF
+      caption?: string; // <= 1024 chars
     };
 
 export interface SendMediaNode extends FlowNodeBase {

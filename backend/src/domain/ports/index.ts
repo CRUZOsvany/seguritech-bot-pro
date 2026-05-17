@@ -32,9 +32,10 @@ export interface OrderRepository {
  * Puerto para envío de mensajes al usuario final.
  *
  * BREAKING CHANGE (Sprint C): todas las firmas reciben tenantId como primer
- * argumento. La razón es multi-tenant: cada tenant tiene su propio
- * phone_number_id y access_token de Meta. El adapter resuelve credenciales
- * internamente; ni el BotController ni los use cases conocen tokens.
+ * argumento. El adapter resuelve credenciales internamente.
+ *
+ * Sprint D: agregados sendList, sendLocation, sendDocument para paridad
+ * total con Meta Cloud API v21.0.
  */
 export interface NotificationPort {
   sendMessage(
@@ -54,6 +55,44 @@ export interface NotificationPort {
     tenantId: string,
     phoneNumber: string,
     imageUrl: string,
+    caption?: string,
+  ): Promise<void>;
+
+  /**
+   * Envía un mensaje interactivo tipo lista (modal de opciones).
+   * Cada sección debe tener al menos 1 item; total <= 10 rows; <= 10 sections.
+   */
+  sendList(
+    tenantId: string,
+    phoneNumber: string,
+    bodyText: string,
+    buttonLabel: string,
+    sections: Array<{
+      title: string;
+      rows: Array<{ id: string; title: string; description?: string }>;
+    }>,
+  ): Promise<void>;
+
+  /**
+   * Envía un pin de ubicación geográfica.
+   */
+  sendLocation(
+    tenantId: string,
+    phoneNumber: string,
+    latitude: number,
+    longitude: number,
+    name?: string,
+    address?: string,
+  ): Promise<void>;
+
+  /**
+   * Envía un documento (PDF, etc.) por URL.
+   */
+  sendDocument(
+    tenantId: string,
+    phoneNumber: string,
+    documentUrl: string,
+    filename: string,
     caption?: string,
   ): Promise<void>;
 }

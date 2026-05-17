@@ -31,6 +31,12 @@ export type InterpreterOutput =
       name?: string;
       address?: string;
     }
+  | {
+      kind: 'document';
+      url: string;
+      filename: string;
+      caption?: string;
+    }
   | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string };
 
 export interface InterpreterResult {
@@ -411,6 +417,22 @@ export class FlowInterpreter {
           : undefined;
         return [{ kind: 'image', url: node.content.url, caption }];
       }
+
+      if (node.content.media_type === 'document') {
+        const caption = node.content.caption
+          ? await resolveText(node.content.caption)
+          : undefined;
+        return [
+          {
+            kind: 'document',
+            url: node.content.url,
+            filename: node.content.filename,
+            caption,
+          },
+        ];
+      }
+
+      // media_type === 'location'
       return [
         {
           kind: 'location',

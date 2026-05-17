@@ -99,6 +99,7 @@ export class Bootstrap {
       const adminRouter = createAdminRouter({
         assignMoldeUseCase: this.container.getAssignMoldeUseCase(),
         setTenantStatusUseCase: this.container.getSetTenantStatusUseCase(),
+        simulateMessageUseCase: this.container.getSimulateMessageUseCase(),
         tenantRepository,
         botFlowRepository,
         logger: this.logger,

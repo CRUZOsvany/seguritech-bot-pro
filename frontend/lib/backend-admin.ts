@@ -32,8 +32,9 @@ async function callBackend<T>(
       return { error: body.error ?? `Backend error ${res.status}`, status: res.status };
     }
     return { data: body as T, status: res.status };
-  } catch (err: any) {
-    return { error: err.message ?? 'Network error', status: 503 };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Network error';
+    return { error: message, status: 503 };
   }
 }
 
@@ -51,6 +52,42 @@ export interface TenantSummary {
   status: string;
   webhook_verified: boolean;
   has_active_flow: boolean;
+}
+
+// ===== Tipos de outputs del simulador (mirror de InterpreterOutput) =====
+export type SimulatorOutput =
+  | { kind: 'text'; text: string }
+  | { kind: 'buttons'; text: string; buttons: { id: string; title: string }[] }
+  | {
+      kind: 'list';
+      text: string;
+      buttonLabel: string;
+      sections: Array<{
+        title: string;
+        items: Array<{ id: string; title: string; description?: string }>;
+      }>;
+    }
+  | { kind: 'image'; url: string; caption?: string }
+  | {
+      kind: 'location';
+      latitude: number;
+      longitude: number;
+      name?: string;
+      address?: string;
+    }
+  | {
+      kind: 'document';
+      url: string;
+      filename: string;
+      caption?: string;
+    }
+  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string };
+
+export interface SimulateResponse {
+  outputs: SimulatorOutput[];
+  nextNodeId: string;
+  context: Record<string, unknown>;
+  flowEnded: boolean;
 }
 
 export const backendAdmin = {
@@ -79,5 +116,27 @@ export const backendAdmin = {
   async getTenants(): Promise<TenantSummary[]> {
     const res = await callBackend<{ tenants: TenantSummary[] }>('/tenants');
     return res.data?.tenants ?? [];
+  },
+  async simulate(args: {
+    tenantId: string;
+    phoneNumber: string;
+    content: string;
+    persist: boolean;
+  }): Promise<{ data?: SimulateResponse; error?: string }> {
+    const res = await callBackend<SimulateResponse>('/simulate', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+    return { data: res.data, error: res.error };
+  },
+  async simulateReset(args: {
+    tenantId: string;
+    phoneNumber: string;
+  }): Promise<{ error?: string }> {
+    const res = await callBackend('/simulate/reset', {
+      method: 'POST',
+      body: JSON.stringify(args),
+    });
+    return { error: res.error };
   },
 };

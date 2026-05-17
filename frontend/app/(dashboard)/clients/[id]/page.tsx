@@ -115,10 +115,18 @@ export default function ClientDetailPage() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex items-center gap-4">
         <Button variant="ghost" size="sm" onClick={() => router.push('/clients')}>← Clientes</Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-2xl font-bold text-gray-900">{client.nombre_negocio}</h1>
           <p className="text-gray-500 capitalize text-sm">{client.giro} • {STATUS_LABELS[client.status]}</p>
         </div>
+        <Button
+          variant="primary"
+          size="sm"
+          onClick={() => router.push(`/clients/${tenantId}/simulator`)}
+          className="flex items-center gap-2"
+        >
+          💬 Simular bot
+        </Button>
       </div>
       {message && (
         <div className={`p-4 rounded-lg text-sm font-medium ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>

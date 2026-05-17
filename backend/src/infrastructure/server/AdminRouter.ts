@@ -3,6 +3,7 @@ import type pino from 'pino';
 import { config } from '@/config/env';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
+import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 import type { TenantRepository } from '@/domain/ports/TenantRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 
@@ -42,11 +43,19 @@ function requireApiKey(req: Request, res: Response, next: NextFunction): void {
 export function createAdminRouter(params: {
   assignMoldeUseCase: AssignMoldeUseCase;
   setTenantStatusUseCase: SetTenantStatusUseCase;
+  simulateMessageUseCase: SimulateMessageUseCase;
   tenantRepository: TenantRepository;
   botFlowRepository: BotFlowRepository;
   logger: pino.Logger;
 }): Router {
-  const { assignMoldeUseCase, setTenantStatusUseCase, tenantRepository, botFlowRepository, logger } = params;
+  const {
+    assignMoldeUseCase,
+    setTenantStatusUseCase,
+    simulateMessageUseCase,
+    tenantRepository,
+    botFlowRepository,
+    logger,
+  } = params;
   const router = Router();
 
   router.use(requireApiKey);
@@ -152,6 +161,74 @@ export function createAdminRouter(params: {
     } catch (err: any) {
       logger.error({ err, tenantId, status }, 'PATCH /api/admin/tenants/:id/status failed');
       res.status(500).json({ error: err.message ?? 'Error actualizando status' });
+    }
+  });
+
+  // ============================================================
+  // POST /api/admin/simulate
+  // Body: { tenantId, phoneNumber, content, persist?: boolean }
+  // ============================================================
+  router.post('/simulate', async (req: Request, res: Response) => {
+    const { tenantId, phoneNumber, content, persist } = req.body ?? {};
+
+    if (typeof tenantId !== 'string' || tenantId.trim() === '') {
+      res.status(400).json({ error: 'tenantId requerido (string)' });
+      return;
+    }
+    if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
+      res.status(400).json({ error: 'phoneNumber requerido (string)' });
+      return;
+    }
+    if (typeof content !== 'string' || content.trim() === '') {
+      res.status(400).json({ error: 'content requerido (string)' });
+      return;
+    }
+
+    try {
+      const result = await simulateMessageUseCase.execute({
+        tenantId,
+        phoneNumber,
+        content,
+        persist: persist === true,
+      });
+
+      if (result.error) {
+        res.status(404).json({ error: result.error });
+        return;
+      }
+
+      res.json({
+        outputs: result.outputs,
+        nextNodeId: result.nextNodeId,
+        context: result.context,
+        flowEnded: result.flowEnded,
+      });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error en simulate';
+      logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate failed');
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ============================================================
+  // POST /api/admin/simulate/reset
+  // Body: { tenantId, phoneNumber }
+  // ============================================================
+  router.post('/simulate/reset', async (req: Request, res: Response) => {
+    const { tenantId, phoneNumber } = req.body ?? {};
+
+    if (typeof tenantId !== 'string' || typeof phoneNumber !== 'string') {
+      res.status(400).json({ error: 'tenantId y phoneNumber requeridos' });
+      return;
+    }
+
+    try {
+      await simulateMessageUseCase.reset(tenantId, phoneNumber);
+      res.json({ success: true });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Error reseteando';
+      logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate/reset failed');
+      res.status(500).json({ error: message });
     }
   });
 

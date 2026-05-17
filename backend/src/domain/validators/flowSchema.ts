@@ -55,12 +55,18 @@ const ListItemSchema = z.object({
 const ListSectionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('static'),
-    title: z.string().min(1),
+    title: z
+      .string()
+      .min(1)
+      .max(24, 'Meta: section title ≤ 24 chars'),
     items: z.array(ListItemSchema).min(1),
   }),
   z.object({
     type: z.literal('dynamic'),
-    title: z.string().min(1),
+    title: z
+      .string()
+      .min(1)
+      .max(24, 'Meta: section title ≤ 24 chars'),
     items_source: z.literal('catalog_items'),
   }),
 ]);
@@ -72,7 +78,12 @@ const ListSectionSchema = z.discriminatedUnion('type', [
 const SendTextNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('send_text'),
-  content: z.object({ text: z.string().min(1) }),
+  content: z.object({
+    text: z
+      .string()
+      .min(1)
+      .max(4096, 'Meta: text body ≤ 4096 chars (recomendado ≤ 1024)'),
+  }),
   transitions: z.array(TransitionSchema),
 });
 
@@ -80,7 +91,10 @@ const SendButtonsNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('send_buttons'),
   content: z.object({
-    text: z.string().min(1),
+    text: z
+      .string()
+      .min(1)
+      .max(1024, 'Meta: interactive body ≤ 1024 chars'),
     buttons: z
       .array(
         z.object({
@@ -103,9 +117,18 @@ const SendListNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('send_list'),
   content: z.object({
-    text: z.string().min(1),
-    button_label: z.string().min(1).max(20, 'Meta: button_label ≤ 20 chars'),
-    sections: z.array(ListSectionSchema).min(1),
+    text: z
+      .string()
+      .min(1)
+      .max(1024, 'Meta: list body ≤ 1024 chars'),
+    button_label: z
+      .string()
+      .min(1)
+      .max(20, 'Meta: button_label ≤ 20 chars'),
+    sections: z
+      .array(ListSectionSchema)
+      .min(1)
+      .max(10, 'Meta: máximo 10 sections en un list'),
   }),
   transitions: z.array(TransitionSchema),
 });
@@ -117,14 +140,29 @@ const SendMediaNodeSchema = z.object({
     z.object({
       media_type: z.literal('image'),
       url: z.string().url(),
-      caption: z.string().optional(),
+      caption: z
+        .string()
+        .max(1024, 'Meta: image caption ≤ 1024 chars')
+        .optional(),
     }),
     z.object({
       media_type: z.literal('location'),
       latitude: z.number().min(-90).max(90),
       longitude: z.number().min(-180).max(180),
-      name: z.string().optional(),
-      address: z.string().optional(),
+      name: z.string().max(1000).optional(),
+      address: z.string().max(1000).optional(),
+    }),
+    z.object({
+      media_type: z.literal('document'),
+      url: z.string().url(),
+      filename: z
+        .string()
+        .min(1)
+        .max(240, 'Meta: document filename ≤ 240 chars'),
+      caption: z
+        .string()
+        .max(1024, 'Meta: document caption ≤ 1024 chars')
+        .optional(),
     }),
   ]),
   transitions: z.array(TransitionSchema),
@@ -238,6 +276,21 @@ export const FlowSchema = z
           ctx.addIssue({
             code: z.ZodIssueCode.custom,
             message: `Nodo "${node.id}": Meta: máximo 10 items totales en static sections`,
+          });
+        }
+      }
+    }
+
+    // Meta: hard cap de 10 rows totales sumando static + dynamic
+    // (dynamic se valida en runtime en DynamicSectionResolver; aquí solo prevenimos
+    // configuraciones absurdas como 11 secciones estáticas vacías).
+    for (const node of flow.nodes) {
+      if (node.type === 'send_list') {
+        const sectionsCount = node.content.sections.length;
+        if (sectionsCount > 10) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: `Nodo "${node.id}": Meta: máximo 10 sections (recibidas ${sectionsCount})`,
           });
         }
       }

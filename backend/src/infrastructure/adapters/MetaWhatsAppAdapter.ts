@@ -86,7 +86,53 @@ interface MetaImagePayload {
   image: { link: string; caption?: string };
 }
 
-type MetaSendPayload = MetaTextPayload | MetaButtonPayload | MetaImagePayload;
+interface MetaListPayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'interactive';
+  interactive: {
+    type: 'list';
+    body: { text: string };
+    action: {
+      button: string;
+      sections: Array<{
+        title: string;
+        rows: Array<{ id: string; title: string; description?: string }>;
+      }>;
+    };
+  };
+}
+
+interface MetaLocationPayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'location';
+  location: {
+    latitude: number;
+    longitude: number;
+    name?: string;
+    address?: string;
+  };
+}
+
+interface MetaDocumentPayload {
+  messaging_product: 'whatsapp';
+  to: string;
+  type: 'document';
+  document: {
+    link: string;
+    filename: string;
+    caption?: string;
+  };
+}
+
+type MetaSendPayload =
+  | MetaTextPayload
+  | MetaButtonPayload
+  | MetaImagePayload
+  | MetaListPayload
+  | MetaLocationPayload
+  | MetaDocumentPayload;
 
 export class MetaWhatsAppAdapter implements NotificationPort {
   private readonly metaApiUrl: string;
@@ -274,6 +320,129 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       to: phoneNumber,
       type: 'image',
       image: { link: imageUrl, ...(caption ? { caption } : {}) },
+    };
+
+    await this.sendToMeta(creds, payload, phoneNumber);
+  }
+
+  async sendList(
+    tenantId: string,
+    phoneNumber: string,
+    bodyText: string,
+    buttonLabel: string,
+    sections: Array<{
+      title: string;
+      rows: Array<{ id: string; title: string; description?: string }>;
+    }>,
+  ): Promise<void> {
+    const creds = await this.credsRepo.findByTenantId(tenantId);
+    if (!creds) {
+      this.logger.warn(
+        { tenantId, phoneNumber },
+        '⚠️  Sin credenciales Meta para este tenant — list no enviado',
+      );
+      return;
+    }
+
+    // Validación defensiva en runtime (el Zod del flow ya valida, pero por
+    // si llegan llamadas directas desde código externo)
+    if (sections.length === 0 || sections.length > 10) {
+      this.logger.error(
+        { tenantId, sectionsCount: sections.length },
+        '❌ List inválida: sections debe ser 1..10',
+      );
+      return;
+    }
+    const totalRows = sections.reduce((acc, s) => acc + s.rows.length, 0);
+    if (totalRows === 0 || totalRows > 10) {
+      this.logger.error(
+        { tenantId, totalRows },
+        '❌ List inválida: total rows debe ser 1..10',
+      );
+      return;
+    }
+
+    const payload: MetaListPayload = {
+      messaging_product: 'whatsapp',
+      to: phoneNumber,
+      type: 'interactive',
+      interactive: {
+        type: 'list',
+        body: { text: bodyText.slice(0, 1024) },
+        action: {
+          button: buttonLabel.slice(0, 20),
+          sections: sections.map((s) => ({
+            title: s.title.slice(0, 24),
+            rows: s.rows.map((r) => ({
+              id: r.id,
+              title: r.title.slice(0, 24),
+              ...(r.description ? { description: r.description.slice(0, 72) } : {}),
+            })),
+          })),
+        },
+      },
+    };
+
+    await this.sendToMeta(creds, payload, phoneNumber);
+  }
+
+  async sendLocation(
+    tenantId: string,
+    phoneNumber: string,
+    latitude: number,
+    longitude: number,
+    name?: string,
+    address?: string,
+  ): Promise<void> {
+    const creds = await this.credsRepo.findByTenantId(tenantId);
+    if (!creds) {
+      this.logger.warn(
+        { tenantId, phoneNumber },
+        '⚠️  Sin credenciales Meta para este tenant — location no enviada',
+      );
+      return;
+    }
+
+    const payload: MetaLocationPayload = {
+      messaging_product: 'whatsapp',
+      to: phoneNumber,
+      type: 'location',
+      location: {
+        latitude,
+        longitude,
+        ...(name ? { name } : {}),
+        ...(address ? { address } : {}),
+      },
+    };
+
+    await this.sendToMeta(creds, payload, phoneNumber);
+  }
+
+  async sendDocument(
+    tenantId: string,
+    phoneNumber: string,
+    documentUrl: string,
+    filename: string,
+    caption?: string,
+  ): Promise<void> {
+    const creds = await this.credsRepo.findByTenantId(tenantId);
+    if (!creds) {
+      this.logger.warn(
+        { tenantId, phoneNumber },
+        '⚠️  Sin credenciales Meta para este tenant — document no enviado',
+      );
+      return;
+    }
+
+    const payload: MetaDocumentPayload = {
+      messaging_product: 'whatsapp',
+      to: phoneNumber,
+      type: 'document',
+      document: {
+        link: documentUrl,
+        filename: filename.slice(0, 240),
+        ...(caption ? { caption: caption.slice(0, 1024) } : {}),
+      },
     };
 
     await this.sendToMeta(creds, payload, phoneNumber);
