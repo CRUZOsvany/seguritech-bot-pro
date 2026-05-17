@@ -26,7 +26,7 @@ SaaS multi-tenant de chatbots de WhatsApp para pequeños negocios. Backend Node.
 
 ```bash
 cp .env.example .env
-cp frontend/.env.local.example frontend/.env.local
+cp frontend/.env.local frontend/.env.local
 # editá ambos .env con tus credenciales
 docker compose up
 ```
@@ -38,7 +38,7 @@ Backend en `http://localhost:3001`, frontend en `http://localhost:3000`.
 ```bash
 npm run install:all
 cp .env.example .env
-cp frontend/.env.local.example frontend/.env.local
+cp frontend/.env.local frontend/.env.local
 # editá ambos .env con tus credenciales
 npm run dev
 ```

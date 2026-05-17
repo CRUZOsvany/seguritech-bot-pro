@@ -327,7 +327,7 @@ cd securitech-bot-pro
 npm install
 
 # 3. Copia y llena .env.local
-cp .env.local.example .env.local
+cp .env.local .env.local
 # (Completar con credenciales Supabase)
 
 # 4. En Supabase SQL, ejecuta SCHEMA_SUPABASE.sql

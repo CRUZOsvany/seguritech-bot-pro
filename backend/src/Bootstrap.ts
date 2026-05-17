@@ -5,6 +5,7 @@ import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUserRepository';
 import { SupabaseBotFlowRepository } from '@/infrastructure/repositories/SupabaseBotFlowRepository';
 import { SupabaseTenantRepository } from '@/infrastructure/repositories/SupabaseTenantRepository';
+import { SupabaseMetaCredentialsRepository } from '@/infrastructure/repositories/SupabaseMetaCredentialsRepository';
 import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
@@ -13,16 +14,19 @@ import { ExpressServer } from '@/infrastructure/server/ExpressServer';
 import { getSupabaseClient } from '@/infrastructure/services/SupabaseClientFactory';
 import { SupabaseTenantConfigService } from '@/infrastructure/services/SupabaseTenantConfigService';
 import { MessageLogService } from '@/infrastructure/services/MessageLogService';
+import { TokenCrypto } from '@/infrastructure/services/TokenCrypto';
 import { NotificationPort } from '@/domain/ports';
 
 /**
- * Bootstrap — arma todo el grafo de objetos.
+ * Bootstrap — Sprint C (multi-tenant Meta).
  *
- * Sprint 2:
- * - Persistencia: Supabase (vía SupabaseUserRepository).
- * - Notificación: MetaWhatsAppAdapter si hay credenciales, sino Console (dev).
- * - Config por tenant: SupabaseTenantConfigService con caché de 5 min.
- * - Idempotencia de webhook: MessageLogService chequea meta_message_id.
+ * Cambios clave:
+ *   - Quita la lectura de las vars Meta de phone/token a nivel de proceso.
+ *   - Las credenciales Meta viven en la tabla tenant_meta_credentials.
+ *   - El MetaWhatsAppAdapter las resuelve por tenantId en cada envío.
+ *   - Si NO hay META_TOKEN_ENCRYPTION_KEY, NO se puede usar Meta; cae a
+ *     ConsoleNotificationAdapter para que el dev pueda seguir trabajando
+ *     contra el ReadlineAdapter sin tocar Meta.
  */
 export class Bootstrap {
   private logger!: pino.Logger;
@@ -36,42 +40,40 @@ export class Bootstrap {
       this.logger = createLogger();
       this.logger.info('🚀 SegurITech Bot Pro');
       this.logger.info(`Entorno: ${config.environment}\n`);
-      this.logger.info('⚙️  Inicializando...');
 
-      // === Capa de infraestructura ===
       const supabase = getSupabaseClient();
       const userRepository = new SupabaseUserRepository(supabase, this.logger);
       const tenantConfigService = new SupabaseTenantConfigService(supabase, this.logger);
       const messageLogService = new MessageLogService(supabase, this.logger);
+      const botFlowRepository = new SupabaseBotFlowRepository(supabase, this.logger);
+      const tenantRepository = new SupabaseTenantRepository(supabase, this.logger);
 
-      // === Notification port: Meta si hay credenciales, sino Console ===
+      // === Notification port: Meta (si hay clave de cifrado) o Console ===
       let notificationPort: NotificationPort;
       let metaAdapter: MetaWhatsAppAdapter | undefined;
 
-      if (config.meta.phoneNumberId && config.meta.accessToken) {
+      if (config.meta.tokenEncryptionKey) {
+        const crypto = new TokenCrypto(config.meta.tokenEncryptionKey);
+        const credsRepo = new SupabaseMetaCredentialsRepository(
+          supabase,
+          crypto,
+          this.logger,
+        );
         metaAdapter = new MetaWhatsAppAdapter(
           this.logger,
-          config.meta.phoneNumberId,
-          config.meta.accessToken,
+          credsRepo,
           config.meta.apiUrl,
         );
         notificationPort = metaAdapter;
-        this.logger.info('✅ MetaWhatsAppAdapter activo (envío real a WhatsApp)');
+        this.logger.info('✅ MetaWhatsAppAdapter activo (multi-tenant)');
       } else {
         this.logger.warn(
-          '⚠️  META_PHONE_NUMBER_ID/META_ACCESS_TOKEN no configurados. ' +
+          '⚠️  META_TOKEN_ENCRYPTION_KEY no configurada. ' +
           'Usando ConsoleNotificationAdapter (dev mode).',
         );
         notificationPort = new ConsoleNotificationAdapter();
       }
 
-      // === Repositorio de flows ===
-      const botFlowRepository = new SupabaseBotFlowRepository(supabase, this.logger);
-
-      // === Repositorio de tenants ===
-      const tenantRepository = new SupabaseTenantRepository(supabase, this.logger);
-
-      // === Capa de aplicación ===
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
@@ -83,7 +85,6 @@ export class Bootstrap {
       );
       this.logger.info('✅ Contenedor DI listo');
 
-      // === Servidor Express con webhook ===
       this.expressServer = new ExpressServer(
         this.logger,
         metaAdapter,
@@ -95,7 +96,6 @@ export class Bootstrap {
           botController.processMessage(tenantId, phoneNumber, text, metaMessageId),
       );
 
-      // === API Admin (interna para el panel de SegurITech) ===
       const adminRouter = createAdminRouter({
         assignMoldeUseCase: this.container.getAssignMoldeUseCase(),
         setTenantStatusUseCase: this.container.getSetTenantStatusUseCase(),
@@ -108,7 +108,7 @@ export class Bootstrap {
 
       await this.expressServer.start();
 
-      // === CLI interactiva (útil en dev) ===
+      // CLI multi-tenant para desarrollo
       this.readlineAdapter = new ReadlineAdapter(this.logger);
       this.logger.info('✅ Bot iniciado\n');
       await this.readlineAdapter.start(

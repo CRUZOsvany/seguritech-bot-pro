@@ -29,11 +29,33 @@ export interface OrderRepository {
 }
 
 /**
- * Puerto para notificaciones (envío de mensajes al usuario final)
+ * Puerto para envío de mensajes al usuario final.
+ *
+ * BREAKING CHANGE (Sprint C): todas las firmas reciben tenantId como primer
+ * argumento. La razón es multi-tenant: cada tenant tiene su propio
+ * phone_number_id y access_token de Meta. El adapter resuelve credenciales
+ * internamente; ni el BotController ni los use cases conocen tokens.
  */
 export interface NotificationPort {
-  sendMessage(phoneNumber: string, message: string): Promise<void>;
-  sendButtons(phoneNumber: string, message: string, buttons: string[]): Promise<void>;
+  sendMessage(
+    tenantId: string,
+    phoneNumber: string,
+    message: string,
+  ): Promise<void>;
+
+  sendButtons(
+    tenantId: string,
+    phoneNumber: string,
+    message: string,
+    buttons: string[],
+  ): Promise<void>;
+
+  sendImage(
+    tenantId: string,
+    phoneNumber: string,
+    imageUrl: string,
+    caption?: string,
+  ): Promise<void>;
 }
 
 /**
@@ -55,3 +77,8 @@ export { BotFlowRepository } from './BotFlowRepository';
  * Puerto para operaciones CRUD de tenants (administración interna).
  */
 export { TenantRepository } from './TenantRepository';
+
+export {
+  MetaCredentialsRepository,
+  MetaCredentials,
+} from './MetaCredentialsRepository';

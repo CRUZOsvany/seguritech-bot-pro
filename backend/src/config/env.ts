@@ -17,10 +17,12 @@ const envSchema = z.object({
 
   // Meta Cloud API (WhatsApp oficial)
   META_API_URL: z.string().url().default('https://graph.facebook.com/v21.0'),
-  META_PHONE_NUMBER_ID: z.string().optional(),
-  META_ACCESS_TOKEN: z.string().optional(),
   META_VERIFY_TOKEN: z.string().min(32).optional(),
   META_APP_SECRET: z.string().min(32).optional(),
+
+  // Clave para cifrar tokens de Meta en tenant_meta_credentials.
+  // Generar con: openssl rand -hex 32
+  META_TOKEN_ENCRYPTION_KEY: z.string().length(64).optional(),
 
   // Bot
   BOT_NAME: z.string().default('SegurITech Bot'),
@@ -88,10 +90,9 @@ export const config = {
 
   meta: {
     apiUrl: envVars.META_API_URL,
-    phoneNumberId: envVars.META_PHONE_NUMBER_ID || '',
-    accessToken: envVars.META_ACCESS_TOKEN || '',
     verifyToken: envVars.META_VERIFY_TOKEN || '',
     appSecret: envVars.META_APP_SECRET || '',
+    tokenEncryptionKey: envVars.META_TOKEN_ENCRYPTION_KEY || '',
   },
 
   bot: {
@@ -122,10 +123,9 @@ export function validateConfig(): void {
     const missing: string[] = [];
     if (!config.supabase.url) missing.push('SUPABASE_URL');
     if (!config.supabase.serviceRoleKey) missing.push('SUPABASE_SERVICE_ROLE_KEY');
-    if (!config.meta.phoneNumberId) missing.push('META_PHONE_NUMBER_ID');
-    if (!config.meta.accessToken) missing.push('META_ACCESS_TOKEN');
     if (!config.meta.appSecret) missing.push('META_APP_SECRET');
     if (!config.meta.verifyToken) missing.push('META_VERIFY_TOKEN');
+    if (!config.meta.tokenEncryptionKey) missing.push('META_TOKEN_ENCRYPTION_KEY');
 
     if (missing.length > 0) {
       throw new Error(

@@ -96,7 +96,7 @@ export class BotController {
         });
 
         // Enviar outputs
-        const lastText = await this.dispatchOutputs(from, result.outputs);
+        const lastText = await this.dispatchOutputs(tenantId, from, result.outputs);
 
         this.logger.info(
           {
@@ -121,9 +121,9 @@ export class BotController {
       );
 
       if (response.buttons && response.buttons.length > 0) {
-        await this.notificationPort.sendButtons(from, response.message, response.buttons);
+        await this.notificationPort.sendButtons(tenantId, from, response.message, response.buttons);
       } else {
-        await this.notificationPort.sendMessage(from, response.message);
+        await this.notificationPort.sendMessage(tenantId, from, response.message);
       }
 
       return response.message;
@@ -156,6 +156,7 @@ export class BotController {
    * Devuelve el último texto enviado (o null si no se envió nada).
    */
   private async dispatchOutputs(
+    tenantId: string,
     to: string,
     outputs: InterpreterOutput[],
   ): Promise<string | null> {
@@ -164,12 +165,13 @@ export class BotController {
     for (const output of outputs) {
       switch (output.kind) {
       case 'text':
-        await this.notificationPort.sendMessage(to, output.text);
+        await this.notificationPort.sendMessage(tenantId, to, output.text);
         lastText = output.text;
         break;
 
       case 'buttons':
         await this.notificationPort.sendButtons(
+          tenantId,
           to,
           output.text,
           output.buttons.map((b) => b.title),
@@ -178,8 +180,6 @@ export class BotController {
         break;
 
       case 'list': {
-        // NotificationPort no tiene sendList nativo todavía;
-        // serializamos a texto enumerado como fallback.
         const lines: string[] = [output.text];
         if (output.sections.length > 0) lines.push('');
         for (const section of output.sections) {
@@ -190,24 +190,32 @@ export class BotController {
           });
         }
         const text = lines.join('\n');
-        await this.notificationPort.sendMessage(to, text);
+        await this.notificationPort.sendMessage(tenantId, to, text);
         lastText = text;
         break;
       }
 
       case 'image':
+        await this.notificationPort.sendImage(
+          tenantId,
+          to,
+          output.url,
+          output.caption,
+        );
+        lastText = output.caption ?? null;
+        break;
+
       case 'location':
-        // NotificationPort actual no tiene sendMedia; loguear y omitir.
         this.logger.warn(
           { kind: output.kind, to },
-          'send_media no soportado por NotificationPort — omitiendo output',
+          'send_location aún no soportado por NotificationPort — omitiendo',
         );
         break;
 
       case 'escape_to_human':
-        await this.notificationPort.sendMessage(to, output.userResponse);
+        await this.notificationPort.sendMessage(tenantId, to, output.userResponse);
         lastText = output.userResponse;
-        // owner_alert se ignora en V1 — Sprint 5 lo enrutará al canal del operador.
+        // owner_alert se ignora en V1 — Sprint futuro lo enrutará al operador.
         break;
       }
     }

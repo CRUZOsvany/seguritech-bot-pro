@@ -56,7 +56,7 @@
 ```bash
 cd securitech-bot-pro
 npm install
-cp .env.local.example .env.local
+cp .env.local .env.local
 # Llenar .env.local con credenciales Supabase
 ```
 

@@ -99,18 +99,20 @@ function LoginContent() {
           </Button>
         </form>
 
-        {/* Footer */}
-        <div className="mt-8 pt-6 border-t border-gray-200">
-          <p className="text-xs text-gray-500 text-center">
-            Credenciales de prueba (desarrollo):
-          </p>
-          <p className="text-xs text-gray-600 text-center mt-2">
-            Email: <code className="bg-gray-100 px-1">admin@seguritech.test</code>
-          </p>
-          <p className="text-xs text-gray-600 text-center">
-            Password: <code className="bg-gray-100 px-1">password123</code>
-          </p>
-        </div>
+        {/* Footer — credenciales de prueba SOLO si está habilitado por env */}
+        {process.env.NEXT_PUBLIC_SHOW_DEV_CREDENTIALS === 'true' && (
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <p className="text-xs text-gray-500 text-center">
+              Credenciales de prueba (desarrollo):
+            </p>
+            <p className="text-xs text-gray-600 text-center mt-2">
+              Email: <code className="bg-gray-100 px-1">admin@seguritech.test</code>
+            </p>
+            <p className="text-xs text-gray-600 text-center">
+              Password: <code className="bg-gray-100 px-1">password123</code>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Bottom info */}
