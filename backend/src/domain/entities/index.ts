@@ -135,3 +135,10 @@ export interface BotResponse {
 // permanecen inline en este archivo por backwards-compat.
 // ============================================================================
 export * from './flow';
+
+// ============================================================================
+// POS module (Sprint 5.1a — re-export desde pos/)
+// Entidades del Punto de Venta. Viven en subcarpeta para no contaminar el
+// espacio plano de entidades legacy.
+// ============================================================================
+export * from './pos';

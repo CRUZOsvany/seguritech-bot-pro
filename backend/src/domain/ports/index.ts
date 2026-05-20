@@ -141,3 +141,18 @@ export { MessagesRepository, MessageRow } from './MessagesRepository';
 export { AdminUsersRepository, AdminUser, AdminRole } from './AdminUsersRepository';
 export { AdminSessionsRepository } from './AdminSessionsRepository';
 export { LoginAttemptsRepository } from './LoginAttemptsRepository';
+
+/**
+ * Puertos del módulo POS (Sprint 5.1a).
+ * Re-exportados desde pos/ subbarrel para mantener separación visual.
+ */
+export type {
+  PosProductRepository,
+  PosProductListOptions,
+  PosCategoryRepository,
+  PosTenantConfigRepository,
+  PosUserRepository,
+  InvoicingPort,
+  InvoicingRequest,
+  InvoicingResult,
+} from './pos';
