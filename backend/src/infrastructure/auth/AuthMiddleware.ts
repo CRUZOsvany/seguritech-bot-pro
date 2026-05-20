@@ -44,11 +44,12 @@ export function createAuthMiddleware(params: AuthMiddlewareParams) {
     res: Response,
     next: NextFunction,
   ): Promise<void> {
-    // 1) Cookie JWT
+    // 1) Cookie JWT (sólo scope=admin; tokens con scope=pos los rechaza
+    //    el overload con un throw y caen al siguiente camino auth)
     const cookieToken = parseCookie(req.headers.cookie, cookieName);
     if (cookieToken) {
       try {
-        const payload = jwt.verify(cookieToken);
+        const payload = jwt.verify(cookieToken, 'admin');
         const isRevoked = await sessions.isRevoked(payload.jti);
         if (isRevoked) {
           logger.warn(

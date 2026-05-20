@@ -7,6 +7,15 @@ import crypto from 'crypto';
  *
  * El payload incluye `jti` (JWT ID) para permitir revocación server-side
  * vía denylist (admin_sessions_revoked).
+ *
+ * Sprint 5.1a: agregada unión discriminada por `scope` para soportar dos tipos
+ * de sesión sobre el mismo JwtService:
+ *   - scope='admin' (o undefined, retrocompat): panel admin con email+role
+ *   - scope='pos'  : cajero POS con displayName+role pos_*
+ *
+ * verify() está sobrecargado: pasa el scope esperado para que TS narrow al
+ * tipo concreto (AdminJwtPayload o PosJwtPayload). Sin argumento devuelve la
+ * unión y debes narrow tú con `payload.scope`.
  */
 
 const b64url = {
@@ -26,10 +35,31 @@ export interface AdminJwtPayload {
   email: string;
   role: 'super_admin' | 'admin_operator';
   tenantId: string | null; // null para super_admin
+  /** Marca el scope. Opcional por retrocompat — tokens viejos no tienen este claim. */
+  scope?: 'admin';
   jti: string; // JWT ID para revocación
   iat: number;
   exp: number;
 }
+
+export interface PosJwtPayload {
+  sub: string; // pos_users.id
+  /** Cajeros no tienen email; se loguea displayName en auditoría. */
+  displayName: string;
+  role: 'pos_cashier' | 'pos_manager';
+  /** Siempre presente — un cajero pertenece a un tenant específico. */
+  tenantId: string;
+  scope: 'pos';
+  jti: string;
+  iat: number;
+  exp: number;
+}
+
+export type SessionJwtPayload = AdminJwtPayload | PosJwtPayload;
+
+type SignableAdminPayload = Omit<AdminJwtPayload, 'iat' | 'exp' | 'jti'>;
+type SignablePosPayload = Omit<PosJwtPayload, 'iat' | 'exp' | 'jti'>;
+type SignablePayload = SignableAdminPayload | SignablePosPayload;
 
 export class JwtService {
   private readonly secret: Buffer;
@@ -43,7 +73,7 @@ export class JwtService {
     this.ttlSeconds = ttlSeconds;
   }
 
-  sign(payload: Omit<AdminJwtPayload, 'iat' | 'exp' | 'jti'>): {
+  sign(payload: SignablePayload): {
     token: string;
     jti: string;
     exp: number;
@@ -51,7 +81,7 @@ export class JwtService {
     const now = Math.floor(Date.now() / 1000);
     const exp = now + this.ttlSeconds;
     const jti = crypto.randomBytes(16).toString('hex');
-    const full: AdminJwtPayload = { ...payload, iat: now, exp, jti };
+    const full = { ...payload, iat: now, exp, jti } as SessionJwtPayload;
 
     const header = b64url.encode(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
     const body = b64url.encode(JSON.stringify(full));
@@ -63,8 +93,16 @@ export class JwtService {
   /**
    * Verifica firma + exp. NO consulta la denylist (eso lo hace el middleware
    * para no acoplar esta clase a Supabase).
+   *
+   * Sobrecargas:
+   * - verify(token): devuelve SessionJwtPayload (unión). Narrow tú con .scope.
+   * - verify(token, 'admin'): devuelve AdminJwtPayload. Lanza si el token es pos.
+   * - verify(token, 'pos'):   devuelve PosJwtPayload.   Lanza si el token es admin.
    */
-  verify(token: string): AdminJwtPayload {
+  verify(token: string): SessionJwtPayload;
+  verify(token: string, expectedScope: 'admin'): AdminJwtPayload;
+  verify(token: string, expectedScope: 'pos'): PosJwtPayload;
+  verify(token: string, expectedScope?: 'admin' | 'pos'): SessionJwtPayload {
     const parts = token.split('.');
     if (parts.length !== 3) throw new Error('JWT malformado');
     const [h, b, s] = parts;
@@ -78,9 +116,16 @@ export class JwtService {
       throw new Error('Firma inválida');
     }
 
-    const payload = JSON.parse(b64url.decode(b).toString('utf8')) as AdminJwtPayload;
+    const payload = JSON.parse(b64url.decode(b).toString('utf8')) as SessionJwtPayload;
     const now = Math.floor(Date.now() / 1000);
     if (payload.exp < now) throw new Error('JWT expirado');
+
+    if (expectedScope) {
+      const actual = payload.scope ?? 'admin';
+      if (actual !== expectedScope) {
+        throw new Error(`Scope inválido: esperado ${expectedScope}, recibido ${actual}`);
+      }
+    }
     return payload;
   }
 }
