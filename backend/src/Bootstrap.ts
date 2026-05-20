@@ -13,6 +13,14 @@ import { SupabaseAdminSessionsRepository } from '@/infrastructure/repositories/S
 import { SupabaseLoginAttemptsRepository } from '@/infrastructure/repositories/SupabaseLoginAttemptsRepository';
 import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
 import { createAuthRouter } from '@/infrastructure/server/AuthRouter';
+import { createPosRouter } from '@/infrastructure/server/PosRouter';
+import { SupabasePosProductRepository } from '@/infrastructure/repositories/pos/SupabasePosProductRepository';
+import { SupabasePosCategoryRepository } from '@/infrastructure/repositories/pos/SupabasePosCategoryRepository';
+import { SupabasePosTenantConfigRepository } from '@/infrastructure/repositories/pos/SupabasePosTenantConfigRepository';
+import { SupabasePosUserRepository } from '@/infrastructure/repositories/pos/SupabasePosUserRepository';
+import { PosAuthService } from '@/application/pos/PosAuthService';
+import { createPosAuthMiddleware } from '@/infrastructure/auth/PosAuthMiddleware';
+import { createRequireModule } from '@/infrastructure/auth/ModuleGuard';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
@@ -118,6 +126,33 @@ export class Bootstrap {
         logger: this.logger,
       });
 
+      // === POS (Sprint 5.1a) — fuera del ApplicationContainer ===
+      const posProductRepository = new SupabasePosProductRepository(supabase, this.logger);
+      const posCategoryRepository = new SupabasePosCategoryRepository(supabase, this.logger);
+      const posTenantConfigRepository = new SupabasePosTenantConfigRepository(
+        supabase,
+        this.logger,
+      );
+      const posUserRepository = new SupabasePosUserRepository(supabase, this.logger);
+
+      const posAuthService = new PosAuthService(
+        posUserRepository,
+        tenantRepository,
+        jwtService,
+        auditLog,
+        config.admin.loginMaxAttempts,
+        config.admin.loginLockoutMinutes,
+        this.logger,
+      );
+
+      const requirePosSession = createPosAuthMiddleware({
+        jwt: jwtService,
+        sessions: adminSessionsRepository,
+        posCookieName: config.admin.posCookieName,
+        logger: this.logger,
+      });
+      const requirePosModule = createRequireModule(tenantRepository, 'pos', this.logger);
+
       this.expressServer = new ExpressServer(this.logger, metaAdapter, messageLogService);
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
@@ -132,6 +167,9 @@ export class Bootstrap {
         attempts: loginAttemptsRepository,
         audit: auditLog,
         requireAdmin,
+        posAuthService,
+        requirePosSession,
+        posCookieName: config.admin.posCookieName,
         logger: this.logger,
       });
       this.expressServer.setupAuthRoutes(authRouter);
@@ -153,6 +191,17 @@ export class Bootstrap {
       });
       this.expressServer.setupAdminRoutes(adminRouter);
       this.logger.info('✅ API Admin montada en /api/admin');
+
+      const posRouter = createPosRouter({
+        requirePosSession,
+        requireModule: requirePosModule,
+        posProducts: posProductRepository,
+        posCategories: posCategoryRepository,
+        posConfig: posTenantConfigRepository,
+        logger: this.logger,
+      });
+      this.expressServer.setupPosRoutes(posRouter);
+      this.logger.info('✅ API POS montada en /api/pos (Sprint 5.1a)');
 
       this.expressServer.setupStaticAssets();
 

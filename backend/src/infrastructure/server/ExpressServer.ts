@@ -273,6 +273,17 @@ export class ExpressServer {
   }
 
   /**
+   * Monta el router del módulo POS bajo /api/pos.
+   * Llamar después de setupAdminRoutes. Cada ruta del PosRouter define su
+   * propio nivel de auth (health público, resto behind requirePosSession).
+   *
+   * Sprint 5.1a.
+   */
+  setupPosRoutes(posRouter: Router): void {
+    this.app.use('/api/pos', posRouter);
+  }
+
+  /**
    * Sirve assets estáticos del panel admin y del simulador WhatsApp.
    *
    * Estructura esperada en disco (poblada por FASE 6 y 7):
