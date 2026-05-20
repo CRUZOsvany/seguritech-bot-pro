@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SegurITech · Acceso</title>
+  <link rel="stylesheet" href="/panel/_shared.css">
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+    .login-card { width: 380px; padding: 32px; }
+    .login-card h1 { margin-bottom: 8px; }
+    .login-card .muted { margin-bottom: 24px; }
+    .login-card .field { margin-bottom: 16px; }
+    .login-card .field label { display:block; margin-bottom: 4px; font-size: 13px; }
+    .login-card .field input { width: 100%; padding: 10px; box-sizing: border-box; }
+    .login-card button { width: 100%; padding: 12px; cursor: pointer; }
+    .totp-row { display: none; }
+    .totp-row.show { display: block; }
+  </style>
+</head>
+<body>
+  <div class="card login-card">
+    <h1>SegurITech</h1>
+    <p class="muted">Panel interno · Sólo equipo autorizado</p>
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" autocomplete="current-password" required>
+    </div>
+    <div class="field totp-row" id="totp-row">
+      <label for="totp">Código 2FA (6 dígitos)</label>
+      <input type="text" id="totp" inputmode="numeric" maxlength="6" pattern="\d{6}">
+    </div>
+    <button id="btn-login" class="btn-primary">Entrar</button>
+    <p class="muted" id="msg"></p>
+  </div>
+
+  <script src="/panel/_api.js"></script>
+  <script>
+    (function () {
+      var $ = function (s) { return document.querySelector(s); };
+      var msgEl = $('#msg');
+      var msg = function (t, kind) {
+        msgEl.textContent = t || '';
+        msgEl.style.color = kind === 'error' ? 'var(--danger,#b91c1c)' : '';
+      };
+
+      async function doLogin() {
+        msg('');
+        var body = {
+          email: $('#email').value.trim(),
+          password: $('#password').value,
+        };
+        var totp = $('#totp').value.trim();
+        if (totp) body.totpCode = totp;
+
+        var btn = $('#btn-login');
+        btn.disabled = true;
+        try {
+          var res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin',
+            body: JSON.stringify(body),
+          });
+          var data = {};
+          try { data = await res.json(); } catch (_) {}
+          if (data && data.error === '2FA_REQUIRED') {
+            $('#totp-row').classList.add('show');
+            $('#totp').focus();
+            msg('Ingresa tu código 2FA');
+            return;
+          }
+          if (data && data.mustChangePassword) {
+            var qsEmail = encodeURIComponent($('#email').value.trim());
+            window.location.href = '/panel/change-password.html?email=' + qsEmail;
+            return;
+          }
+          if (!res.ok) {
+            msg((data && data.error) || ('HTTP ' + res.status), 'error');
+            return;
+          }
+          window.location.href = '/panel/index.html';
+        } catch (err) {
+          msg('Red caída: ' + (err && err.message), 'error');
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      $('#btn-login').addEventListener('click', doLogin);
+      ['email', 'password', 'totp'].forEach(function (id) {
+        $('#' + id).addEventListener('keypress', function (e) {
+          if (e.key === 'Enter') doLogin();
+        });
+      });
+      $('#email').focus();
+    })();
+  </script>
+</body>
+</html>

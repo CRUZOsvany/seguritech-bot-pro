@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SegurITech · Clientes</title>
+  <link rel="stylesheet" href="/panel/_shared.css">
+</head>
+<body>
+<main>
+  <h2>Clientes (tenants)</h2>
+  <div class="card" id="tenants-card">
+    <div class="empty">Cargando…</div>
+  </div>
+  <p class="muted">Click en una fila para ver detalle. Bind dev: <code>127.0.0.1:3001</code>.</p>
+</main>
+<script src="/panel/_api.js"></script>
+<script>
+renderHeader();
+
+async function load() {
+  const card = $('#tenants-card');
+  try {
+    const { tenants } = await Api.listTenants();
+    if (!tenants.length) {
+      card.innerHTML = `<div class="empty">No hay clientes todavía. <a href="/panel/new.html">Crear el primero</a>.</div>`;
+      return;
+    }
+    card.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Negocio</th>
+            <th>Giro</th>
+            <th>Status</th>
+            <th>Webhook</th>
+            <th>Molde</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${tenants.map(t => `
+            <tr>
+              <td><strong>${escapeHtml(t.nombre_negocio)}</strong><br><code>${escapeHtml(t.id.slice(0, 8))}…</code></td>
+              <td>${escapeHtml(t.giro)}</td>
+              <td>${statusBadge(t.status)}</td>
+              <td>${t.webhook_verified ? '✅' : '⏳'}</td>
+              <td>${t.has_active_flow ? '✅ asignado' : '⚠️ sin molde'}</td>
+              <td class="actions">
+                <a class="btn" href="/panel/tenant.html?id=${encodeURIComponent(t.id)}">Ver</a>
+                <a class="btn" href="/simulator/${encodeURIComponent(t.id)}" target="_blank">Simular</a>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    card.innerHTML = `<div class="empty error-text">Error: ${escapeHtml(err.message)}</div>`;
+    toast(err.message, 'error');
+  }
+}
+
+load();
+</script>
+</body>
+</html>

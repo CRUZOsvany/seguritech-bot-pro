@@ -360,7 +360,11 @@ export class PerformanceSecurityTest {
     const tenantRepository: TenantRepository = {
       findAll: async () => [],
       findById: async () => null,
+      findFullDetail: async () => null,
       setStatus: async () => { /* noop */ },
+      createAtomic: async () => { throw new Error('not implemented in perf test'); },
+      update: async () => { throw new Error('not implemented in perf test'); },
+      softDelete: async () => { throw new Error('not implemented in perf test'); },
     };
     const supabaseStub = {} as SupabaseClient;
 

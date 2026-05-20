@@ -3,6 +3,7 @@ import type pino from 'pino';
 import type {
   MetaCredentials,
   MetaCredentialsRepository,
+  UpsertMetaCredentialsInput,
 } from '@/domain/ports';
 import { TokenCrypto } from '@/infrastructure/services/TokenCrypto';
 
@@ -81,6 +82,69 @@ export class SupabaseMetaCredentialsRepository implements MetaCredentialsReposit
 
     this.cache.set(tenantId, { creds, expiresAt: now + CACHE_TTL_MS });
     return creds;
+  }
+
+  async upsert(input: UpsertMetaCredentialsInput): Promise<void> {
+    const ciphertext = this.crypto.encrypt(input.accessToken);
+
+    // ¿Existe registro previo? -> update; si no -> insert.
+    // No usamos onConflict porque queremos resetear is_active y rotated_at sólo
+    // cuando es update real, no en cada upsert.
+    const { data: existing, error: selErr } = await this.supabase
+      .from('tenant_meta_credentials')
+      .select('id')
+      .eq('tenant_id', input.tenantId)
+      .maybeSingle();
+
+    if (selErr) {
+      this.logger.error(
+        { err: selErr, tenantId: input.tenantId },
+        '❌ upsert meta_creds select previo falló',
+      );
+      throw new Error(`upsert meta_creds select: ${selErr.message}`);
+    }
+
+    if (existing?.id) {
+      const { error } = await this.supabase
+        .from('tenant_meta_credentials')
+        .update({
+          phone_number_id: input.phoneNumberId,
+          waba_id: input.wabaId,
+          display_phone_number: input.displayPhoneNumber,
+          access_token_ciphertext: ciphertext,
+          is_active: true,
+          rotated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id);
+      if (error) throw new Error(`upsert meta_creds update: ${error.message}`);
+    } else {
+      const { error } = await this.supabase.from('tenant_meta_credentials').insert({
+        tenant_id: input.tenantId,
+        phone_number_id: input.phoneNumberId,
+        waba_id: input.wabaId,
+        display_phone_number: input.displayPhoneNumber,
+        access_token_ciphertext: ciphertext,
+        is_active: true,
+      });
+      if (error) throw new Error(`upsert meta_creds insert: ${error.message}`);
+    }
+
+    this.invalidate(input.tenantId);
+    this.logger.info(
+      { tenantId: input.tenantId, rotated: !!existing?.id },
+      '🔐 Credenciales Meta upserted (cifradas)',
+    );
+  }
+
+  async revoke(tenantId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('tenant_meta_credentials')
+      .update({ is_active: false })
+      .eq('tenant_id', tenantId);
+    if (error) throw new Error(`revoke meta_creds: ${error.message}`);
+
+    this.invalidate(tenantId);
+    this.logger.warn({ tenantId }, '⚠️  Credenciales Meta revocadas (is_active=false)');
   }
 
   invalidate(tenantId: string): void {

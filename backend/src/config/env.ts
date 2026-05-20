@@ -31,11 +31,31 @@ const envSchema = z.object({
   SUPABASE_URL: z.string().url().optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
 
-  // CORS
-  ALLOWED_ORIGINS: z.string().default('http://localhost:3000'),
+  // CORS — el panel HTML se sirve desde el mismo origen del backend, así que
+  // same-origin no necesita CORS. Esta lista solo importa para clientes
+  // externos (ej. otra herramienta interna que pegue al backend desde otro host).
+  ALLOWED_ORIGINS: z.string().default('http://127.0.0.1:3001'),
 
   // Admin API
   BACKEND_API_KEY: z.string().min(16).optional(),
+
+  // Cloudflare Access: dominio de email whitelist para el panel en producción.
+  // Cloudflare inyecta el header Cf-Access-Authenticated-User-Email tras OAuth.
+  // En dev local no se usa.
+  CLOUDFLARE_ALLOWED_DOMAIN: z.string().min(3).optional(),
+
+  // Sesiones admin (Operación Búnker v2 — Sprint F)
+  // Secreto para firmar JWTs. Generar con: openssl rand -hex 64
+  ADMIN_JWT_SECRET: z.string().min(64).optional(),
+  // Tiempo de vida del JWT en segundos (8h por defecto)
+  ADMIN_JWT_TTL_SECONDS: z.coerce.number().int().positive().default(28800),
+  // Cookie name. En prod usar prefijo __Host- para impone Secure+Path=/+sin Domain.
+  ADMIN_COOKIE_NAME: z.string().default('seguritech_session'),
+  // Lockout por intentos fallidos
+  ADMIN_LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  ADMIN_LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
+  // Bcrypt cost (12 es el sweet spot 2026)
+  ADMIN_BCRYPT_COST: z.coerce.number().int().min(10).max(14).default(12),
 });
 
 type EnvType = z.infer<typeof envSchema>;
@@ -110,6 +130,13 @@ export const config = {
 
   admin: {
     apiKey: envVars.BACKEND_API_KEY || '',
+    cloudflareAllowedDomain: envVars.CLOUDFLARE_ALLOWED_DOMAIN || '',
+    jwtSecret: envVars.ADMIN_JWT_SECRET || '',
+    jwtTtlSeconds: envVars.ADMIN_JWT_TTL_SECONDS,
+    cookieName: envVars.ADMIN_COOKIE_NAME,
+    loginMaxAttempts: envVars.ADMIN_LOGIN_MAX_ATTEMPTS,
+    loginLockoutMinutes: envVars.ADMIN_LOGIN_LOCKOUT_MINUTES,
+    bcryptCost: envVars.ADMIN_BCRYPT_COST,
   },
 };
 
@@ -126,6 +153,7 @@ export function validateConfig(): void {
     if (!config.meta.appSecret) missing.push('META_APP_SECRET');
     if (!config.meta.verifyToken) missing.push('META_VERIFY_TOKEN');
     if (!config.meta.tokenEncryptionKey) missing.push('META_TOKEN_ENCRYPTION_KEY');
+    if (!config.admin.jwtSecret) missing.push('ADMIN_JWT_SECRET');
 
     if (missing.length > 0) {
       throw new Error(

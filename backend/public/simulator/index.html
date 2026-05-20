@@ -1,0 +1,841 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Simulator · SegurITech</title>
+<style>
+  /* ====================== BASE ====================== */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    gap: 32px;
+    color: #fff;
+  }
+
+  /* ====================== PHONE FRAME (iPhone 15 Pro look) ====================== */
+  .phone {
+    width: 380px;
+    height: 800px;
+    background: #000;
+    border-radius: 50px;
+    padding: 12px;
+    box-shadow:
+      0 0 0 2px #1a1a1a,
+      0 0 0 3px #2a2a2a,
+      0 30px 60px rgba(0,0,0,0.5),
+      inset 0 0 0 1px rgba(255,255,255,0.05);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .phone-screen {
+    width: 100%;
+    height: 100%;
+    background: #ece5dd;
+    border-radius: 38px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  /* Dynamic Island */
+  .notch {
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 32px;
+    background: #000;
+    border-radius: 20px;
+    z-index: 100;
+  }
+  /* iOS status bar */
+  .status-bar {
+    height: 44px;
+    padding: 14px 28px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: #000;
+    background: #075e54;
+    color: white;
+    flex-shrink: 0;
+  }
+  .status-bar .right { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+
+  /* ====================== WHATSAPP HEADER ====================== */
+  .wa-header {
+    background: #075e54;
+    color: white;
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .wa-header .back { font-size: 22px; opacity: 0.9; cursor: pointer; }
+  .wa-header .avatar {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: #128c7e;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 16px;
+  }
+  .wa-header .title { flex: 1; line-height: 1.2; }
+  .wa-header .title strong { display: block; font-size: 15px; font-weight: 500; }
+  .wa-header .title small { font-size: 12px; opacity: 0.85; }
+  .wa-header .icons { display: flex; gap: 18px; font-size: 18px; opacity: 0.9; }
+
+  /* ====================== CHAT BODY ====================== */
+  .wa-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    background-color: #ece5dd;
+    background-image:
+      radial-gradient(circle at 10% 20%, rgba(255,255,255,0.3) 0.5px, transparent 1px),
+      radial-gradient(circle at 80% 50%, rgba(0,0,0,0.04) 0.5px, transparent 1px),
+      radial-gradient(circle at 40% 90%, rgba(255,255,255,0.25) 0.5px, transparent 1px);
+    background-size: 60px 60px, 80px 80px, 100px 100px;
+  }
+  .wa-body::-webkit-scrollbar { width: 4px; }
+  .wa-body::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.2); border-radius: 2px; }
+
+  .msg {
+    max-width: 78%;
+    padding: 6px 9px 5px;
+    border-radius: 8px;
+    font-size: 14.5px;
+    line-height: 1.35;
+    word-wrap: break-word;
+    box-shadow: 0 1px 0.5px rgba(0,0,0,0.13);
+    position: relative;
+    color: #111b21;
+  }
+  .msg .ts {
+    display: inline-block;
+    font-size: 10.5px;
+    color: #667781;
+    margin-left: 8px;
+    float: right;
+    margin-top: 2px;
+  }
+  .msg.in { background: #fff; align-self: flex-start; border-radius: 0 8px 8px 8px; margin-left: 6px; }
+  .msg.out { background: #d9fdd3; align-self: flex-end; border-radius: 8px 0 8px 8px; margin-right: 6px; }
+  .msg.system {
+    background: rgba(225,245,254,0.92);
+    align-self: center;
+    font-size: 12.5px;
+    color: #54656f;
+    padding: 6px 12px;
+    border-radius: 7px;
+    box-shadow: 0 1px 0.5px rgba(11,20,26,0.13);
+    margin: 4px 0;
+  }
+  .msg.system.error {
+    background: rgba(255, 224, 224, 0.95);
+    color: #b71c1c;
+  }
+
+  /* Botones interactivos */
+  .buttons-group {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid rgba(0,0,0,0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+  .buttons-group button {
+    background: transparent;
+    border: none;
+    color: #00a884;
+    padding: 9px;
+    font-size: 14.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    border-top: 1px solid rgba(0,0,0,0.07);
+    text-align: center;
+  }
+  .buttons-group button:first-child { border-top: none; }
+  .buttons-group button:hover { background: rgba(0,168,132,0.05); }
+
+  /* Botón para abrir lista */
+  .open-list-btn {
+    margin-top: 6px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,0.07);
+    background: transparent;
+    border: none;
+    color: #00a884;
+    font-size: 14.5px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+  }
+
+  /* Imagen */
+  .media-image {
+    display: block;
+    max-width: 100%;
+    border-radius: 6px;
+    margin-bottom: 4px;
+  }
+
+  /* Location card */
+  .location-card {
+    background: #f0f2f5;
+    border-radius: 6px;
+    padding: 8px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 200px;
+    margin-bottom: 4px;
+  }
+  .location-card .pin {
+    width: 40px; height: 40px;
+    background: #f15c6d;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: white; font-size: 22px;
+  }
+  .location-card .info strong { display: block; font-size: 13.5px; color: #111b21; }
+  .location-card .info small { font-size: 12.5px; color: #667781; }
+
+  /* Document card */
+  .document-card {
+    background: #f5f6f6;
+    border-radius: 6px;
+    padding: 10px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    min-width: 220px;
+    margin-bottom: 4px;
+  }
+  .document-card .icon {
+    width: 40px; height: 48px;
+    background: white;
+    border-radius: 4px;
+    border: 1px solid #d1d7db;
+    display: flex; align-items: center; justify-content: center;
+    color: #f15c6d; font-weight: 700; font-size: 11px;
+  }
+  .document-card .info strong { display: block; font-size: 13px; color: #111b21; }
+  .document-card .info small { font-size: 11.5px; color: #667781; }
+
+  /* ====================== INPUT BAR ====================== */
+  .wa-input-bar {
+    background: #f0f2f5;
+    padding: 8px 10px 22px;
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .wa-input-bar .emoji {
+    color: #54656f; font-size: 22px; padding: 4px 6px; cursor: pointer;
+  }
+  .wa-input-bar input {
+    flex: 1;
+    padding: 9px 14px;
+    border: none;
+    border-radius: 21px;
+    background: white;
+    font-size: 14.5px;
+    font-family: inherit;
+    color: #111b21;
+  }
+  .wa-input-bar input:focus { outline: none; box-shadow: 0 0 0 1.5px #00a884; }
+  .wa-input-bar .send-btn {
+    width: 42px; height: 42px;
+    background: #00a884;
+    border: none; border-radius: 50%;
+    color: white; font-size: 18px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .wa-input-bar .send-btn:hover { background: #008f72; }
+  .wa-input-bar .send-btn:disabled { background: #b1b3b5; cursor: not-allowed; }
+
+  /* iOS home indicator */
+  .home-indicator {
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 140px;
+    height: 5px;
+    background: rgba(0,0,0,0.4);
+    border-radius: 3px;
+    z-index: 100;
+  }
+
+  /* ====================== SIDE PANEL (controles) ====================== */
+  .controls {
+    width: 320px;
+    background: rgba(255,255,255,0.04);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 16px;
+    padding: 22px;
+    color: #e4e6eb;
+    max-height: 800px;
+    overflow-y: auto;
+  }
+  .controls h2 {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: #8b949e;
+    margin: 20px 0 10px;
+    font-weight: 600;
+  }
+  .controls h2:first-child { margin-top: 0; }
+  .controls h1 {
+    font-size: 18px;
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+  .controls p.intro { font-size: 12.5px; color: #8b949e; line-height: 1.5; margin-bottom: 4px; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 11.5px;
+    color: #8b949e;
+    margin-bottom: 5px;
+    font-weight: 500;
+  }
+  .field input[type="text"], .field input[type="tel"] {
+    width: 100%;
+    padding: 8px 11px;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 7px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 13px;
+  }
+  .field input:focus { outline: none; border-color: #00a884; }
+  .toggle-row {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: #c9d1d9;
+    cursor: pointer;
+    user-select: none;
+  }
+  .toggle-row input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: #00a884;
+  }
+  .controls button {
+    width: 100%;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 7px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    margin-bottom: 6px;
+  }
+  .controls button:hover { background: rgba(255,255,255,0.1); }
+  .controls button.primary {
+    background: #00a884;
+    border-color: #00a884;
+  }
+  .controls button.primary:hover { background: #008f72; }
+  .controls button.danger {
+    background: rgba(241,92,109,0.15);
+    border-color: rgba(241,92,109,0.4);
+    color: #ff8a95;
+  }
+  .debug-pane {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 6px;
+    padding: 9px 11px;
+    font-size: 11.5px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    color: #8b949e;
+    max-height: 130px;
+    overflow-y: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+  }
+
+  /* ====================== MODAL LISTA ====================== */
+  .modal-backdrop {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 200;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .modal-backdrop.show { display: flex; }
+  .modal {
+    background: white;
+    width: 100%;
+    max-height: 85%;
+    border-radius: 18px 18px 0 0;
+    overflow-y: auto;
+    padding: 12px 0 24px;
+    animation: slideUp 0.25s ease-out;
+  }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal .grabber {
+    width: 36px; height: 4px;
+    background: #d1d7db; border-radius: 2px;
+    margin: 0 auto 12px;
+  }
+  .modal h3 { padding: 0 16px 8px; font-size: 16px; color: #111b21; font-weight: 500; }
+  .modal .section-title {
+    padding: 12px 16px 6px;
+    font-size: 12px;
+    color: #667781;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  .modal .list-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f2f5;
+    cursor: pointer;
+  }
+  .modal .list-item:hover { background: #f5f6f6; }
+  .modal .list-item strong { display: block; font-size: 14.5px; color: #111b21; }
+  .modal .list-item small { font-size: 13px; color: #667781; }
+  .modal .modal-close {
+    margin: 14px 16px 0;
+    background: #f0f2f5;
+    border: none;
+    color: #54656f;
+    padding: 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    width: calc(100% - 32px);
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+
+<!-- =================== PHONE =================== -->
+<div class="phone">
+  <div class="phone-screen">
+    <div class="notch"></div>
+
+    <!-- iOS status bar (re-pintada con color verde para integrarse al header WA) -->
+    <div class="status-bar">
+      <span id="ios-time">9:41</span>
+      <span class="right">●●● 5G  ▮▮▮</span>
+    </div>
+
+    <!-- WhatsApp header -->
+    <div class="wa-header">
+      <span class="back">‹</span>
+      <div class="avatar" id="bot-avatar">B</div>
+      <div class="title">
+        <strong id="bot-name">Bot</strong>
+        <small id="bot-status">en línea</small>
+      </div>
+      <div class="icons">
+        <span>📹</span>
+        <span>📞</span>
+      </div>
+    </div>
+
+    <!-- Chat body -->
+    <div class="wa-body" id="chat-body">
+      <div class="msg system">Hoy</div>
+      <div class="msg system">Escribe un mensaje para iniciar la conversación.</div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="wa-input-bar">
+      <span class="emoji">😊</span>
+      <input type="text" id="msg-input" placeholder="Mensaje" autocomplete="off">
+      <button class="send-btn" id="btn-send" title="Enviar">➤</button>
+    </div>
+
+    <div class="home-indicator"></div>
+
+    <!-- Modal lista -->
+    <div class="modal-backdrop" id="modal-list">
+      <div class="modal">
+        <div class="grabber"></div>
+        <h3 id="modal-title">Opciones</h3>
+        <div id="modal-content"></div>
+        <button class="modal-close" id="modal-close-btn">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== SIDE PANEL =================== -->
+<aside class="controls">
+  <h1>Simulador WhatsApp</h1>
+  <p class="intro">Prueba el bot sin tocar Meta. Cada mensaje pega a <code style="background:rgba(0,0,0,0.3); padding:1px 5px; border-radius:3px; font-size:11px;">POST /api/admin/simulate</code> y renderiza los outputs reales del FlowInterpreter.</p>
+
+  <h2>Tenant</h2>
+  <div class="field">
+    <label>Tenant ID</label>
+    <input type="text" id="ctrl-tenant" value="" readonly>
+  </div>
+  <div class="field">
+    <label>Teléfono de prueba (quien "escribe")</label>
+    <input type="tel" id="ctrl-phone" value="+527471234567">
+  </div>
+  <div class="field">
+    <label class="toggle-row">
+      <input type="checkbox" id="ctrl-persist">
+      <span>Persistir estado en BD</span>
+    </label>
+  </div>
+
+  <h2>Acciones</h2>
+  <button id="btn-reset">🔄 Reset conversación</button>
+  <button id="btn-clear">🧹 Limpiar pantalla</button>
+
+  <h2>Estado del flow</h2>
+  <div class="field">
+    <label>currentNodeId</label>
+    <div class="debug-pane" id="dbg-node">—</div>
+  </div>
+  <div class="field">
+    <label>context (último turno)</label>
+    <div class="debug-pane" id="dbg-ctx">{}</div>
+  </div>
+</aside>
+
+<script>
+// ============================================================
+// Tenant del query string. Si falta, abortar con mensaje claro.
+// ============================================================
+const params = new URLSearchParams(window.location.search);
+const TENANT_ID = params.get('tenantId') || '';
+if (!TENANT_ID) {
+  document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#fff;background:#1a1a2e;min-height:100vh;display:flex;align-items:center;justify-content:center;"><div><h2>Falta tenantId en la URL</h2><p style="opacity:0.7;margin-top:10px;">Ejemplo: <code>/simulator/&lt;uuid&gt;</code></p></div></div>';
+  throw new Error('missing tenantId');
+}
+document.getElementById('ctrl-tenant').value = TENANT_ID;
+document.getElementById('bot-avatar').textContent = TENANT_ID.slice(0, 1).toUpperCase();
+document.getElementById('bot-name').textContent = `Bot · ${TENANT_ID.slice(0, 8)}…`;
+
+// ============================================================
+// Reloj iOS (se actualiza cada 30s)
+// ============================================================
+function updateClock() {
+  const d = new Date();
+  const h = d.getHours();
+  const m = d.getMinutes().toString().padStart(2, '0');
+  document.getElementById('ios-time').textContent = `${h}:${m}`;
+}
+updateClock(); setInterval(updateClock, 30000);
+
+// ============================================================
+// DOM refs
+// ============================================================
+const $body = document.getElementById('chat-body');
+const $input = document.getElementById('msg-input');
+const $send = document.getElementById('btn-send');
+const $dbgNode = document.getElementById('dbg-node');
+const $dbgCtx = document.getElementById('dbg-ctx');
+const $phone = document.getElementById('ctrl-phone');
+const $persist = document.getElementById('ctrl-persist');
+
+// ============================================================
+// Helpers
+// ============================================================
+function nowTime() {
+  const d = new Date();
+  return d.getHours() + ':' + d.getMinutes().toString().padStart(2,'0');
+}
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function scrollToBottom() {
+  setTimeout(() => { $body.scrollTop = $body.scrollHeight; }, 10);
+}
+
+function addUserMsg(text) {
+  const el = document.createElement('div');
+  el.className = 'msg out';
+  el.innerHTML = `${escapeHtml(text)}<span class="ts">${nowTime()} ✓✓</span>`;
+  $body.appendChild(el);
+  scrollToBottom();
+}
+
+function addSystemMsg(text, isError = false) {
+  const el = document.createElement('div');
+  el.className = isError ? 'msg system error' : 'msg system';
+  el.textContent = text;
+  $body.appendChild(el);
+  scrollToBottom();
+}
+
+// ============================================================
+// Render de outputs — usa createElement + addEventListener.
+// NO usamos onclick="..." en attributes porque el browser decodifica
+// HTML entities ANTES de evaluar el JS del attribute, abriendo XSS
+// si un flow malicioso inyecta comillas en button.title / item.id.
+// ============================================================
+function makeEl(tag, opts = {}) {
+  const el = document.createElement(tag);
+  if (opts.cls) el.className = opts.cls;
+  if (opts.text != null) el.textContent = opts.text;
+  if (opts.attrs) for (const [k, v] of Object.entries(opts.attrs)) el.setAttribute(k, v);
+  if (opts.on) for (const [evt, fn] of Object.entries(opts.on)) el.addEventListener(evt, fn);
+  return el;
+}
+
+function buildOutputNode(out) {
+  if (out.kind === 'escape_to_human') {
+    const el = makeEl('div', { cls: 'msg system' });
+    el.textContent = '🙋 ' + (out.userResponse || 'Te conecto con una persona…');
+    return el;
+  }
+
+  const el = makeEl('div', { cls: 'msg in' });
+
+  switch (out.kind) {
+    case 'text':
+      el.appendChild(document.createTextNode(out.text ?? ''));
+      break;
+
+    case 'buttons': {
+      el.appendChild(document.createTextNode(out.text ?? ''));
+      const group = makeEl('div', { cls: 'buttons-group' });
+      for (const b of (out.buttons || [])) {
+        const btnId = String(b.id ?? '');
+        const btnTitle = String(b.title ?? '');
+        group.appendChild(makeEl('button', {
+          text: btnTitle,
+          on: { click: () => onUserAction(btnId, btnTitle) },
+        }));
+      }
+      el.appendChild(group);
+      break;
+    }
+
+    case 'list': {
+      el.appendChild(document.createTextNode(out.text ?? ''));
+      const sections = out.sections || [];
+      const label = String(out.buttonLabel ?? 'Ver opciones');
+      el.appendChild(makeEl('button', {
+        cls: 'open-list-btn',
+        text: '📋 ' + label,
+        on: { click: () => openListModal(sections, label) },
+      }));
+      break;
+    }
+
+    case 'image': {
+      const img = makeEl('img', { cls: 'media-image', attrs: { alt: '', src: String(out.url ?? '') } });
+      img.addEventListener('error', () => {
+        const fallback = makeEl('div', {
+          attrs: { style: 'padding:30px;background:#f0f2f5;border-radius:6px;text-align:center;color:#667781;font-size:12px;' },
+          text: '[imagen no disponible: ' + String(out.url ?? '') + ']',
+        });
+        img.replaceWith(fallback);
+      });
+      el.appendChild(img);
+      if (out.caption) {
+        const cap = makeEl('div', { attrs: { style: 'margin-top:4px;' } });
+        cap.textContent = out.caption;
+        el.appendChild(cap);
+      }
+      break;
+    }
+
+    case 'location': {
+      const card = makeEl('div', { cls: 'location-card' });
+      card.appendChild(makeEl('div', { cls: 'pin', text: '📍' }));
+      const info = makeEl('div', { cls: 'info' });
+      info.appendChild(makeEl('strong', { text: out.name || 'Ubicación' }));
+      info.appendChild(makeEl('small', {
+        text: out.address || `${out.latitude}, ${out.longitude}`,
+      }));
+      card.appendChild(info);
+      el.appendChild(card);
+      break;
+    }
+
+    case 'document': {
+      const card = makeEl('div', { cls: 'document-card' });
+      card.appendChild(makeEl('div', { cls: 'icon', text: 'PDF' }));
+      const info = makeEl('div', { cls: 'info' });
+      info.appendChild(makeEl('strong', { text: out.filename || 'archivo' }));
+      info.appendChild(makeEl('small', { text: 'Toca para abrir' }));
+      card.appendChild(info);
+      el.appendChild(card);
+      if (out.caption) {
+        const cap = makeEl('div', { attrs: { style: 'margin-top:4px;' } });
+        cap.textContent = out.caption;
+        el.appendChild(cap);
+      }
+      break;
+    }
+
+    default: {
+      const em = makeEl('em', { text: '[kind desconocido: ' + String(out.kind) + ']' });
+      el.appendChild(em);
+    }
+  }
+
+  const ts = makeEl('span', { cls: 'ts', text: nowTime() });
+  el.appendChild(ts);
+  return el;
+}
+
+function renderOutputs(outputs) {
+  for (const out of (outputs || [])) {
+    $body.appendChild(buildOutputNode(out));
+  }
+  scrollToBottom();
+}
+
+function openListModal(sections, title) {
+  document.getElementById('modal-title').textContent = title;
+  const cont = document.getElementById('modal-content');
+  // Limpia contenido previo y reconstruye con DOM (sin innerHTML peligroso)
+  while (cont.firstChild) cont.removeChild(cont.firstChild);
+  for (const sec of (sections || [])) {
+    cont.appendChild(makeEl('div', { cls: 'section-title', text: String(sec.title ?? '') }));
+    for (const it of (sec.items || [])) {
+      const itemId = String(it.id ?? '');
+      const itemTitle = String(it.title ?? '');
+      const item = makeEl('div', {
+        cls: 'list-item',
+        on: { click: () => onUserAction(itemId, itemTitle) },
+      });
+      item.appendChild(makeEl('strong', { text: itemTitle }));
+      if (it.description) {
+        item.appendChild(makeEl('small', { text: String(it.description) }));
+      }
+      cont.appendChild(item);
+    }
+  }
+  document.getElementById('modal-list').classList.add('show');
+}
+function closeModal() {
+  document.getElementById('modal-list').classList.remove('show');
+}
+
+// ============================================================
+// API real → backend
+// ============================================================
+async function apiCall(content) {
+  const res = await fetch('/api/admin/simulate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'same-origin',
+    body: JSON.stringify({
+      tenantId: TENANT_ID,
+      phoneNumber: $phone.value.trim() || '+527470000000',
+      content,
+      persist: $persist.checked,
+    }),
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* sin body o no-JSON */ }
+  if (!res.ok) {
+    throw new Error((data && data.error) || `HTTP ${res.status}`);
+  }
+  return data;
+}
+
+// ============================================================
+// Send (entrada del user)
+// ============================================================
+async function onUserAction(idOrText, displayText) {
+  // displayText es lo que mostramos como "tu mensaje" (label del botón / item)
+  // idOrText es lo que mandamos al backend (button id / list item id / texto libre)
+  closeModal();
+  addUserMsg(displayText);
+  $send.disabled = true;
+  try {
+    const resp = await apiCall(idOrText);
+    if (resp.error) {
+      addSystemMsg('⚠️ ' + resp.error, true);
+      return;
+    }
+    renderOutputs(resp.outputs || []);
+    $dbgNode.textContent = resp.nextNodeId || '—';
+    $dbgCtx.textContent = JSON.stringify(resp.context || {}, null, 2);
+    if (resp.flowEnded === true) {
+      addSystemMsg('— Fin del flow —');
+    }
+  } catch (err) {
+    addSystemMsg('Error: ' + err.message, true);
+  } finally {
+    $send.disabled = false;
+    $input.focus();
+  }
+}
+
+function send() {
+  const text = $input.value.trim();
+  if (!text) return;
+  $input.value = '';
+  onUserAction(text, text);
+}
+
+async function resetConv() {
+  if (!confirm('¿Resetear conversación? Si "persistir" está activo, también limpia bot_users.')) return;
+  try {
+    await fetch('/api/admin/simulate/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tenantId: TENANT_ID,
+        phoneNumber: $phone.value.trim() || '+527470000000',
+      }),
+    });
+    $body.innerHTML = '<div class="msg system">Conversación reseteada.</div>';
+    $dbgNode.textContent = '—';
+    $dbgCtx.textContent = '{}';
+  } catch (err) {
+    alert('Error al resetear: ' + err.message);
+  }
+}
+
+function clearScreen() {
+  $body.innerHTML = '<div class="msg system">Pantalla limpiada (estado del flow intacto en debug).</div>';
+}
+
+// Listeners
+$send.addEventListener('click', send);
+$input.addEventListener('keypress', e => { if (e.key === 'Enter') send(); });
+document.getElementById('btn-reset').addEventListener('click', resetConv);
+document.getElementById('btn-clear').addEventListener('click', clearScreen);
+document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+
+// Auto-focus
+$input.focus();
+</script>
+</body>
+</html>

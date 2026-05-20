@@ -115,9 +115,29 @@ export { BotFlowRepository } from './BotFlowRepository';
 /**
  * Puerto para operaciones CRUD de tenants (administración interna).
  */
-export { TenantRepository } from './TenantRepository';
+export {
+  TenantRepository,
+  TenantSummary,
+  TenantDetail,
+  CreateTenantInput,
+  UpdateTenantInput,
+  TenantGiro,
+} from './TenantRepository';
 
 export {
   MetaCredentialsRepository,
   MetaCredentials,
+  UpsertMetaCredentialsInput,
 } from './MetaCredentialsRepository';
+
+/**
+ * Puerto de solo-lectura para tail de mensajes desde el panel admin.
+ */
+export { MessagesRepository, MessageRow } from './MessagesRepository';
+
+/**
+ * Puertos de autenticación admin (Operación Búnker v2 — Sprint F).
+ */
+export { AdminUsersRepository, AdminUser, AdminRole } from './AdminUsersRepository';
+export { AdminSessionsRepository } from './AdminSessionsRepository';
+export { LoginAttemptsRepository } from './LoginAttemptsRepository';

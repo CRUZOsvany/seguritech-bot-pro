@@ -14,6 +14,7 @@ import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
+import { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 
 /**
  * Contenedor de inyección de dependencias.
@@ -27,6 +28,7 @@ export class ApplicationContainer {
   private readonly assignMoldeUseCase: AssignMoldeUseCase;
   private readonly setTenantStatusUseCase: SetTenantStatusUseCase;
   private readonly simulateMessageUseCase: SimulateMessageUseCase;
+  private readonly createTenantUseCase: CreateTenantUseCase;
 
   constructor(
     userRepository: UserRepository,
@@ -72,6 +74,8 @@ export class ApplicationContainer {
       flowInterpreter,
       logger,
     );
+
+    this.createTenantUseCase = new CreateTenantUseCase(tenantRepository, logger);
   }
 
   getBotController(): BotController {
@@ -88,5 +92,9 @@ export class ApplicationContainer {
 
   getSimulateMessageUseCase(): SimulateMessageUseCase {
     return this.simulateMessageUseCase;
+  }
+
+  getCreateTenantUseCase(): CreateTenantUseCase {
+    return this.createTenantUseCase;
   }
 }

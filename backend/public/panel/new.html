@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SegurITech · Nuevo cliente</title>
+  <link rel="stylesheet" href="/panel/_shared.css">
+</head>
+<body>
+<main>
+  <h2>Nuevo cliente</h2>
+  <div class="card">
+    <h3>Datos del negocio</h3>
+    <div class="grid-2">
+      <div class="field">
+        <label>Nombre del negocio</label>
+        <input type="text" id="f-nombre" placeholder="Papelería La Esquina">
+      </div>
+      <div class="field">
+        <label>Giro</label>
+        <select id="f-giro">
+          <option value="ferreteria">Ferretería</option>
+          <option value="papeleria" selected>Papelería</option>
+          <option value="cerrajeria">Cerrajería</option>
+          <option value="pizzeria">Pizzería</option>
+          <option value="salon">Salón de belleza</option>
+          <option value="medico">Consultorio médico</option>
+          <option value="refaccionaria">Refaccionaria</option>
+          <option value="farmacia">Farmacia</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+    </div>
+    <div class="field">
+      <label>Dirección (opcional)</label>
+      <input type="text" id="f-direccion" placeholder="Av. Insurgentes 123, Col. Centro">
+    </div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Horario semana</label>
+        <input type="text" id="f-horario-semana" placeholder="9:00 - 19:00">
+      </div>
+      <div class="field">
+        <label>Horario sábado</label>
+        <input type="text" id="f-horario-sabado" placeholder="9:00 - 14:00">
+      </div>
+    </div>
+    <div class="field">
+      <label style="text-transform:none; font-weight:normal; color:var(--text);">
+        <input type="checkbox" id="f-abre-domingo"> Abre domingos
+      </label>
+    </div>
+
+    <h3>Configuración del bot</h3>
+    <div class="grid-2">
+      <div class="field">
+        <label>Número WhatsApp asignado</label>
+        <input type="tel" id="f-numero" placeholder="+527471234567">
+      </div>
+      <div class="field">
+        <label>Nombre del bot</label>
+        <input type="text" id="f-nombre-bot" value="Asistente">
+      </div>
+    </div>
+    <div class="field">
+      <label>Tono</label>
+      <select id="f-tono">
+        <option value="amigable" selected>Amigable</option>
+        <option value="formal">Formal</option>
+        <option value="directo">Directo</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Mensaje de bienvenida</label>
+      <textarea id="f-bienvenida" placeholder="¡Hola! ¿En qué puedo ayudarte?"></textarea>
+    </div>
+
+    <h3>Molde inicial (opcional)</h3>
+    <div class="field">
+      <label>Template</label>
+      <select id="f-template">
+        <option value="">— Sin molde (asignar después) —</option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button id="btn-submit" class="btn-primary">Crear cliente</button>
+      <a class="btn" href="/panel/index.html">Cancelar</a>
+    </div>
+  </div>
+</main>
+<script src="/panel/_api.js"></script>
+<script>
+renderHeader();
+
+async function loadTemplates() {
+  try {
+    const { templates } = await Api.listTemplates();
+    const sel = $('#f-template');
+    for (const t of (templates || [])) {
+      const opt = document.createElement('option');
+      opt.value = t.slug;
+      opt.textContent = `${t.nombre} (${t.giro})`;
+      sel.appendChild(opt);
+    }
+  } catch (err) {
+    toast('No se pudieron cargar templates: ' + err.message, 'error');
+  }
+}
+
+async function submit() {
+  const btn = $('#btn-submit');
+  btn.disabled = true;
+  try {
+    const body = {
+      nombre_negocio: $('#f-nombre').value.trim(),
+      giro: $('#f-giro').value,
+      direccion: $('#f-direccion').value.trim() || undefined,
+      horario_semana: $('#f-horario-semana').value.trim() || undefined,
+      horario_sabado: $('#f-horario-sabado').value.trim() || undefined,
+      abre_domingo: $('#f-abre-domingo').checked,
+      bot_configuration: {
+        numero_whatsapp_asignado: $('#f-numero').value.trim(),
+        nombre_bot: $('#f-nombre-bot').value.trim() || 'Asistente',
+        tono_bot: $('#f-tono').value,
+        mensaje_bienvenida: $('#f-bienvenida').value.trim() || undefined,
+      },
+      template_slug: $('#f-template').value || undefined,
+    };
+    const { id } = await Api.createTenant(body);
+    toast('Cliente creado', 'success');
+    setTimeout(() => { window.location.href = `/panel/tenant.html?id=${encodeURIComponent(id)}`; }, 600);
+  } catch (err) {
+    toast(err.message, 'error');
+    btn.disabled = false;
+  }
+}
+
+$('#btn-submit').addEventListener('click', submit);
+loadTemplates();
+</script>
+</body>
+</html>

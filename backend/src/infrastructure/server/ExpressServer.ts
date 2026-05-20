@@ -1,6 +1,7 @@
 import express, { Express, Request, Response, Router } from 'express';
 import pino from 'pino';
 import crypto from 'crypto';
+import path from 'path';
 import helmet from 'helmet';
 import cors from 'cors';
 import rateLimit from 'express-rate-limit';
@@ -64,7 +65,40 @@ export class ExpressServer {
   }
 
   private setupMiddleware(): void {
-    this.app.use(helmet());
+    // Confiar en el primer hop (Cloudflare en prod, ninguno en dev) para
+    // obtener IP real del cliente. Necesario para que express-rate-limit
+    // no rate-limitee a todo el CIDR de Cloudflare como un solo cliente.
+    this.app.set('trust proxy', config.isProduction ? 1 : false);
+
+    // CSP explícita. Permitimos 'unsafe-inline' en script/style porque el
+    // panel HTML y el simulator inlinean su JS y CSS por diseño (sin build).
+    // El riesgo de XSS está mitigado porque:
+    //   - El JS construye DOM con createElement/textContent, no con innerHTML
+    //     de datos del backend.
+    //   - script-src-attr 'none' BLOQUEA event handlers inline (onclick=,
+    //     onerror=, etc.) — los listeners deben registrarse con
+    //     addEventListener desde <script>. Esto cierra el vector más común
+    //     de XSS reflejado por atributos.
+    this.app.use(
+      helmet({
+        contentSecurityPolicy: {
+          useDefaults: true,
+          directives: {
+            'default-src': ["'self'"],
+            'script-src': ["'self'", "'unsafe-inline'"],
+            'script-src-attr': ["'none'"],
+            'style-src': ["'self'", "'unsafe-inline'"],
+            'img-src': ["'self'", 'data:', 'https:'],
+            'connect-src': ["'self'"],
+            'frame-ancestors': ["'none'"],
+            'object-src': ["'none'"],
+            'base-uri': ["'self'"],
+            'form-action': ["'self'"],
+          },
+        },
+        crossOriginEmbedderPolicy: false, // no usamos SharedArrayBuffer
+      }),
+    );
 
     const allowedOrigins = config.cors.allowedOrigins.split(',').map((o) => o.trim());
     this.app.use(
@@ -230,6 +264,61 @@ export class ExpressServer {
   }
 
   /**
+   * Monta el router de autenticación bajo /api/auth.
+   * Debe llamarse ANTES que setupAdminRoutes para que /api/auth/login
+   * sea accesible sin la cookie de sesión.
+   */
+  setupAuthRoutes(authRouter: Router): void {
+    this.app.use('/api/auth', authRouter);
+  }
+
+  /**
+   * Sirve assets estáticos del panel admin y del simulador WhatsApp.
+   *
+   * Estructura esperada en disco (poblada por FASE 6 y 7):
+   *   backend/public/panel/      — index.html, new.html, tenant.html, etc.
+   *   backend/public/simulator/  — index.html (lee tenantId del query string)
+   *
+   * Path resolution: __dirname al runtime es
+   *   - dev (ts-node): backend/src/infrastructure/server
+   *   - build:         backend/dist/infrastructure/server
+   * 3 niveles arriba aterriza en backend/ en ambos casos.
+   *
+   * Para conveniencia, /simulator/:tenantId redirige a la SPA con tenantId en el
+   * query string. Registrado DESPUÉS del static para que /simulator/index.html
+   * y /simulator/*.css se sirvan tal cual.
+   */
+  setupStaticAssets(): void {
+    const publicDir = path.resolve(__dirname, '..', '..', '..', 'public');
+    const panelDir = path.join(publicDir, 'panel');
+    const simulatorDir = path.join(publicDir, 'simulator');
+
+    const noCache = (res: Response): void => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    };
+
+    this.app.use(
+      '/panel',
+      express.static(panelDir, { index: 'index.html', setHeaders: noCache }),
+    );
+    this.app.use(
+      '/simulator',
+      express.static(simulatorDir, { index: false, setHeaders: noCache }),
+    );
+
+    // /simulator/:tenantId  →  /simulator/index.html?tenantId=<uuid>
+    this.app.get('/simulator/:tenantId', (req: Request, res: Response, next) => {
+      const raw = String(req.params.tenantId ?? '');
+      if (raw === 'index.html') {
+        return next();
+      }
+      res.redirect(`/simulator/index.html?tenantId=${encodeURIComponent(raw)}`);
+    });
+
+    this.logger.info({ publicDir }, '📂 Assets estáticos montados en /panel y /simulator');
+  }
+
+  /**
    * Procesa un mensaje parseado: idempotencia, log inbound, ejecutar, log outbound.
    */
   private async handleParsed(
@@ -287,9 +376,12 @@ export class ExpressServer {
 
   async start(port?: number): Promise<void> {
     const PORT = port ?? parseInt(config.webhook.port || '3001', 10);
+    // Dev bindea solo a loopback (auth bypass del panel HTML depende de esto).
+    // Prod bindea a 0.0.0.0 — Cloudflare Access debe estar enfrente.
+    const HOST = config.isDevelopment ? '127.0.0.1' : '0.0.0.0';
     return new Promise((resolve) => {
-      this.server = this.app.listen(PORT, () => {
-        this.logger.info(`🚀 Express escuchando en puerto ${PORT}`);
+      this.server = this.app.listen(PORT, HOST, () => {
+        this.logger.info({ host: HOST, port: PORT }, `🚀 Express escuchando en ${HOST}:${PORT}`);
         resolve();
       });
     });

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SegurITech · Cliente</title>
+  <link rel="stylesheet" href="/panel/_shared.css">
+</head>
+<body>
+<main>
+  <h2 id="tenant-title">Cargando…</h2>
+  <div id="content" class="empty">Cargando detalle…</div>
+</main>
+<script src="/panel/_api.js"></script>
+<script>
+renderHeader();
+const tenantId = qs('id');
+if (!tenantId) {
+  document.body.innerHTML = '<main><div class="card empty">Falta ?id=… en la URL.</div></main>';
+}
+
+let cachedDetail = null;
+let cachedTemplates = [];
+
+async function load() {
+  try {
+    const [{ tenant }, { templates }] = await Promise.all([
+      Api.getTenantDetail(tenantId),
+      Api.listTemplates(),
+    ]);
+    cachedDetail = tenant;
+    cachedTemplates = templates || [];
+    render();
+  } catch (err) {
+    $('#content').innerHTML = `<div class="empty error-text">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function render() {
+  const t = cachedDetail;
+  $('#tenant-title').innerHTML = `${escapeHtml(t.nombre_negocio)} ${statusBadge(t.status)}`;
+
+  const bc = t.bot_configuration ?? {};
+  const mc = t.meta_credentials;
+  const flow = t.active_flow;
+
+  $('#content').innerHTML = `
+    <!-- Acciones rápidas -->
+    <div class="card">
+      <h3>Acciones</h3>
+      <div class="actions">
+        ${t.status === 'active'
+          ? `<button id="btn-pause">Pausar bot</button>`
+          : `<button id="btn-resume" class="btn-primary">Activar bot</button>`}
+        <a class="btn" href="/simulator/${encodeURIComponent(t.id)}" target="_blank">Abrir simulador</a>
+        <a class="btn" href="/panel/messages.html?tenantId=${encodeURIComponent(t.id)}">Ver mensajes</a>
+        <button id="btn-delete" class="btn-danger">Eliminar cliente</button>
+      </div>
+    </div>
+
+    <!-- Datos del negocio -->
+    <div class="card">
+      <h3>Datos del negocio</h3>
+      <div class="grid-2">
+        <div class="field">
+          <label>Nombre</label>
+          <input type="text" id="e-nombre" value="${escapeHtml(t.nombre_negocio)}">
+        </div>
+        <div class="field">
+          <label>Giro</label>
+          <select id="e-giro">
+            ${['ferreteria','papeleria','cerrajeria','pizzeria','salon','medico','refaccionaria','farmacia','otro']
+              .map(g => `<option value="${g}" ${g === t.giro ? 'selected' : ''}>${g}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Dirección</label>
+        <input type="text" id="e-direccion" value="${escapeHtml(t.direccion ?? '')}">
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Horario semana</label>
+          <input type="text" id="e-horario-semana" value="${escapeHtml(t.horario_semana ?? '')}">
+        </div>
+        <div class="field"><label>Horario sábado</label>
+          <input type="text" id="e-horario-sabado" value="${escapeHtml(t.horario_sabado ?? '')}">
+        </div>
+      </div>
+      <div class="field">
+        <label style="text-transform:none; font-weight:normal; color:var(--text);">
+          <input type="checkbox" id="e-abre-domingo" ${t.abre_domingo ? 'checked' : ''}> Abre domingos
+        </label>
+      </div>
+
+      <h3>Bot</h3>
+      <div class="grid-2">
+        <div class="field"><label>Número WhatsApp</label>
+          <input type="tel" id="e-numero" value="${escapeHtml(bc.numero_whatsapp_asignado ?? '')}">
+        </div>
+        <div class="field"><label>Nombre del bot</label>
+          <input type="text" id="e-nombre-bot" value="${escapeHtml(bc.nombre_bot ?? 'Asistente')}">
+        </div>
+      </div>
+      <div class="field"><label>Tono</label>
+        <select id="e-tono">
+          ${['amigable','formal','directo']
+            .map(x => `<option value="${x}" ${x === bc.tono_bot ? 'selected' : ''}>${x}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Mensaje bienvenida</label>
+        <textarea id="e-bienvenida">${escapeHtml(bc.mensaje_bienvenida ?? '')}</textarea>
+      </div>
+      <div class="field"><label>Mensaje menú principal</label>
+        <textarea id="e-menu">${escapeHtml(bc.mensaje_menu_principal ?? '')}</textarea>
+      </div>
+      <div class="field"><label>Mensaje fuera de horario</label>
+        <textarea id="e-fuera">${escapeHtml(bc.mensaje_fuera_horario ?? '')}</textarea>
+      </div>
+      <div class="field"><label>Mensaje "no entendí"</label>
+        <textarea id="e-noent">${escapeHtml(bc.mensaje_no_entendio ?? '')}</textarea>
+      </div>
+      <div class="actions">
+        <button id="btn-save" class="btn-primary">Guardar cambios</button>
+      </div>
+    </div>
+
+    <!-- Molde -->
+    <div class="card">
+      <h3>Molde (flow)</h3>
+      ${flow
+        ? `<p>Activo: <strong>${escapeHtml(flow.nombre)}</strong> · <code>${escapeHtml(flow.id.slice(0,8))}…</code> · actualizado ${escapeHtml(new Date(flow.updated_at).toLocaleString())}</p>`
+        : `<p class="muted">Sin molde asignado.</p>`}
+      <div class="actions">
+        <select id="sel-template" style="width:auto;">
+          <option value="">— Elegir template —</option>
+          ${cachedTemplates.map(tp => `<option value="${escapeHtml(tp.slug)}">${escapeHtml(tp.nombre)} (${escapeHtml(tp.giro)})</option>`).join('')}
+        </select>
+        <button id="btn-assign-molde" class="btn-primary">Asignar molde</button>
+        ${flow ? `<button id="btn-remove-molde">Quitar molde</button>` : ''}
+      </div>
+    </div>
+
+    <!-- Credenciales Meta -->
+    <div class="card">
+      <h3>Credenciales Meta WhatsApp</h3>
+      ${mc
+        ? `<p>${mc.is_active ? '✅' : '❌'} <code>${escapeHtml(mc.display_phone_number)}</code> · phone_number_id <code>${escapeHtml(mc.phone_number_id)}</code> · WABA <code>${escapeHtml(mc.waba_id)}</code> · rotado ${escapeHtml(mc.rotated_at ? new Date(mc.rotated_at).toLocaleString() : '—')}</p>`
+        : `<p class="muted">Sin credenciales Meta registradas.</p>`}
+      <div class="grid-2">
+        <div class="field"><label>phone_number_id</label>
+          <input type="text" id="mc-phoneId" placeholder="123456789012345">
+        </div>
+        <div class="field"><label>waba_id</label>
+          <input type="text" id="mc-waba" placeholder="123456789012345">
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>display_phone_number</label>
+          <input type="text" id="mc-display" placeholder="+527471234567">
+        </div>
+        <div class="field"><label>access_token (se cifra antes de guardar)</label>
+          <input type="password" id="mc-token" placeholder="EAAJ..." autocomplete="new-password">
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btn-mc-save" class="btn-primary">Guardar / Rotar token</button>
+        ${mc ? `<button id="btn-mc-revoke" class="btn-danger">Revocar</button>` : ''}
+      </div>
+      <p class="muted">El access_token NUNCA se muestra después de guardarse. Si lo pierdes, regéneralo en Meta y vuelve a pegarlo aquí.</p>
+    </div>
+  `;
+
+  // Listeners
+  if ($('#btn-pause'))         $('#btn-pause').addEventListener('click', () => setStatus('paused'));
+  if ($('#btn-resume'))        $('#btn-resume').addEventListener('click', () => setStatus('active'));
+  $('#btn-delete').addEventListener('click', deleteTenant);
+  $('#btn-save').addEventListener('click', saveTenant);
+  $('#btn-assign-molde').addEventListener('click', assignMolde);
+  if ($('#btn-remove-molde'))  $('#btn-remove-molde').addEventListener('click', removeMolde);
+  $('#btn-mc-save').addEventListener('click', saveMetaCreds);
+  if ($('#btn-mc-revoke'))     $('#btn-mc-revoke').addEventListener('click', revokeMetaCreds);
+}
+
+async function setStatus(s) {
+  try { await Api.setStatus(tenantId, s); toast(`Status: ${s}`, 'success'); await load(); }
+  catch (err) { toast(err.message, 'error'); }
+}
+
+async function deleteTenant() {
+  if (!confirm('¿Eliminar este cliente? Es soft-delete (recuperable contactando a admin).')) return;
+  try {
+    await Api.deleteTenant(tenantId);
+    toast('Eliminado', 'success');
+    setTimeout(() => window.location.href = '/panel/index.html', 600);
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function saveTenant() {
+  try {
+    await Api.updateTenant(tenantId, {
+      nombre_negocio: $('#e-nombre').value.trim() || undefined,
+      giro: $('#e-giro').value,
+      direccion: $('#e-direccion').value.trim() || null,
+      horario_semana: $('#e-horario-semana').value.trim() || null,
+      horario_sabado: $('#e-horario-sabado').value.trim() || null,
+      abre_domingo: $('#e-abre-domingo').checked,
+      bot_configuration: {
+        numero_whatsapp_asignado: $('#e-numero').value.trim() || undefined,
+        nombre_bot: $('#e-nombre-bot').value.trim() || undefined,
+        tono_bot: $('#e-tono').value,
+        mensaje_bienvenida: $('#e-bienvenida').value.trim() || undefined,
+        mensaje_menu_principal: $('#e-menu').value.trim() || undefined,
+        mensaje_fuera_horario: $('#e-fuera').value.trim() || undefined,
+        mensaje_no_entendio: $('#e-noent').value.trim() || undefined,
+      },
+    });
+    toast('Guardado', 'success');
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function assignMolde() {
+  const slug = $('#sel-template').value;
+  if (!slug) { toast('Elige un template', 'error'); return; }
+  try {
+    await Api.assignMolde(tenantId, slug);
+    toast('Molde asignado', 'success');
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function removeMolde() {
+  if (!confirm('¿Quitar el molde activo?')) return;
+  try {
+    await Api.removeMolde(tenantId);
+    toast('Molde removido', 'success');
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function saveMetaCreds() {
+  const body = {
+    phoneNumberId:      $('#mc-phoneId').value.trim(),
+    wabaId:             $('#mc-waba').value.trim(),
+    displayPhoneNumber: $('#mc-display').value.trim(),
+    accessToken:        $('#mc-token').value.trim(),
+  };
+  if (!body.phoneNumberId || !body.wabaId || !body.displayPhoneNumber || !body.accessToken) {
+    toast('Llena los 4 campos', 'error');
+    return;
+  }
+  try {
+    await Api.upsertMetaCreds(tenantId, body);
+    toast('Credenciales guardadas (cifradas)', 'success');
+    $('#mc-token').value = '';
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function revokeMetaCreds() {
+  if (!confirm('¿Revocar credenciales Meta? El bot dejará de responder hasta que las vuelvas a configurar.')) return;
+  try {
+    await Api.revokeMetaCreds(tenantId);
+    toast('Revocadas', 'success');
+    await load();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+load();
+</script>
+</body>
+</html>

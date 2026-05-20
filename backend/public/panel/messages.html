@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SegurITech · Mensajes</title>
+  <link rel="stylesheet" href="/panel/_shared.css">
+</head>
+<body>
+<main>
+  <h2>Mensajes recientes</h2>
+  <div class="card">
+    <div class="actions" style="margin-bottom: 12px;">
+      <a class="btn" id="back-link" href="/panel/index.html">← Cliente</a>
+      <button id="btn-refresh">⟳ Refrescar</button>
+      <select id="sel-limit" style="width:auto;">
+        <option value="50">50 últimos</option>
+        <option value="100">100 últimos</option>
+        <option value="200">200 últimos</option>
+      </select>
+    </div>
+    <div id="messages-container"><div class="empty">Cargando…</div></div>
+  </div>
+</main>
+<script src="/panel/_api.js"></script>
+<script>
+renderHeader();
+const tenantId = qs('tenantId');
+if (!tenantId) {
+  document.body.innerHTML = '<main><div class="card empty">Falta ?tenantId=… en la URL.</div></main>';
+}
+$('#back-link').href = `/panel/tenant.html?id=${encodeURIComponent(tenantId)}`;
+
+async function load() {
+  const cont = $('#messages-container');
+  cont.innerHTML = '<div class="empty">Cargando…</div>';
+  try {
+    const limit = parseInt($('#sel-limit').value, 10);
+    const { messages } = await Api.tailMessages(tenantId, limit);
+    if (!messages.length) {
+      cont.innerHTML = '<div class="empty">Sin mensajes todavía.</div>';
+      return;
+    }
+    cont.innerHTML = `
+      <table>
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Dir</th>
+            <th>Teléfono</th>
+            <th>Contenido</th>
+            <th>Respuesta</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${messages.map(m => `
+            <tr>
+              <td><code>${escapeHtml(new Date(m.timestamp).toLocaleString())}</code></td>
+              <td>${m.direction === 'inbound' ? '⬅️ in' : '➡️ out'}</td>
+              <td><code>${escapeHtml(m.fromPhone)}</code></td>
+              <td>${escapeHtml(m.content)}</td>
+              <td>${escapeHtml(m.response ?? '')}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (err) {
+    cont.innerHTML = `<div class="empty error-text">Error: ${escapeHtml(err.message)}</div>`;
+  }
+}
+
+$('#btn-refresh').addEventListener('click', load);
+$('#sel-limit').addEventListener('change', load);
+load();
+</script>
+</body>
+</html>

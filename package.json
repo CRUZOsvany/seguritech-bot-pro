@@ -1,44 +1,33 @@
 {
   "name": "seguritech-bot-pro-monorepo",
   "version": "1.0.0",
-  "description": "SegurITech Bot Pro - Monorepo with Backend (Node.js) and Frontend (Next.js)",
+  "description": "SegurITech Bot Pro — Backend Node.js con panel admin HTML standalone servido por Express",
   "private": true,
   "workspaces": [
-    "backend",
-    "frontend"
+    "backend"
   ],
   "scripts": {
-    "dev": "concurrently \"cd backend && npm run dev\" \"cd frontend && npm run dev\"",
-    "dev:backend": "cd backend && npm run dev",
-    "dev:frontend": "cd frontend && npm run dev",
-    "build": "npm run --workspace backend build && npm run --workspace frontend build",
-    "build:backend": "npm run --workspace backend build",
-    "build:frontend": "npm run --workspace frontend build",
+    "dev": "npm run --workspace backend dev",
+    "build": "npm run --workspace backend build",
     "start": "npm run --workspace backend start",
-    "start:frontend": "npm run --workspace frontend start",
     "lint": "npm run --workspace backend lint",
     "test": "npm run --workspace backend test",
     "test:multiTenant": "npm run --workspace backend test:multiTenant",
-    "test:coverage": "npm run --workspace backend test:coverage",
-    "install:all": "npm install && npm install --workspace backend && npm install --workspace frontend"
+    "test:coverage": "npm run --workspace backend test:coverage"
   },
   "keywords": [
     "whatsapp",
     "chatbot",
     "typescript",
-    "next.js",
     "hexagonal",
-    "monorepo",
-    "saas"
+    "monorepo"
   ],
   "author": "SegurITech",
   "license": "MIT",
-  "devDependencies": {
-    "concurrently": "^8.2.2"
-  },
+  "devDependencies": {},
+  "dependencies": {},
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
-  },
-  "dependencies": {}
+  }
 }

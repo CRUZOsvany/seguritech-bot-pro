@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import pino from 'pino';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
@@ -6,7 +7,12 @@ import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUs
 import { SupabaseBotFlowRepository } from '@/infrastructure/repositories/SupabaseBotFlowRepository';
 import { SupabaseTenantRepository } from '@/infrastructure/repositories/SupabaseTenantRepository';
 import { SupabaseMetaCredentialsRepository } from '@/infrastructure/repositories/SupabaseMetaCredentialsRepository';
+import { SupabaseMessagesRepository } from '@/infrastructure/repositories/SupabaseMessagesRepository';
+import { SupabaseAdminUsersRepository } from '@/infrastructure/repositories/SupabaseAdminUsersRepository';
+import { SupabaseAdminSessionsRepository } from '@/infrastructure/repositories/SupabaseAdminSessionsRepository';
+import { SupabaseLoginAttemptsRepository } from '@/infrastructure/repositories/SupabaseLoginAttemptsRepository';
 import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
+import { createAuthRouter } from '@/infrastructure/server/AuthRouter';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
@@ -15,18 +21,21 @@ import { getSupabaseClient } from '@/infrastructure/services/SupabaseClientFacto
 import { SupabaseTenantConfigService } from '@/infrastructure/services/SupabaseTenantConfigService';
 import { MessageLogService } from '@/infrastructure/services/MessageLogService';
 import { TokenCrypto } from '@/infrastructure/services/TokenCrypto';
+import { AuditLogService } from '@/infrastructure/services/AuditLogService';
+import { JwtService } from '@/infrastructure/auth/JwtService';
+import { createAuthMiddleware } from '@/infrastructure/auth/AuthMiddleware';
 import { NotificationPort } from '@/domain/ports';
 
 /**
- * Bootstrap — Sprint C (multi-tenant Meta).
+ * Bootstrap — Operación Búnker v2 (Sprint F).
  *
  * Cambios clave:
- *   - Quita la lectura de las vars Meta de phone/token a nivel de proceso.
- *   - Las credenciales Meta viven en la tabla tenant_meta_credentials.
- *   - El MetaWhatsAppAdapter las resuelve por tenantId en cada envío.
- *   - Si NO hay META_TOKEN_ENCRYPTION_KEY, NO se puede usar Meta; cae a
- *     ConsoleNotificationAdapter para que el dev pueda seguir trabajando
- *     contra el ReadlineAdapter sin tocar Meta.
+ *   - Wire de AuthRouter + AuthMiddleware con cookie JWT HTTPOnly.
+ *   - Bypass loopback REMOVIDO. Dev ahora también requiere login real.
+ *   - AuditLogService inyectado en AuthRouter y AdminRouter.
+ *   - En dev, si ADMIN_JWT_SECRET está vacío, se genera uno efímero por proceso
+ *     (las sesiones no sobreviven a restarts). En prod, validateConfig() exige
+ *     la variable; nunca generamos uno random en prod.
  */
 export class Bootstrap {
   private logger!: pino.Logger;
@@ -47,21 +56,24 @@ export class Bootstrap {
       const messageLogService = new MessageLogService(supabase, this.logger);
       const botFlowRepository = new SupabaseBotFlowRepository(supabase, this.logger);
       const tenantRepository = new SupabaseTenantRepository(supabase, this.logger);
+      const messagesRepository = new SupabaseMessagesRepository(supabase, this.logger);
 
       // === Notification port: Meta (si hay clave de cifrado) o Console ===
       let notificationPort: NotificationPort;
       let metaAdapter: MetaWhatsAppAdapter | undefined;
+      let metaCredentialsRepository: SupabaseMetaCredentialsRepository | undefined;
+      let tokenCrypto: TokenCrypto | null = null;
 
       if (config.meta.tokenEncryptionKey) {
-        const crypto = new TokenCrypto(config.meta.tokenEncryptionKey);
-        const credsRepo = new SupabaseMetaCredentialsRepository(
+        tokenCrypto = new TokenCrypto(config.meta.tokenEncryptionKey);
+        metaCredentialsRepository = new SupabaseMetaCredentialsRepository(
           supabase,
-          crypto,
+          tokenCrypto,
           this.logger,
         );
         metaAdapter = new MetaWhatsAppAdapter(
           this.logger,
-          credsRepo,
+          metaCredentialsRepository,
           config.meta.apiUrl,
         );
         notificationPort = metaAdapter;
@@ -69,7 +81,7 @@ export class Bootstrap {
       } else {
         this.logger.warn(
           '⚠️  META_TOKEN_ENCRYPTION_KEY no configurada. ' +
-          'Usando ConsoleNotificationAdapter (dev mode).',
+            'Usando ConsoleNotificationAdapter (dev mode).',
         );
         notificationPort = new ConsoleNotificationAdapter();
       }
@@ -85,36 +97,72 @@ export class Bootstrap {
       );
       this.logger.info('✅ Contenedor DI listo');
 
-      this.expressServer = new ExpressServer(
+      // === Sesiones admin (Operación Búnker v2) ===
+      const jwtSecret = this.resolveJwtSecret();
+      const jwtService = new JwtService(jwtSecret, config.admin.jwtTtlSeconds);
+      const adminUsersRepository = new SupabaseAdminUsersRepository(
+        supabase,
+        tokenCrypto,
         this.logger,
-        metaAdapter,
-        messageLogService,
       );
+      const adminSessionsRepository = new SupabaseAdminSessionsRepository(supabase, this.logger);
+      const loginAttemptsRepository = new SupabaseLoginAttemptsRepository(supabase, this.logger);
+      const auditLog = new AuditLogService(supabase, this.logger);
+
+      const requireAdmin = createAuthMiddleware({
+        jwt: jwtService,
+        sessions: adminSessionsRepository,
+        cookieName: config.admin.cookieName,
+        apiKey: config.admin.apiKey,
+        cloudflareAllowedDomain: config.admin.cloudflareAllowedDomain,
+        logger: this.logger,
+      });
+
+      this.expressServer = new ExpressServer(this.logger, metaAdapter, messageLogService);
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
         async (tenantId, phoneNumber, text, metaMessageId) =>
           botController.processMessage(tenantId, phoneNumber, text, metaMessageId),
       );
 
+      const authRouter = createAuthRouter({
+        jwt: jwtService,
+        adminUsers: adminUsersRepository,
+        sessions: adminSessionsRepository,
+        attempts: loginAttemptsRepository,
+        audit: auditLog,
+        requireAdmin,
+        logger: this.logger,
+      });
+      this.expressServer.setupAuthRoutes(authRouter);
+      this.logger.info('✅ API Auth montada en /api/auth');
+
       const adminRouter = createAdminRouter({
+        requireAdmin,
         assignMoldeUseCase: this.container.getAssignMoldeUseCase(),
         setTenantStatusUseCase: this.container.getSetTenantStatusUseCase(),
         simulateMessageUseCase: this.container.getSimulateMessageUseCase(),
+        createTenantUseCase: this.container.getCreateTenantUseCase(),
         tenantRepository,
         botFlowRepository,
+        messagesRepository,
+        metaCredentialsRepository,
+        audit: auditLog,
+        supabase,
         logger: this.logger,
       });
       this.expressServer.setupAdminRoutes(adminRouter);
       this.logger.info('✅ API Admin montada en /api/admin');
+
+      this.expressServer.setupStaticAssets();
 
       await this.expressServer.start();
 
       // CLI multi-tenant para desarrollo
       this.readlineAdapter = new ReadlineAdapter(this.logger);
       this.logger.info('✅ Bot iniciado\n');
-      await this.readlineAdapter.start(
-        async (tenantId, phoneNumber, text) =>
-          botController.processMessage(tenantId, phoneNumber, text),
+      await this.readlineAdapter.start(async (tenantId, phoneNumber, text) =>
+        botController.processMessage(tenantId, phoneNumber, text),
       );
     } catch (error) {
       if (this.logger) {
@@ -124,6 +172,27 @@ export class Bootstrap {
       }
       process.exit(1);
     }
+  }
+
+  /**
+   * Devuelve el secreto JWT. En prod debe venir de ADMIN_JWT_SECRET (validado
+   * por validateConfig()). En dev, si no existe, generamos uno efímero por
+   * proceso para no romper el flow de login (las cookies se invalidan en cada
+   * restart, lo cual es aceptable en dev).
+   */
+  private resolveJwtSecret(): string {
+    if (config.admin.jwtSecret && config.admin.jwtSecret.length >= 64) {
+      return config.admin.jwtSecret;
+    }
+    if (config.isProduction) {
+      throw new Error('ADMIN_JWT_SECRET inválido en producción');
+    }
+    const ephemeral = crypto.randomBytes(64).toString('hex');
+    this.logger.warn(
+      '⚠️  ADMIN_JWT_SECRET no configurado. Generado un secret efímero para este proceso. ' +
+        'Las sesiones se invalidarán en cada restart.',
+    );
+    return ephemeral;
   }
 
   getContainer(): ApplicationContainer {
