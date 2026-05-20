@@ -127,4 +127,14 @@ export interface TenantRepository {
    * NO toca bot_flows ni messages (histórico recuperable).
    */
   softDelete(id: string): Promise<void>;
+
+  /**
+   * Verifica si un módulo está habilitado en el tenant (Sprint 5.1a).
+   * Lee `tenants.enabled_modules TEXT[]` (migración 011). Soft-deleted = false.
+   *
+   * Usado por:
+   *   - moduleGuard middleware (POS routes)
+   *   - PosAuthService (pre-flight antes de login)
+   */
+  isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean>;
 }

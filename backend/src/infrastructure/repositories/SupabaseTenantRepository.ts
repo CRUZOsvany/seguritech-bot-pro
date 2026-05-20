@@ -322,4 +322,20 @@ export class SupabaseTenantRepository implements TenantRepository {
 
     this.logger.warn({ id }, '🗑️  Tenant soft-deleted (status=paused, deleted_at set)');
   }
+
+  async isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('tenants')
+      .select('enabled_modules')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) {
+      this.logger.error({ error, id, module }, 'isModuleEnabled failed');
+      throw new Error(`isModuleEnabled: ${error.message}`);
+    }
+    if (!data) return false;
+    const modules = (data.enabled_modules as string[] | null) ?? [];
+    return modules.includes(module);
+  }
 }

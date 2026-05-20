@@ -365,6 +365,7 @@ export class PerformanceSecurityTest {
       createAtomic: async () => { throw new Error('not implemented in perf test'); },
       update: async () => { throw new Error('not implemented in perf test'); },
       softDelete: async () => { throw new Error('not implemented in perf test'); },
+      isModuleEnabled: async () => false,
     };
     const supabaseStub = {} as SupabaseClient;
 
