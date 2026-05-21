@@ -4,7 +4,7 @@ import type { JwtService, PosJwtPayload } from './JwtService';
 import type { AdminSessionsRepository } from '@/domain/ports/AdminSessionsRepository';
 
 declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
+   
   namespace Express {
     interface Request {
       posUser?: PosJwtPayload;

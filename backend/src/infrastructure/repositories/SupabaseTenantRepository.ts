@@ -146,32 +146,32 @@ export class SupabaseTenantRepository implements TenantRepository {
       abre_domingo: !!t.abre_domingo,
       bot_configuration: bc
         ? {
-            numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
-            nombre_bot: bc.nombre_bot,
-            tono_bot: bc.tono_bot,
-            mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
-            mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
-            mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
-            mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
-            mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
-          }
+          numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
+          nombre_bot: bc.nombre_bot,
+          tono_bot: bc.tono_bot,
+          mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
+          mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
+          mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
+          mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
+          mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
+        }
         : null,
       meta_credentials: mc
         ? {
-            phone_number_id: mc.phone_number_id,
-            waba_id: mc.waba_id,
-            display_phone_number: mc.display_phone_number,
-            is_active: !!mc.is_active,
-            rotated_at: mc.rotated_at ?? null,
-          }
+          phone_number_id: mc.phone_number_id,
+          waba_id: mc.waba_id,
+          display_phone_number: mc.display_phone_number,
+          is_active: !!mc.is_active,
+          rotated_at: mc.rotated_at ?? null,
+        }
         : null,
       active_flow: flow
         ? {
-            id: flow.id,
-            nombre: flow.nombre,
-            source_template_id: flow.source_template_id ?? null,
-            updated_at: flow.updated_at,
-          }
+          id: flow.id,
+          nombre: flow.nombre,
+          source_template_id: flow.source_template_id ?? null,
+          updated_at: flow.updated_at,
+        }
         : null,
       created_at: t.created_at,
       updated_at: t.updated_at,

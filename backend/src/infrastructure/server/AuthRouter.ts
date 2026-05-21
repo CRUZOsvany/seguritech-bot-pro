@@ -323,8 +323,8 @@ export function createAuthRouter(params: {
       if (err instanceof PosAuthError) {
         const status =
           err.code === 'locked' ? 429 :
-          err.code === 'module_disabled' ? 403 :
-          401;
+            err.code === 'module_disabled' ? 403 :
+              401;
         res.status(status).json({ error: err.message, code: err.code });
         return;
       }

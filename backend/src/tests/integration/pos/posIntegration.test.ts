@@ -152,16 +152,16 @@ function buildApp(opts: BuildOpts = {}) {
     list: jest.fn(async (tid) =>
       tid === TENANT_ID
         ? ([
-            {
-              id: 'c1',
-              tenantId: TENANT_ID,
-              name: 'Escritura',
-              parentId: null,
-              displayOrder: 1,
-              isActive: true,
-              createdAt: new Date(),
-            },
-          ] as PosCategory[])
+          {
+            id: 'c1',
+            tenantId: TENANT_ID,
+            name: 'Escritura',
+            parentId: null,
+            displayOrder: 1,
+            isActive: true,
+            createdAt: new Date(),
+          },
+        ] as PosCategory[])
         : [],
     ),
   } as unknown as PosCategoryRepository;
@@ -170,23 +170,23 @@ function buildApp(opts: BuildOpts = {}) {
     getByTenant: jest.fn(async (tid) =>
       tid === TENANT_ID
         ? ({
-            tenantId: TENANT_ID,
-            mould: 'papeleria',
-            businessName: 'Papelería Piloto Test',
-            businessAddress: null,
-            businessPhone: null,
-            ticketHeader: null,
-            ticketFooter: null,
-            printerModel: null,
-            printerConnection: null,
-            printerAddress: null,
-            defaultTaxRate: 0,
-            currency: 'MXN',
-            loyaltyEnabled: true,
-            loyaltyPointsPerPeso: 1.0,
-            whatsappTicketEnabled: false,
-            updatedAt: new Date(),
-          } as PosTenantConfig)
+          tenantId: TENANT_ID,
+          mould: 'papeleria',
+          businessName: 'Papelería Piloto Test',
+          businessAddress: null,
+          businessPhone: null,
+          ticketHeader: null,
+          ticketFooter: null,
+          printerModel: null,
+          printerConnection: null,
+          printerAddress: null,
+          defaultTaxRate: 0,
+          currency: 'MXN',
+          loyaltyEnabled: true,
+          loyaltyPointsPerPeso: 1.0,
+          whatsappTicketEnabled: false,
+          updatedAt: new Date(),
+        } as PosTenantConfig)
         : null,
     ),
   } as unknown as PosTenantConfigRepository;
