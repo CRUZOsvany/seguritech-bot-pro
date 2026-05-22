@@ -1,5 +1,5 @@
 import { HandleMessageUseCase } from '@/domain/use-cases/HandleMessageUseCase';
-import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
+import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
 import { Message, TenantConfig, BotTone, UserState } from '@/domain/entities';
 
 const TENANT_A = 'tenant-a';
