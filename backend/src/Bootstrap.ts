@@ -207,12 +207,18 @@ export class Bootstrap {
 
       await this.expressServer.start();
 
-      // CLI multi-tenant para desarrollo
-      this.readlineAdapter = new ReadlineAdapter(this.logger);
-      this.logger.info('✅ Bot iniciado\n');
-      await this.readlineAdapter.start(async (tenantId, phoneNumber, text) =>
-        botController.processMessage(tenantId, phoneNumber, text),
-      );
+      // CLI multi-tenant SOLO en desarrollo. En prod no hay stdin real.
+      if (config.isDevelopment) {
+        this.readlineAdapter = new ReadlineAdapter(this.logger);
+        this.logger.info('✅ Bot iniciado (modo dev con CLI interactivo)\n');
+        await this.readlineAdapter.start(async (tenantId, phoneNumber, text) =>
+          botController.processMessage(tenantId, phoneNumber, text),
+        );
+      } else {
+        this.logger.info('✅ Bot iniciado (modo producción, sin CLI)\n');
+        // En prod el proceso se mantiene vivo por el servidor Express,
+        // no por readline. PM2 lo respawnea si muere.
+      }
     } catch (error) {
       if (this.logger) {
         this.logger.error({ err: error }, '❌ Error en bootstrap');
