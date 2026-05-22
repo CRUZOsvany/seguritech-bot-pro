@@ -57,6 +57,8 @@ Thumbs.db
 
 # Misc
 *.tgz
+*.zip
+_check_zip/
 .cache/
 .npm/
 .pm2/
