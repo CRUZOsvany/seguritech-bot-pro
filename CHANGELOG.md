@@ -1,6 +1,88 @@
 # CHANGELOG
 
-## [Unreleased] — feature/sprint-5-1a-pos-backend
+## [Unreleased] — feature/sprint-5-5-hardening
+
+### Sprint 5.5 — Hardening + Paused Tenant Gating
+
+Cierra los siguientes items del Documento Maestro v2.0 sección 3.2:
+
+- [x] #1 CI roto por referencias a `frontend/`
+- [x] #2 `backend/bin/www` fósil del generador Express
+- [x] #3 `.env.example` raíz con vars muertas (`NEXT_PUBLIC_*`, `NEXTAUTH_SECRET`)
+- [x] #4 `ReadlineAdapter` sin gate de development
+- [x] #5 `InMemoryUserRepository` fuera de su lugar (era infra, ahora `tests/utils/`)
+- [x] #6 `tenants.status='paused'` NO bloqueaba webhook — RESUELTO
+
+#### El item crítico (#6)
+
+- Nuevo método `findStatusById()` en `TenantRepository` para gating sin cargar
+  `TenantConfig` completo.
+- Cache en memoria con TTL de 30s en `Bootstrap.ts` (evita query por mensaje).
+- Gate aplicado en **ambas rutas** del webhook: `/webhook/:tenantId` y `/webhook`
+  (esta última no estaba en el spec original pero su exclusión hubiera sido
+  puerta trasera).
+- Mapping explícito: `live + sandbox = active`;
+  `paused + archived + draft + not_found = inactive` (response 200 +
+  `{skipped: ...}`, sin reintentos de Meta).
+- Definido el tipo `TenantStatus` que no existía + re-export desde el barrel
+  `domain/ports/index.ts`.
+
+#### Nuevo
+
+- `backend/src/tests/integration/webhookStatusGating.test.ts` con 2 tests
+  cubriendo los casos `inactive` y `not_found`.
+- Path alias `@/tests/*` en `backend/tsconfig.json`.
+- `TenantStatusChecker` exportado desde `ExpressServer.ts` y aceptado como
+  4to argumento opcional del constructor.
+
+#### Modificado
+
+- `.github/workflows/ci.yml`: eliminados 3 steps `cd frontend && ...`;
+  ahora usa `--workspace backend` para lint, type-check, test y build.
+- `Bootstrap.ts`: `ReadlineAdapter.start()` ahora vive dentro de
+  `if (config.isDevelopment)`; cableado del `tenantStatusChecker` con cache
+  in-memory antes del `new ExpressServer(...)`.
+- `TenantRepository.ts`: `+ TenantStatus` (FSM 5 estados) + `+ findStatusById()`.
+- `SupabaseTenantRepository.ts`: implementación de `findStatusById()` con
+  `maybeSingle()` + filtro `deleted_at IS NULL`.
+- `PerformanceSecurityTest.ts`: stub de `TenantRepository` extendido con
+  `findStatusById: async () => null`.
+- 3 tests existentes con import actualizado a `@/tests/utils/InMemoryUserRepository`.
+
+#### Eliminado
+
+- `backend/bin/www` (Express generator fossil, requería `../app` inexistente).
+- `.env.example` raíz (vars muertas de la época pre-Sprint-E).
+
+#### Movido
+
+- `backend/src/infrastructure/repositories/InMemoryUserRepository.ts`
+  → `backend/src/tests/utils/InMemoryUserRepository.ts` (solo se usaba en
+  tests, ubicación previa confundía sobre si era runtime adapter).
+
+#### Tests
+
+- Suite total: **38 passed / 3 skipped / 0 failed** (baseline 36 + 2 nuevos).
+- Lint: 0 errors / 103 warnings preexistentes.
+- Build: OK.
+
+#### Deuda no abordada (fuera de scope)
+
+- `TenantRepository.setStatus()` legacy sigue tipado con tupla
+  `'active' | 'paused'` (de Sprint 3). Se limpia en Sprint 6 junto con la
+  eliminación de `HandleMessageUseCase`.
+- Deuda #2 (send_list interactive), #3 (N+1 en `GET /api/admin/tenants`),
+  #10 (depuración de `docs/`), #11 (`backend/supabase/seed.sql` suelto):
+  diferidas explícitamente al backlog.
+
+#### Próximo
+
+Sprint 5.6 — Primer cliente piloto en producción (VPS Hetzner, Cloudflare
+Access, onboarding de la papelería de Chilpancingo). Parte B del sprint
+(Meta verification + Supabase Cloud + VPS + secretos) es trabajo manual
+en paralelo.
+
+---
 
 ### Sprint 5.1a — POS Module Bootstrap (backend)
 
