@@ -1,4 +1,10 @@
 /**
+ * FSM de estados del tenant (migration 006).
+ * Transiciones: draft → sandbox → live ⇄ paused → archived.
+ */
+export type TenantStatus = 'draft' | 'sandbox' | 'live' | 'paused' | 'archived';
+
+/**
  * Resumen de un tenant para el panel de administración.
  * Incluye has_active_flow (calculado desde bot_flows) para mostrar estado de molde.
  */
@@ -108,6 +114,13 @@ export interface TenantRepository {
   findById(id: string): Promise<TenantSummary | null>;
   findFullDetail(id: string): Promise<TenantDetail | null>;
   setStatus(id: string, status: 'active' | 'paused'): Promise<void>;
+
+  /**
+   * Devuelve únicamente el status del tenant. Para gating rápido del webhook
+   * sin cargar TenantConfig completo. Devuelve null si el tenant no existe
+   * o está soft-deleted.
+   */
+  findStatusById(id: string): Promise<TenantStatus | null>;
 
   /**
    * Crea atómicamente tenant + bot_configuration + (opcional) bot_flow desde template.

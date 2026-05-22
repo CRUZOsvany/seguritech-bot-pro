@@ -122,6 +122,7 @@ export {
   CreateTenantInput,
   UpdateTenantInput,
   TenantGiro,
+  TenantStatus,
 } from './TenantRepository';
 
 export {

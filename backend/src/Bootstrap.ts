@@ -153,7 +153,42 @@ export class Bootstrap {
       });
       const requirePosModule = createRequireModule(tenantRepository, 'pos', this.logger);
 
-      this.expressServer = new ExpressServer(this.logger, metaAdapter, messageLogService);
+      // Sprint 5.5 — gate de tenant inactivo sobre el webhook.
+      // Cachea el status en memoria 30s para evitar query por cada mensaje.
+      const statusCache = new Map<
+        string,
+        { status: 'active' | 'inactive' | 'not_found'; expiresAt: number }
+      >();
+      const STATUS_CACHE_TTL_MS = 30_000;
+
+      const tenantStatusChecker = async (
+        tenantId: string,
+      ): Promise<'active' | 'inactive' | 'not_found'> => {
+        const now = Date.now();
+        const cached = statusCache.get(tenantId);
+        if (cached && cached.expiresAt > now) {
+          return cached.status;
+        }
+        const dbStatus = await tenantRepository.findStatusById(tenantId);
+        let result: 'active' | 'inactive' | 'not_found';
+        if (dbStatus === null) {
+          result = 'not_found';
+        } else if (dbStatus === 'live' || dbStatus === 'sandbox') {
+          result = 'active';
+        } else {
+          // 'paused', 'archived', 'draft' → inactive
+          result = 'inactive';
+        }
+        statusCache.set(tenantId, { status: result, expiresAt: now + STATUS_CACHE_TTL_MS });
+        return result;
+      };
+
+      this.expressServer = new ExpressServer(
+        this.logger,
+        metaAdapter,
+        messageLogService,
+        tenantStatusChecker,
+      );
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
         async (tenantId, phoneNumber, text, metaMessageId) =>

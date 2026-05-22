@@ -18,6 +18,16 @@ type ProcessMessage = (
 ) => Promise<string | null>;
 
 /**
+ * Sprint 5.5 — Gate de tenants paused/archived/draft sobre el webhook.
+ * Devuelve 'active' si el tenant procesa mensajes (status live/sandbox),
+ * 'inactive' si el tenant existe pero está paused/archived/draft, o
+ * 'not_found' si no existe (o está soft-deleted).
+ */
+export type TenantStatusChecker = (
+  tenantId: string,
+) => Promise<'active' | 'inactive' | 'not_found'>;
+
+/**
  * Verificar firma HMAC-SHA256 de Meta sobre el rawBody del webhook.
  */
 function verifyMetaSignature(req: Request): boolean {
@@ -51,17 +61,51 @@ export class ExpressServer {
   private server: any;
   private readonly metaAdapter?: MetaWhatsAppAdapter;
   private readonly messageLogService?: MessageLogService;
+  private readonly tenantStatusChecker?: TenantStatusChecker;
 
   constructor(
     logger: pino.Logger,
     metaAdapter?: MetaWhatsAppAdapter,
     messageLogService?: MessageLogService,
+    tenantStatusChecker?: TenantStatusChecker,
   ) {
     this.logger = logger;
     this.metaAdapter = metaAdapter;
     this.messageLogService = messageLogService;
+    this.tenantStatusChecker = tenantStatusChecker;
     this.app = express();
     this.setupMiddleware();
+  }
+
+  /**
+   * Sprint 5.5 — gate de tenant inactivo aplicado en ambas rutas webhook.
+   * Si el tenant está paused/archived/draft o no existe, responde 200 OK con
+   * `{skipped}` para que Meta no reintente, sin invocar processMessage ni
+   * tocar messages/message_logs. Devuelve true si la respuesta ya fue enviada.
+   */
+  private async rejectIfTenantInactive(
+    tenantId: string,
+    res: Response,
+  ): Promise<boolean> {
+    if (!this.tenantStatusChecker) return false;
+    const status = await this.tenantStatusChecker(tenantId);
+    if (status === 'inactive') {
+      this.logger.warn(
+        { tenantId },
+        '🚫 Webhook recibido para tenant inactivo (paused/archived/draft). Mensaje descartado.',
+      );
+      res.status(200).json({ success: true, skipped: 'tenant_inactive' });
+      return true;
+    }
+    if (status === 'not_found') {
+      this.logger.warn(
+        { tenantId },
+        '🚫 Webhook recibido para tenant inexistente. Mensaje descartado.',
+      );
+      res.status(200).json({ success: true, skipped: 'tenant_not_found' });
+      return true;
+    }
+    return false;
   }
 
   private setupMiddleware(): void {
@@ -170,6 +214,9 @@ export class ExpressServer {
             }
           }
 
+          // Sprint 5.5 — gate de tenant pausado/archivado/draft.
+          if (await this.rejectIfTenantInactive(tenantId, res)) return;
+
           if (this.metaAdapter) {
             const parsed = this.metaAdapter.parseIncomingMessage(req.body);
             if (!parsed) {
@@ -187,6 +234,7 @@ export class ExpressServer {
           res.status(400).json({ error: 'Missing parameters' });
           return;
         }
+        if (await this.rejectIfTenantInactive(tenantId, res)) return;
         const response = await processMessage(tenantId, phoneNumber, message);
         res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
       } catch (error) {
@@ -223,6 +271,9 @@ export class ExpressServer {
             res.json({ success: true });
             return;
           }
+
+          // Sprint 5.5 — gate de tenant pausado/archivado/draft.
+          if (await this.rejectIfTenantInactive(tenantId, res)) return;
 
           await this.handleParsed(tenantId, parsed, processMessage, res);
           return;

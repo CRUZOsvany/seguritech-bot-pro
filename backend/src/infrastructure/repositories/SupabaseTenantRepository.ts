@@ -6,6 +6,7 @@ import type {
   TenantDetail,
   CreateTenantInput,
   UpdateTenantInput,
+  TenantStatus,
 } from '@/domain/ports/TenantRepository';
 
 /**
@@ -191,6 +192,23 @@ export class SupabaseTenantRepository implements TenantRepository {
     }
 
     this.logger.info({ id, status }, '[SupabaseTenantRepository] status actualizado');
+  }
+
+  async findStatusById(id: string): Promise<TenantStatus | null> {
+    const { data, error } = await this.supabase
+      .from('tenants')
+      .select('status')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error({ error, id }, 'findStatusById failed');
+      throw new Error(`findStatusById failed: ${error.message}`);
+    }
+
+    if (!data) return null;
+    return data.status as TenantStatus;
   }
 
   async createAtomic(input: CreateTenantInput): Promise<string> {
