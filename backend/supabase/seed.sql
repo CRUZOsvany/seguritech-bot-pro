@@ -1,7 +1,18 @@
 -- ============================================================================
+-- ACTIVO (verificado 2026-05-26): Datos únicos no duplicados en migrations/.
+-- Contiene los 5 flow_templates JSONB por giro (default_v1, papeleria_v1,
+-- cerrajeria_v1, pizzeria_v1, ferreteria_v1). Sin esto, el BotFlowExecutor
+-- no encuentra fallback cuando un tenant no tiene template asignado.
+--
+-- Para Supabase Cloud:
+--   1. Ejecutar este SQL una vez en SQL Editor (idempotente vía ON CONFLICT).
+--   2. Después: migrations/seed_admin_user.sql (super_admin)
+--   3. Opcional piloto: migrations/seed_pos_papeleria_pilot.sql
+--
+-- Para dev local: `supabase db reset` lo aplica automáticamente.
+-- ============================================================================
 -- seed.sql — Plantillas de flujos por giro (Sprint A)
 -- Idempotente: re-ejecutable sin duplicar (ON CONFLICT DO UPDATE).
--- Aplica automáticamente con `supabase db reset`.
 -- ============================================================================
 
 -- ============================================================================

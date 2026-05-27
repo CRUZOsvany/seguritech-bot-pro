@@ -1,50 +1,35 @@
-# Índice de Documentación
+# SegurITech Bot Pro — Índice de documentación
 
-> Punto de entrada para navegar `docs/`. Para overview del producto, ver [`../README.md`](../README.md).
+> Fuente principal: [`../SEGURITECH_PROYECTO_MAESTRO.md`](../SEGURITECH_PROYECTO_MAESTRO.md)
+> Este índice cubre solo documentación técnica complementaria.
 
-## Estructura
+## Arquitectura
+- [Arquitectura del sistema](architecture/ARCHITECTURE.md)
+- [Estructura del proyecto](architecture/PROJECT_STRUCTURE.md)
+- [Arquitectura visual multi-tenant](architecture/ARQUITECTURA_VISUAL_MULTI_TENANT.md)
 
-```
-docs/
-├── INDEX.md              ← estás aquí
-├── README.md             ← overview de la documentación
-├── architecture/         ← arquitectura hexagonal, multi-tenancy, estructura del proyecto
-├── meta-adapter/         ← integración Meta WhatsApp Cloud API
-├── testing/              ← estrategia y suite de tests
-├── deployment/           ← deploy a producción
-├── development/          ← guías de desarrollo y referencia del equipo
-├── troubleshooting/      ← problemas conocidos y soluciones
-├── pos/                  ← POS Papelería (Sprint 5.1)
-└── history/              ← sprints, entregas y refactors pasados (referencia)
-```
+## Desarrollo
+- [Guía del desarrollador](development/DEVELOPER_GUIDE.md)
+- [Referencia del equipo](development/REFERENCIA_EQUIPO.md)
 
-## Por rol
+## Módulo POS (Sprint 5.1a)
+- [Visión general](pos/README.md)
+- [API POS](pos/api.md)
+- [Schema POS](pos/schema.md)
+- [Seguridad POS](pos/security.md)
 
-### Desarrollador nuevo
-1. [`../README.md`](../README.md) — overview del proyecto
-2. [`architecture/ARCHITECTURE.md`](./architecture/ARCHITECTURE.md) — diseño hexagonal
-3. [`development/DEVELOPER_GUIDE.md`](./development/DEVELOPER_GUIDE.md) — setup y estándares
-4. [`testing/QUICK_START_TESTS.md`](./testing/QUICK_START_TESTS.md) — correr tests
+## Meta WhatsApp Cloud API
+- [Quickstart Meta](meta-adapter/META_QUICKSTART.md)
+- [Guía completa del adapter](meta-adapter/META_WHATSAPP_ADAPTER_GUIDE.md)
 
-### Trabajando en integración Meta WhatsApp
-- [`meta-adapter/META_QUICKSTART.md`](./meta-adapter/META_QUICKSTART.md)
-- [`meta-adapter/META_WHATSAPP_ADAPTER_GUIDE.md`](./meta-adapter/META_WHATSAPP_ADAPTER_GUIDE.md)
-- [`meta-adapter/META_NAVIGATION_MAP.md`](./meta-adapter/META_NAVIGATION_MAP.md)
+## Deploy
+- [Pasos de deploy](deployment/DEPLOYMENT_STEPS.md)
 
-### Trabajando en POS Papelería
-- [`pos/README.md`](./pos/README.md)
-- [`pos/api.md`](./pos/api.md) — endpoints
-- [`pos/schema.md`](./pos/schema.md) — BD
-- [`pos/security.md`](./pos/security.md) — auth y permisos
+## Tests
+- [Quick start](testing/QUICK_START_TESTS.md)
+- [Arquitectura del suite](testing/TEST_SUITE_ARCHITECTURE.md)
+- [Documentación del suite](testing/TEST_SUITE_DOCUMENTATION.md)
 
-### DevOps / Deploy
-- [`deployment/DEPLOYMENT_STEPS.md`](./deployment/DEPLOYMENT_STEPS.md)
-- [`../docker-compose.yml`](../docker-compose.yml)
+---
 
-### Debugging / Troubleshooting
-- [`troubleshooting/SOLUCION_DEPENDENCIAS.md`](./troubleshooting/SOLUCION_DEPENDENCIAS.md)
-- [`troubleshooting/SOLUCION_REACT_CONTEXT.md`](./troubleshooting/SOLUCION_REACT_CONTEXT.md)
-
-## Referencia histórica
-
-`docs/history/` contiene documentos de sprints, entregas y refactors pasados. Sirven como bitácora pero no reflejan necesariamente el estado actual del código — verificar siempre contra el código vivo antes de actuar sobre algo que lees ahí.
+*Documentación histórica (sprints anteriores, troubleshooting de issues ya resueltos, primeras versiones del adapter Meta) en [`archive/`](archive/) — referencia bitácora, no refleja el estado actual del código.*

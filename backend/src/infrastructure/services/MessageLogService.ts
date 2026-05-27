@@ -52,7 +52,7 @@ export class MessageLogService {
 
     if (error) {
       // Code 23505 = unique_violation: ya existía. No es error, es idempotencia.
-      if ((error as any).code === '23505') {
+      if ((error as { code?: string }).code === '23505') {
         this.logger.debug(
           { metaMessageId: params.metaMessageId },
           'Mensaje ya logueado (race condition con isProcessed)',
