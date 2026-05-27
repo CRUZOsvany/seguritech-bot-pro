@@ -5,7 +5,7 @@ import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
-import type { TenantRepository } from '@/domain/ports/TenantRepository';
+import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MetaCredentialsRepository } from '@/domain/ports';
 import type { MessagesRepository } from '@/domain/ports';
@@ -305,8 +305,11 @@ export function createAdminRouter(params: {
     const { status } = req.body ?? {};
     const c = ctx(req);
 
-    if (!['active', 'paused'].includes(status)) {
-      res.status(400).json({ error: 'status debe ser "active" o "paused"' });
+    const VALID_STATUSES: TenantStatus[] = ['draft', 'sandbox', 'live', 'paused', 'archived'];
+    if (!VALID_STATUSES.includes(status)) {
+      res.status(400).json({
+        error: `status inválido. Valores permitidos: ${VALID_STATUSES.join(', ')}`,
+      });
       return;
     }
 

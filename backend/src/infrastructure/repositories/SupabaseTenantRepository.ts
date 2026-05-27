@@ -179,7 +179,7 @@ export class SupabaseTenantRepository implements TenantRepository {
     };
   }
 
-  async setStatus(id: string, status: 'active' | 'paused'): Promise<void> {
+  async setStatus(id: string, status: TenantStatus): Promise<void> {
     const { error } = await this.supabase
       .from('tenants')
       .update({ status })
@@ -333,12 +333,12 @@ export class SupabaseTenantRepository implements TenantRepository {
   async softDelete(id: string): Promise<void> {
     const { error } = await this.supabase
       .from('tenants')
-      .update({ deleted_at: new Date().toISOString(), status: 'paused' })
+      .update({ deleted_at: new Date().toISOString(), status: 'archived' as TenantStatus })
       .eq('id', id)
       .is('deleted_at', null);
     if (error) throw new Error(`softDelete tenant: ${error.message}`);
 
-    this.logger.warn({ id }, '🗑️  Tenant soft-deleted (status=paused, deleted_at set)');
+    this.logger.warn({ id }, '🗑️  Tenant soft-deleted (status=archived, deleted_at set)');
   }
 
   async isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean> {
