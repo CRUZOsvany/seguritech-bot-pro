@@ -61,8 +61,9 @@ export function createAuthMiddleware(params: AuthMiddlewareParams) {
         }
         req.admin = payload;
         return next();
-      } catch (err: any) {
-        logger.debug({ err: err?.message }, 'JWT cookie inválido');
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.debug({ err: msg }, 'JWT cookie inválido');
         // Damos chance a CF Access / API key
       }
     }

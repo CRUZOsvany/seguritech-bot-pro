@@ -29,7 +29,18 @@ export class SupabaseMessagesRepository implements MessagesRepository {
       throw new Error(`tailByTenant: ${error.message}`);
     }
 
-    return (data ?? []).map((row: any) => ({
+    type MessageDbRow = {
+      id: string;
+      tenant_id: string;
+      from_phone: string;
+      content: string;
+      response: string | null;
+      direction: MessageRow['direction'];
+      meta_message_id: string | null;
+      timestamp: string;
+    };
+
+    return (data ?? []).map((row: MessageDbRow) => ({
       id: row.id,
       tenantId: row.tenant_id,
       fromPhone: row.from_phone,

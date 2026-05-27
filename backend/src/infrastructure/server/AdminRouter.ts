@@ -69,6 +69,9 @@ export function createAdminRouter(params: {
     userAgent: String(req.headers['user-agent'] ?? ''),
   });
 
+  const errMsg = (err: unknown): string =>
+    err instanceof Error ? err.message : String(err);
+
   // ============================================================
   // GET /api/admin/tenants
   // super_admin: lista completa. admin_operator: solo su tenant.
@@ -139,9 +142,9 @@ export function createAdminRouter(params: {
         metadata: { nombre_negocio: req.body?.nombre_negocio, giro: req.body?.giro },
       });
       res.status(201).json({ id });
-    } catch (err: any) {
-      logger.warn({ err: err?.message, body: req.body }, 'POST /api/admin/tenants failed');
-      const msg = String(err?.message ?? '');
+    } catch (err: unknown) {
+      const msg = errMsg(err);
+      logger.warn({ err: msg, body: req.body }, 'POST /api/admin/tenants failed');
       const safeToExpose =
         msg.startsWith('Validación:') || msg.includes('template') || msg.includes('no encontrado');
       res.status(400).json({
@@ -205,9 +208,9 @@ export function createAdminRouter(params: {
         metadata: { keys: Object.keys(parsed.data) },
       });
       res.json({ ok: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error({ err, id }, 'PATCH /api/admin/tenants/:id failed');
-      res.status(500).json({ error: err?.message ?? 'Error interno' });
+      res.status(500).json({ error: errMsg(err) || 'Error interno' });
     }
   });
 
@@ -226,9 +229,9 @@ export function createAdminRouter(params: {
         targetId: id,
       });
       res.json({ ok: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error({ err, id }, 'DELETE /api/admin/tenants/:id failed');
-      res.status(500).json({ error: err?.message ?? 'Error interno' });
+      res.status(500).json({ error: errMsg(err) || 'Error interno' });
     }
   });
 
@@ -268,10 +271,11 @@ export function createAdminRouter(params: {
         metadata: { templateSlug },
       });
       res.json({ success: true, tenantId, templateSlug });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = errMsg(err);
       logger.error({ err, tenantId, templateSlug }, 'POST /api/admin/tenants/:id/molde failed');
-      const status = err.message?.includes('no existe') ? 404 : 400;
-      res.status(status).json({ error: err.message ?? 'Error asignando molde' });
+      const status = msg.includes('no existe') ? 404 : 400;
+      res.status(status).json({ error: msg || 'Error asignando molde' });
     }
   });
 
@@ -291,9 +295,9 @@ export function createAdminRouter(params: {
         targetId: tenantId,
       });
       res.json({ success: true, tenantId });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error({ err, tenantId }, 'DELETE /api/admin/tenants/:id/molde failed');
-      res.status(500).json({ error: err.message ?? 'Error removiendo molde' });
+      res.status(500).json({ error: errMsg(err) || 'Error removiendo molde' });
     }
   });
 
@@ -323,9 +327,9 @@ export function createAdminRouter(params: {
         metadata: { status },
       });
       res.json({ success: true, tenantId, status });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error({ err, tenantId, status }, 'PATCH /api/admin/tenants/:id/status failed');
-      res.status(500).json({ error: err.message ?? 'Error actualizando status' });
+      res.status(500).json({ error: errMsg(err) || 'Error actualizando status' });
     }
   });
 
@@ -374,9 +378,9 @@ export function createAdminRouter(params: {
           },
         });
         res.json({ ok: true, rotatedAt: new Date().toISOString() });
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error({ err, tenantId }, 'POST /tenants/:id/meta-credentials failed');
-        res.status(500).json({ error: err?.message ?? 'Error interno' });
+        res.status(500).json({ error: errMsg(err) || 'Error interno' });
       }
     },
   );
@@ -406,9 +410,9 @@ export function createAdminRouter(params: {
           targetId: tenantId,
         });
         res.json({ ok: true });
-      } catch (err: any) {
+      } catch (err: unknown) {
         logger.error({ err, tenantId }, 'DELETE /tenants/:id/meta-credentials failed');
-        res.status(500).json({ error: err?.message ?? 'Error interno' });
+        res.status(500).json({ error: errMsg(err) || 'Error interno' });
       }
     },
   );
@@ -422,9 +426,9 @@ export function createAdminRouter(params: {
     try {
       const messages = await messagesRepository.tailByTenant(tenantId, limit);
       res.json({ messages });
-    } catch (err: any) {
+    } catch (err: unknown) {
       logger.error({ err, tenantId, limit }, 'GET /tenants/:id/messages failed');
-      res.status(500).json({ error: err?.message ?? 'Error interno' });
+      res.status(500).json({ error: errMsg(err) || 'Error interno' });
     }
   });
 

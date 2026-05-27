@@ -46,7 +46,15 @@ export class SupabaseTenantRepository implements TenantRepository {
       (flowsRes.data ?? []).map((r: { tenant_id: string }) => r.tenant_id),
     );
 
-    return (tenantsRes.data ?? []).map((t: any) => ({
+    type TenantListRow = {
+      id: string;
+      nombre_negocio: string;
+      giro: string;
+      status: string;
+      webhook_verified: boolean | null;
+    };
+
+    return (tenantsRes.data ?? []).map((t: TenantListRow) => ({
       id: t.id,
       nombre_negocio: t.nombre_negocio,
       giro: t.giro,
@@ -79,7 +87,14 @@ export class SupabaseTenantRepository implements TenantRepository {
 
     if (!tenantRes.data) return null;
 
-    const t = tenantRes.data as any;
+    type TenantByIdRow = {
+      id: string;
+      nombre_negocio: string;
+      giro: string;
+      status: string;
+      webhook_verified: boolean | null;
+    };
+    const t = tenantRes.data as TenantByIdRow;
     return {
       id: t.id,
       nombre_negocio: t.nombre_negocio,
@@ -277,14 +292,15 @@ export class SupabaseTenantRepository implements TenantRepository {
         '✅ Tenant creado atómicamente',
       );
       return tenantId;
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Rollback: borrar el tenant. FK ON DELETE CASCADE limpia bot_configurations y bot_flows.
       await this.supabase.from('tenants').delete().eq('id', tenantId);
+      const msg = err instanceof Error ? err.message : String(err);
       this.logger.error(
-        { err: err?.message, tenantId },
+        { err: msg, tenantId },
         '❌ createAtomic falló; tenant revertido vía cascade',
       );
-      throw new Error(`createAtomic: ${err?.message ?? 'error desconocido'}`);
+      throw new Error(`createAtomic: ${msg || 'error desconocido'}`);
     }
   }
 

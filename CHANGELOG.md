@@ -2,6 +2,22 @@
 
 ## [Unreleased] — feature/sprint-5-5-hardening
 
+### Limpieza de calidad (2026-05-26)
+
+- **[fix]** Verificado: `send_list` envía `interactive type=list` correcto en
+  `MetaWhatsAppAdapter.sendList()` (con validación 1..10 sections / 1..10 rows)
+  y renderiza con modal (`openListModal`) en `backend/public/simulator/index.html`.
+  `BotController` enruta `kind='list'` a `notificationPort.sendList()` (no a
+  `sendMessage`). **Deuda #2 marcada como RESUELTA** — no hubo código a tocar.
+- **[chore]** Lint: warnings `any` en catch blocks de `AdminRouter.ts` y otros
+  reemplazados por `unknown` + narrowing. Row mappers de Supabase con tipos
+  inline. Ver detalle en commit.
+- **[docs]** `docs/` reorganizado: históricos movidos a `docs/archive/`,
+  `docs/INDEX.md` reescrito para apuntar a `SEGURITECH_PROYECTO_MAESTRO.md`
+  como fuente única.
+- **[chore]** `backend/supabase/seed.sql` marcado como **ACTIVO** (contiene
+  los 5 flow_templates JSONB únicos, no duplicados con `migrations/seed_*.sql`).
+
 ### Sprint 5.5 — Hardening + Paused Tenant Gating
 
 Cierra los siguientes items del Documento Maestro v2.0 sección 3.2:
@@ -72,9 +88,9 @@ Cierra los siguientes items del Documento Maestro v2.0 sección 3.2:
 - `TenantRepository.setStatus()` legacy sigue tipado con tupla
   `'active' | 'paused'` (de Sprint 3). Se limpia en Sprint 6 junto con la
   eliminación de `HandleMessageUseCase`.
-- Deuda #2 (send_list interactive), #3 (N+1 en `GET /api/admin/tenants`),
-  #10 (depuración de `docs/`), #11 (`backend/supabase/seed.sql` suelto):
-  diferidas explícitamente al backlog.
+- Deuda #3 (N+1 en `GET /api/admin/tenants`) diferida al backlog.
+- Deuda #2 (send_list), #10 (docs/) y #11 (seed.sql) **cerradas** en la
+  limpieza de 2026-05-26 (ver sección al inicio del Unreleased).
 
 #### Próximo
 
