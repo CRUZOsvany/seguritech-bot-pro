@@ -113,7 +113,12 @@ export interface TenantRepository {
   findAll(): Promise<TenantSummary[]>;
   findById(id: string): Promise<TenantSummary | null>;
   findFullDetail(id: string): Promise<TenantDetail | null>;
-  setStatus(id: string, status: 'active' | 'paused'): Promise<void>;
+  /**
+   * Actualiza el estado FSM del tenant.
+   * Transiciones válidas: draft→sandbox→live⇄paused→archived.
+   * El caller es responsable de validar la transición antes de llamar.
+   */
+  setStatus(id: string, status: TenantStatus): Promise<void>;
 
   /**
    * Devuelve únicamente el status del tenant. Para gating rápido del webhook
@@ -136,7 +141,7 @@ export interface TenantRepository {
   update(id: string, input: UpdateTenantInput): Promise<void>;
 
   /**
-   * Soft-delete: setea deleted_at = now() y status = 'paused'.
+   * Soft-delete: setea deleted_at = now() y status = 'archived'.
    * NO toca bot_flows ni messages (histórico recuperable).
    */
   softDelete(id: string): Promise<void>;

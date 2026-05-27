@@ -1,15 +1,22 @@
 import type pino from 'pino';
-import type { TenantRepository } from '@/domain/ports/TenantRepository';
+import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 
 /**
- * Cambia el status operacional de un tenant (active / paused).
+ * Cambia el estado FSM operacional de un tenant.
  *
- * - 'active': el bot procesa mensajes normalmente.
- * - 'paused': el bot NO responde (control de pago/mora).
+ * Estados válidos (migration 006):
+ *   - 'draft':    creado, sin configuración completa
+ *   - 'sandbox':  pruebas internas, bot procesa mensajes
+ *   - 'live':     producción, bot procesa mensajes
+ *   - 'paused':   suspensión temporal (mora/pago), bot NO responde
+ *   - 'archived': retirado del servicio, bot NO responde
  *
- * NOTA: ExpressServer no verifica tenants.status todavía.
- * La verificación de status se agrega en Sprint 5 como middleware del webhook.
- * Por ahora este use case persiste el estado; el enforcement se agrega luego.
+ * Webhook gating (Sprint 5.5): `live + sandbox = active`,
+ * `paused + archived + draft = inactive`.
+ *
+ * Este use case persiste el estado; el caller (AdminRouter) es responsable
+ * de validar el valor recibido del cliente HTTP. Las transiciones permitidas
+ * no se enforzan aquí — eso lo hace la capa de presentación si es necesario.
  */
 export class SetTenantStatusUseCase {
   constructor(
@@ -19,7 +26,7 @@ export class SetTenantStatusUseCase {
 
   async execute(params: {
     tenantId: string;
-    status: 'active' | 'paused';
+    status: TenantStatus;
   }): Promise<void> {
     const { tenantId, status } = params;
 
