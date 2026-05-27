@@ -1,5 +1,4 @@
-import { createRoute } from '@tanstack/react-router';
-import { authedLayoutRoute } from './_authed';
+import { createLazyRoute } from '@tanstack/react-router';
 import {
   Card,
   CardContent,
@@ -10,7 +9,7 @@ import {
 import { Button } from '@/shared/ui/button';
 
 function TenantDetailPage() {
-  const { id } = tenantDetailRoute.useParams();
+  const { id } = Route.useParams();
 
   return (
     <Card>
@@ -35,8 +34,6 @@ function TenantDetailPage() {
   );
 }
 
-export const tenantDetailRoute = createRoute({
-  getParentRoute: () => authedLayoutRoute,
-  path: '/tenants/$id',
+export const Route = createLazyRoute('/tenants/$id')({
   component: TenantDetailPage,
 });

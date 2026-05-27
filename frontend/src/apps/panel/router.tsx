@@ -1,28 +1,62 @@
 import {
+  createRoute,
   createRouter,
   createMemoryHistory,
   createBrowserHistory,
 } from '@tanstack/react-router';
 import { rootRoute } from './routes/__root';
 import { indexRoute } from './routes/index';
-import { loginRoute } from './routes/login';
-import { changePasswordRoute } from './routes/change-password';
 import { authedLayoutRoute } from './routes/_authed';
 import { dashboardRoute } from './routes/dashboard';
-import { tenantsNewRoute } from './routes/tenants.new';
-import { tenantDetailRoute } from './routes/tenants.$id';
+import { RoutePending } from './components/route-pending';
 
 /**
- * Árbol de rutas:
+ * Rutas LAZY — se cargan en chunks separados al primer hit.
  *
- *   __root
- *     ├── /                      (redirect → /dashboard)
- *     ├── /login                 (sin shell)
- *     ├── /change-password       (sin shell)
- *     └── _authed (layout)
- *           ├── /dashboard
- *           ├── /tenants/new
- *           └── /tenants/$id
+ * Patrón:
+ *   - Definición eager aquí: path, getParentRoute, validateSearch
+ *   - Componente real en routes/X.tsx exportado como `Route`
+ *   - `.lazy()` resuelve el componente del chunk dinámico
+ *
+ * Lo que NO se splitea:
+ *   - __root, _authed (AppShell), index (redirect), dashboard (landing post-auth)
+ *
+ * El `import()` de Vite genera automáticamente un chunk por archivo.
+ */
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { next?: string } => ({
+    next: typeof search.next === 'string' ? search.next : undefined,
+  }),
+}).lazy(() => import('./routes/login').then((d) => d.Route));
+
+const changePasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/change-password',
+}).lazy(() =>
+  import('./routes/change-password').then((d) => d.Route),
+);
+
+const tenantsNewRoute = createRoute({
+  getParentRoute: () => authedLayoutRoute,
+  path: '/tenants/new',
+}).lazy(() =>
+  import('./routes/tenants.new').then((d) => d.Route),
+);
+
+const tenantDetailRoute = createRoute({
+  getParentRoute: () => authedLayoutRoute,
+  path: '/tenants/$id',
+}).lazy(() =>
+  import('./routes/tenants.$id').then((d) => d.Route),
+);
+
+/**
+ * Árbol de rutas final.
  */
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -41,6 +75,8 @@ export const router = createRouter({
   history:
     typeof window !== 'undefined' ? createBrowserHistory() : createMemoryHistory(),
   defaultPreload: 'intent',
+  defaultPendingComponent: RoutePending,
+  defaultPendingMs: 100,
 });
 
 declare module '@tanstack/react-router' {

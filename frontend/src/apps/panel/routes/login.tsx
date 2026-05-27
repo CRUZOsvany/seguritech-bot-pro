@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { createRoute, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useSearch } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import { rootRoute } from './__root';
 import { login, type LoginResponse } from '@/shared/api/auth';
 import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
@@ -23,7 +22,7 @@ interface LoginSearch {
 }
 
 function LoginPage() {
-  const search = useSearch({ from: loginRoute.id }) as LoginSearch;
+  const search = useSearch({ from: '/login' }) as LoginSearch;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -150,11 +149,6 @@ function LoginPage() {
   );
 }
 
-export const loginRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/login',
+export const Route = createLazyRoute('/login')({
   component: LoginPage,
-  validateSearch: (search: Record<string, unknown>): LoginSearch => ({
-    next: typeof search.next === 'string' ? search.next : undefined,
-  }),
 });

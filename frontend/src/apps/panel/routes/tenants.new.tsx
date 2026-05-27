@@ -1,5 +1,4 @@
-import { createRoute } from '@tanstack/react-router';
-import { authedLayoutRoute } from './_authed';
+import { createLazyRoute } from '@tanstack/react-router';
 import {
   Card,
   CardContent,
@@ -28,8 +27,6 @@ function NewTenantPage() {
   );
 }
 
-export const tenantsNewRoute = createRoute({
-  getParentRoute: () => authedLayoutRoute,
-  path: '/tenants/new',
+export const Route = createLazyRoute('/tenants/new')({
   component: NewTenantPage,
 });
