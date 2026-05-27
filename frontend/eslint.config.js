@@ -18,5 +18,17 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // TanStack Router code-based routing exporta `xxxRoute` junto al
+      // componente; shadcn exporta `buttonVariants` etc. Ambos rompen la
+      // regla pero no rompen fast-refresh en la práctica.
+      'react-refresh/only-export-components': [
+        'warn',
+        { allowConstantExport: true, allowExportNames: [
+          'loginRoute', 'dashboardRoute', 'indexRoute',
+          'changePasswordRoute', 'rootRoute',
+        ] },
+      ],
+    },
   },
 ])
