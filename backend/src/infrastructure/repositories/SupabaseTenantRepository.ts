@@ -222,7 +222,7 @@ export class SupabaseTenantRepository implements TenantRepository {
         horario_semana: input.horario_semana ?? null,
         horario_sabado: input.horario_sabado ?? null,
         abre_domingo: input.abre_domingo ?? false,
-        status: 'unconfigured',
+        status: 'draft',
         webhook_verified: false,
       })
       .select('id')

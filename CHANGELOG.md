@@ -12,6 +12,7 @@ Cierra los siguientes items del Documento Maestro v2.0 sección 3.2:
 - [x] #4 `ReadlineAdapter` sin gate de development
 - [x] #5 `InMemoryUserRepository` fuera de su lugar (era infra, ahora `tests/utils/`)
 - [x] #6 `tenants.status='paused'` NO bloqueaba webhook — RESUELTO
+- [x] #7 `createAtomic` insertaba `status='unconfigured'` (valor inválido post-006) — RESUELTO con `status='draft'`
 
 #### El item crítico (#6)
 
