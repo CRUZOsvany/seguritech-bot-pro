@@ -1,0 +1,64 @@
+import { Link } from '@tanstack/react-router';
+import { useMutation } from '@tanstack/react-query';
+import { LogOut } from 'lucide-react';
+import { useSession } from '@/shared/auth/useSession';
+import { logout } from '@/shared/api/auth';
+import { Button } from '@/shared/ui/button';
+
+export function AppHeader() {
+  const { data: session } = useSession();
+
+  const logoutMutation = useMutation({
+    mutationFn: logout,
+    onSettled: () => {
+      // Cookie invalidada server-side (o quedó stale).
+      // Hard navigation a /app/login resetea el query cache.
+      window.location.href = '/app/login';
+    },
+  });
+
+  return (
+    <header className="border-b border-border bg-card">
+      <div className="mx-auto flex h-14 max-w-[1100px] items-center justify-between px-6">
+        <div className="flex items-center gap-6">
+          <h1 className="text-sm font-semibold tracking-tight">
+            SegurITech Bot Pro · Panel
+          </h1>
+          <nav className="flex items-center gap-1">
+            <Link
+              to="/dashboard"
+              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              activeProps={{ className: 'bg-accent text-foreground' }}
+            >
+              Clientes
+            </Link>
+            <Link
+              to="/tenants/new"
+              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              activeProps={{ className: 'bg-accent text-foreground' }}
+            >
+              + Nuevo
+            </Link>
+          </nav>
+        </div>
+
+        <div className="flex items-center gap-3">
+          {session && (
+            <span className="text-xs text-muted-foreground">
+              {session.email} · {session.role}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => logoutMutation.mutate()}
+            disabled={logoutMutation.isPending}
+          >
+            <LogOut className="mr-1.5 h-3.5 w-3.5" />
+            Salir
+          </Button>
+        </div>
+      </div>
+    </header>
+  );
+}
