@@ -11,6 +11,13 @@ build/
 out/
 *.tsbuildinfo
 
+# Frontend build output (Vite → backend/public/app/, served by Express)
+backend/public/app/
+
+# Frontend dev
+frontend/node_modules/
+frontend/dist/
+
 # Test coverage
 coverage/
 .nyc_output/

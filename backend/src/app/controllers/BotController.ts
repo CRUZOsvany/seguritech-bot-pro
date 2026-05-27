@@ -1,6 +1,5 @@
 import pino from 'pino';
 import { Message, User, UserState } from '@/domain/entities';
-import { HandleMessageUseCase } from '@/domain/use-cases/HandleMessageUseCase';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
 import {
   NotificationPort,
@@ -10,18 +9,14 @@ import {
 } from '@/domain/ports';
 
 /**
- * Controlador del bot — Sprint 2.
+ * Controlador del bot.
  *
- * Estrategia dual:
- *  1. Intenta FlowInterpreter cuando el tenant tiene un bot_flow activo.
- *  2. Si no hay flow (o falla la carga) → cae a HandleMessageUseCase (FSM legacy).
- *
- * El cliente de WhatsApp no nota la diferencia — ambas rutas envían mensajes
- * por el mismo NotificationPort.
+ * Ruta única: FlowInterpreter cuando el tenant tiene bot_flow activo.
+ * Sin flow → mensaje de mantenimiento (ADR-012: fallback a FSM hardcodeada
+ * de papelería eliminado en Sprint 6 — causaba que ferreterías/cerrajerías
+ * respondieran con catálogo de productos escolares).
  */
 export class BotController {
-  private readonly handleMessageUseCase: HandleMessageUseCase;
-
   constructor(
     private readonly userRepository: UserRepository,
     private readonly notificationPort: NotificationPort,
@@ -29,9 +24,7 @@ export class BotController {
     private readonly botFlowRepository: BotFlowRepository,
     private readonly flowInterpreter: FlowInterpreter,
     private readonly logger: pino.Logger,
-  ) {
-    this.handleMessageUseCase = new HandleMessageUseCase(userRepository);
-  }
+  ) {}
 
   async processMessage(
     tenantId: string,
@@ -72,7 +65,7 @@ export class BotController {
       } catch (err) {
         this.logger.error(
           { err, tenantId },
-          'Error cargando bot_flow — degradando a FSM legacy',
+          'Error cargando bot_flow — respondiendo "en mantenimiento"',
         );
       }
 
@@ -111,22 +104,15 @@ export class BotController {
         return lastText;
       }
 
-      // 5. Fallback: HandleMessageUseCase (FSM hardcodeada)
-      this.logger.debug({ tenantId }, 'Usando FSM legacy (sin bot_flow activo)');
-      const response = await this.handleMessageUseCase.execute(message, config);
-
-      this.logger.info(
-        { tenantId, from, hasButtons: !!response.buttons?.length },
-        'Respuesta FSM generada',
+      // 5. Sin bot_flow activo — respuesta de mantenimiento (ADR-012).
+      const maintenanceText =
+        '⚙️ Este servicio está siendo configurado. Por favor intenta más tarde.';
+      this.logger.warn(
+        { tenantId, from },
+        '[BotController] Tenant sin bot_flow activo — respondiendo "en mantenimiento"',
       );
-
-      if (response.buttons && response.buttons.length > 0) {
-        await this.notificationPort.sendButtons(tenantId, from, response.message, response.buttons);
-      } else {
-        await this.notificationPort.sendMessage(tenantId, from, response.message);
-      }
-
-      return response.message;
+      await this.notificationPort.sendMessage(tenantId, from, maintenanceText);
+      return maintenanceText;
     } catch (error) {
       this.logger.error({ error, tenantId, from }, 'Error procesando mensaje');
       throw error;
