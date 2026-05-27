@@ -1,24 +1,40 @@
-import { createRouter, createMemoryHistory, createBrowserHistory } from '@tanstack/react-router';
+import {
+  createRouter,
+  createMemoryHistory,
+  createBrowserHistory,
+} from '@tanstack/react-router';
 import { rootRoute } from './routes/__root';
 import { indexRoute } from './routes/index';
 import { loginRoute } from './routes/login';
 import { changePasswordRoute } from './routes/change-password';
+import { authedLayoutRoute } from './routes/_authed';
 import { dashboardRoute } from './routes/dashboard';
+import { tenantsNewRoute } from './routes/tenants.new';
+import { tenantDetailRoute } from './routes/tenants.$id';
 
+/**
+ * Árbol de rutas:
+ *
+ *   __root
+ *     ├── /                      (redirect → /dashboard)
+ *     ├── /login                 (sin shell)
+ *     ├── /change-password       (sin shell)
+ *     └── _authed (layout)
+ *           ├── /dashboard
+ *           ├── /tenants/new
+ *           └── /tenants/$id
+ */
 const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
   changePasswordRoute,
-  dashboardRoute,
+  authedLayoutRoute.addChildren([
+    dashboardRoute,
+    tenantsNewRoute,
+    tenantDetailRoute,
+  ]),
 ]);
 
-/**
- * basepath: '/app' porque Express sirve el bundle estático en /app/index.html.
- * Todos los links internos del router son relativos a /app/.
- *
- * History: browserHistory en runtime (SPA real); memoryHistory si algún día
- * pre-renderizamos (no es el caso hoy, pero deja la puerta abierta).
- */
 export const router = createRouter({
   routeTree,
   basepath: '/app',
