@@ -378,7 +378,9 @@ export class ExpressServer {
 
     // SPA fallback: cualquier ruta /app/* no encontrada como asset físico
     // devuelve index.html para que TanStack Router maneje el routing client-side.
-    this.app.get('/app/*', (_req: Request, res: Response) => {
+    // Express 5 / path-to-regexp v8 requiere splat nombrado ('/app/*splat'),
+    // ya no acepta '/app/*' a secas.
+    this.app.get('/app/*splat', (_req: Request, res: Response) => {
       res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(appDir, 'index.html'));
     });
