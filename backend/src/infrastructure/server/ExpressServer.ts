@@ -376,6 +376,13 @@ export class ExpressServer {
       express.static(appDir, { index: 'index.html', setHeaders: noCache }),
     );
 
+    // SPA fallback: cualquier ruta /app/* no encontrada como asset físico
+    // devuelve index.html para que TanStack Router maneje el routing client-side.
+    this.app.get('/app/*', (_req: Request, res: Response) => {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.sendFile(path.join(appDir, 'index.html'));
+    });
+
     // /simulator/:tenantId  →  /simulator/index.html?tenantId=<uuid>
     this.app.get('/simulator/:tenantId', (req: Request, res: Response, next) => {
       const raw = String(req.params.tenantId ?? '');
