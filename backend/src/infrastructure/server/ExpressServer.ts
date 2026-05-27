@@ -354,6 +354,7 @@ export class ExpressServer {
     const publicDir = path.resolve(__dirname, '..', '..', '..', 'public');
     const panelDir = path.join(publicDir, 'panel');
     const simulatorDir = path.join(publicDir, 'simulator');
+    const appDir = path.join(publicDir, 'app');
 
     const noCache = (res: Response): void => {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -368,6 +369,22 @@ export class ExpressServer {
       express.static(simulatorDir, { index: false, setHeaders: noCache }),
     );
 
+    // /app — SPA React (build de Vite del workspace frontend/). Sprint 6.
+    // Los assets hasheados (index-XXX.js) se cachean; index.html no.
+    this.app.use(
+      '/app',
+      express.static(appDir, { index: 'index.html', setHeaders: noCache }),
+    );
+
+    // SPA fallback: cualquier ruta /app/* no encontrada como asset físico
+    // devuelve index.html para que TanStack Router maneje el routing client-side.
+    // Express 5 / path-to-regexp v8 requiere splat nombrado ('/app/*splat'),
+    // ya no acepta '/app/*' a secas.
+    this.app.get('/app/*splat', (_req: Request, res: Response) => {
+      res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.sendFile(path.join(appDir, 'index.html'));
+    });
+
     // /simulator/:tenantId  →  /simulator/index.html?tenantId=<uuid>
     this.app.get('/simulator/:tenantId', (req: Request, res: Response, next) => {
       const raw = String(req.params.tenantId ?? '');
@@ -377,7 +394,10 @@ export class ExpressServer {
       res.redirect(`/simulator/index.html?tenantId=${encodeURIComponent(raw)}`);
     });
 
-    this.logger.info({ publicDir }, '📂 Assets estáticos montados en /panel y /simulator');
+    this.logger.info(
+      { publicDir },
+      '📂 Assets estáticos montados en /panel, /simulator y /app',
+    );
   }
 
   /**

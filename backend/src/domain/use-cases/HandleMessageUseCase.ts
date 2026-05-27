@@ -8,11 +8,16 @@ import {
 import { UserRepository } from '../ports';
 
 /**
- * Caso de uso: Manejar mensaje entrante.
+ * @deprecated ADR-012 — Este use case se elimina en Sprint 7.
+ * Ya no está conectado al BotController (Sprint 6 lo desconectó porque
+ * la FSM hardcodeada de papelería respondía con productos escolares a
+ * ferreterías/cerrajerías sin bot_flow asignado).
  *
- * Capa de dominio pura — sin dependencias de infraestructura.
- * Recibe la TenantConfig precargada por el controller, así no necesita
- * conocer cómo se carga (Supabase, caché, etc.).
+ * Mantenido como referencia hasta que Sprint 7 limpie las tablas legacy
+ * de products/orders y la columna bot_users.current_state.
+ *
+ * Sustituido por: FlowInterpreter (bot_flow activo) +
+ *   mensaje de "en mantenimiento" (sin bot_flow).
  */
 export class HandleMessageUseCase {
   constructor(private readonly userRepository: UserRepository) {}
