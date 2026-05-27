@@ -6,6 +6,7 @@ import type {
   TenantDetail,
   CreateTenantInput,
   UpdateTenantInput,
+  TenantStatus,
 } from '@/domain/ports/TenantRepository';
 
 /**
@@ -146,32 +147,32 @@ export class SupabaseTenantRepository implements TenantRepository {
       abre_domingo: !!t.abre_domingo,
       bot_configuration: bc
         ? {
-            numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
-            nombre_bot: bc.nombre_bot,
-            tono_bot: bc.tono_bot,
-            mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
-            mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
-            mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
-            mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
-            mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
-          }
+          numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
+          nombre_bot: bc.nombre_bot,
+          tono_bot: bc.tono_bot,
+          mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
+          mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
+          mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
+          mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
+          mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
+        }
         : null,
       meta_credentials: mc
         ? {
-            phone_number_id: mc.phone_number_id,
-            waba_id: mc.waba_id,
-            display_phone_number: mc.display_phone_number,
-            is_active: !!mc.is_active,
-            rotated_at: mc.rotated_at ?? null,
-          }
+          phone_number_id: mc.phone_number_id,
+          waba_id: mc.waba_id,
+          display_phone_number: mc.display_phone_number,
+          is_active: !!mc.is_active,
+          rotated_at: mc.rotated_at ?? null,
+        }
         : null,
       active_flow: flow
         ? {
-            id: flow.id,
-            nombre: flow.nombre,
-            source_template_id: flow.source_template_id ?? null,
-            updated_at: flow.updated_at,
-          }
+          id: flow.id,
+          nombre: flow.nombre,
+          source_template_id: flow.source_template_id ?? null,
+          updated_at: flow.updated_at,
+        }
         : null,
       created_at: t.created_at,
       updated_at: t.updated_at,
@@ -193,6 +194,23 @@ export class SupabaseTenantRepository implements TenantRepository {
     this.logger.info({ id, status }, '[SupabaseTenantRepository] status actualizado');
   }
 
+  async findStatusById(id: string): Promise<TenantStatus | null> {
+    const { data, error } = await this.supabase
+      .from('tenants')
+      .select('status')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error({ error, id }, 'findStatusById failed');
+      throw new Error(`findStatusById failed: ${error.message}`);
+    }
+
+    if (!data) return null;
+    return data.status as TenantStatus;
+  }
+
   async createAtomic(input: CreateTenantInput): Promise<string> {
     // 1. Insert tenant
     const { data: tenant, error: tErr } = await this.supabase
@@ -204,7 +222,7 @@ export class SupabaseTenantRepository implements TenantRepository {
         horario_semana: input.horario_semana ?? null,
         horario_sabado: input.horario_sabado ?? null,
         abre_domingo: input.abre_domingo ?? false,
-        status: 'unconfigured',
+        status: 'draft',
         webhook_verified: false,
       })
       .select('id')
@@ -321,5 +339,21 @@ export class SupabaseTenantRepository implements TenantRepository {
     if (error) throw new Error(`softDelete tenant: ${error.message}`);
 
     this.logger.warn({ id }, '🗑️  Tenant soft-deleted (status=paused, deleted_at set)');
+  }
+
+  async isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('tenants')
+      .select('enabled_modules')
+      .eq('id', id)
+      .is('deleted_at', null)
+      .maybeSingle();
+    if (error) {
+      this.logger.error({ error, id, module }, 'isModuleEnabled failed');
+      throw new Error(`isModuleEnabled: ${error.message}`);
+    }
+    if (!data) return false;
+    const modules = (data.enabled_modules as string[] | null) ?? [];
+    return modules.includes(module);
   }
 }

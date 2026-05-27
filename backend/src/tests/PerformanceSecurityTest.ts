@@ -10,7 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
-import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
+import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { TenantConfigPort, BotFlowRepository, TenantRepository } from '@/domain/ports';
 
@@ -362,9 +362,11 @@ export class PerformanceSecurityTest {
       findById: async () => null,
       findFullDetail: async () => null,
       setStatus: async () => { /* noop */ },
+      findStatusById: async () => null,
       createAtomic: async () => { throw new Error('not implemented in perf test'); },
       update: async () => { throw new Error('not implemented in perf test'); },
       softDelete: async () => { throw new Error('not implemented in perf test'); },
+      isModuleEnabled: async () => false,
     };
     const supabaseStub = {} as SupabaseClient;
 

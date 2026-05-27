@@ -9,6 +9,8 @@ import type { AdminUsersRepository } from '@/domain/ports/AdminUsersRepository';
 import type { AdminSessionsRepository } from '@/domain/ports/AdminSessionsRepository';
 import type { LoginAttemptsRepository } from '@/domain/ports/LoginAttemptsRepository';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
+import type { PosAuthService } from '@/application/pos/PosAuthService';
+import { PosAuthError } from '@/application/pos/PosAuthError';
 
 const LoginSchema = z.object({
   email: z.string().email().max(120),
@@ -41,9 +43,17 @@ export function createAuthRouter(params: {
   attempts: LoginAttemptsRepository;
   audit: AuditLogService;
   requireAdmin: (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
+  // Sprint 5.1a — POS
+  posAuthService: PosAuthService;
+  requirePosSession: (req: Request, res: Response, next: NextFunction) => void | Promise<void>;
+  posCookieName: string;
   logger: pino.Logger;
 }): Router {
-  const { jwt, adminUsers, sessions, attempts, audit, requireAdmin, logger } = params;
+  const {
+    jwt, adminUsers, sessions, attempts, audit, requireAdmin,
+    posAuthService, requirePosSession, posCookieName,
+    logger,
+  } = params;
   const router = Router();
 
   // Rate limit estricto: 5 intentos por IP cada 15 min. Suma con el lockout
@@ -257,6 +267,93 @@ export function createAuthRouter(params: {
       userAgent,
     });
 
+    res.json({ ok: true });
+  });
+
+  // ======================================================================
+  // POS (Sprint 5.1a)
+  // ======================================================================
+
+  // Rate limiter dedicado para pos-login. Estado separado de loginLimiter
+  // (cada rateLimit() crea su MemoryStore). Cajeros y admins no comparten
+  // contador.
+  const posLoginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: config.admin.loginMaxAttempts,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'Demasiados intentos. Intenta en 15 minutos.' },
+  });
+
+  const PosLoginSchema = z.object({
+    tenantId: z.string().uuid(),
+    name: z.string().min(1).max(50),
+    pin: z.string().regex(/^\d{4,8}$/, 'PIN: 4-8 dígitos'),
+  });
+
+  // ----------------------------------------------------------------------
+  // POST /api/auth/pos-login
+  // ----------------------------------------------------------------------
+  router.post('/pos-login', posLoginLimiter, async (req: Request, res: Response) => {
+    const parsed = PosLoginSchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'tenantId, name y pin requeridos' });
+      return;
+    }
+    const { tenantId, name, pin } = parsed.data;
+    const ip = String(req.ip ?? '');
+    const userAgent = String(req.headers['user-agent'] ?? '');
+
+    try {
+      const { token, exp, user } = await posAuthService.login({
+        tenantId, name, pin, ip, userAgent,
+      });
+
+      res.cookie(posCookieName, token, {
+        httpOnly: true,
+        secure: config.isProduction,
+        sameSite: 'strict',
+        path: '/',
+        maxAge: (exp - Math.floor(Date.now() / 1000)) * 1000,
+      });
+
+      res.json({ ok: true, user });
+    } catch (err: unknown) {
+      if (err instanceof PosAuthError) {
+        const status =
+          err.code === 'locked' ? 429 :
+            err.code === 'module_disabled' ? 403 :
+              401;
+        res.status(status).json({ error: err.message, code: err.code });
+        return;
+      }
+      logger.error({ err }, 'pos-login unhandled error');
+      res.status(500).json({ error: 'Error interno' });
+    }
+  });
+
+  // ----------------------------------------------------------------------
+  // POST /api/auth/pos-logout
+  // Revoca el jti (denylist compartida con admin) y limpia la cookie POS.
+  // ----------------------------------------------------------------------
+  router.post('/pos-logout', requirePosSession, async (req: Request, res: Response) => {
+    if (req.posUser?.jti) {
+      const exp = new Date((req.posUser.exp ?? 0) * 1000);
+      try {
+        await sessions.revoke(req.posUser.jti, req.posUser.sub || null, exp);
+      } catch (err) {
+        logger.error({ err, jti: req.posUser.jti }, 'pos-logout revoke failed');
+      }
+      audit.log({
+        adminId: null,
+        adminEmail: `pos:${req.posUser.displayName}@${req.posUser.tenantId}`,
+        action: 'pos.auth.logout',
+        ip: String(req.ip ?? ''),
+        metadata: { posUserId: req.posUser.sub, jti: req.posUser.jti },
+      });
+    }
+    res.clearCookie(posCookieName, { path: '/' });
     res.json({ ok: true });
   });
 

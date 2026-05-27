@@ -41,6 +41,7 @@
       "@/infrastructure/*": ["src/infrastructure/*"],
       "@/config/*": ["src/config/*"],
       "@/shared/*": ["src/shared/*"],
+      "@/tests/*": ["src/tests/*"],
       "@/utils/*": ["src/utils/*"]
     }
   },

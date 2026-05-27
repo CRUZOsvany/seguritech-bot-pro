@@ -31,7 +31,7 @@ import pino from 'pino';
 import { ExpressServer } from '@/infrastructure/server/ExpressServer';
 import { BotController } from '@/app/controllers/BotController';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
-import { InMemoryUserRepository } from '@/infrastructure/repositories/InMemoryUserRepository';
+import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
 import {
   printTestHeader,
   printTestResult,

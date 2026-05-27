@@ -1,4 +1,10 @@
 /**
+ * FSM de estados del tenant (migration 006).
+ * Transiciones: draft → sandbox → live ⇄ paused → archived.
+ */
+export type TenantStatus = 'draft' | 'sandbox' | 'live' | 'paused' | 'archived';
+
+/**
  * Resumen de un tenant para el panel de administración.
  * Incluye has_active_flow (calculado desde bot_flows) para mostrar estado de molde.
  */
@@ -110,6 +116,13 @@ export interface TenantRepository {
   setStatus(id: string, status: 'active' | 'paused'): Promise<void>;
 
   /**
+   * Devuelve únicamente el status del tenant. Para gating rápido del webhook
+   * sin cargar TenantConfig completo. Devuelve null si el tenant no existe
+   * o está soft-deleted.
+   */
+  findStatusById(id: string): Promise<TenantStatus | null>;
+
+  /**
    * Crea atómicamente tenant + bot_configuration + (opcional) bot_flow desde template.
    * Rollback manual vía cascade: si falla cualquier paso posterior al insert del tenant,
    * borra el tenant (FKs ON DELETE CASCADE limpian bot_configurations y bot_flows).
@@ -127,4 +140,14 @@ export interface TenantRepository {
    * NO toca bot_flows ni messages (histórico recuperable).
    */
   softDelete(id: string): Promise<void>;
+
+  /**
+   * Verifica si un módulo está habilitado en el tenant (Sprint 5.1a).
+   * Lee `tenants.enabled_modules TEXT[]` (migración 011). Soft-deleted = false.
+   *
+   * Usado por:
+   *   - moduleGuard middleware (POS routes)
+   *   - PosAuthService (pre-flight antes de login)
+   */
+  isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean>;
 }

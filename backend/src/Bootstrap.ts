@@ -13,6 +13,14 @@ import { SupabaseAdminSessionsRepository } from '@/infrastructure/repositories/S
 import { SupabaseLoginAttemptsRepository } from '@/infrastructure/repositories/SupabaseLoginAttemptsRepository';
 import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
 import { createAuthRouter } from '@/infrastructure/server/AuthRouter';
+import { createPosRouter } from '@/infrastructure/server/PosRouter';
+import { SupabasePosProductRepository } from '@/infrastructure/repositories/pos/SupabasePosProductRepository';
+import { SupabasePosCategoryRepository } from '@/infrastructure/repositories/pos/SupabasePosCategoryRepository';
+import { SupabasePosTenantConfigRepository } from '@/infrastructure/repositories/pos/SupabasePosTenantConfigRepository';
+import { SupabasePosUserRepository } from '@/infrastructure/repositories/pos/SupabasePosUserRepository';
+import { PosAuthService } from '@/application/pos/PosAuthService';
+import { createPosAuthMiddleware } from '@/infrastructure/auth/PosAuthMiddleware';
+import { createRequireModule } from '@/infrastructure/auth/ModuleGuard';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
@@ -118,7 +126,69 @@ export class Bootstrap {
         logger: this.logger,
       });
 
-      this.expressServer = new ExpressServer(this.logger, metaAdapter, messageLogService);
+      // === POS (Sprint 5.1a) — fuera del ApplicationContainer ===
+      const posProductRepository = new SupabasePosProductRepository(supabase, this.logger);
+      const posCategoryRepository = new SupabasePosCategoryRepository(supabase, this.logger);
+      const posTenantConfigRepository = new SupabasePosTenantConfigRepository(
+        supabase,
+        this.logger,
+      );
+      const posUserRepository = new SupabasePosUserRepository(supabase, this.logger);
+
+      const posAuthService = new PosAuthService(
+        posUserRepository,
+        tenantRepository,
+        jwtService,
+        auditLog,
+        config.admin.loginMaxAttempts,
+        config.admin.loginLockoutMinutes,
+        this.logger,
+      );
+
+      const requirePosSession = createPosAuthMiddleware({
+        jwt: jwtService,
+        sessions: adminSessionsRepository,
+        posCookieName: config.admin.posCookieName,
+        logger: this.logger,
+      });
+      const requirePosModule = createRequireModule(tenantRepository, 'pos', this.logger);
+
+      // Sprint 5.5 — gate de tenant inactivo sobre el webhook.
+      // Cachea el status en memoria 30s para evitar query por cada mensaje.
+      const statusCache = new Map<
+        string,
+        { status: 'active' | 'inactive' | 'not_found'; expiresAt: number }
+      >();
+      const STATUS_CACHE_TTL_MS = 30_000;
+
+      const tenantStatusChecker = async (
+        tenantId: string,
+      ): Promise<'active' | 'inactive' | 'not_found'> => {
+        const now = Date.now();
+        const cached = statusCache.get(tenantId);
+        if (cached && cached.expiresAt > now) {
+          return cached.status;
+        }
+        const dbStatus = await tenantRepository.findStatusById(tenantId);
+        let result: 'active' | 'inactive' | 'not_found';
+        if (dbStatus === null) {
+          result = 'not_found';
+        } else if (dbStatus === 'live' || dbStatus === 'sandbox') {
+          result = 'active';
+        } else {
+          // 'paused', 'archived', 'draft' → inactive
+          result = 'inactive';
+        }
+        statusCache.set(tenantId, { status: result, expiresAt: now + STATUS_CACHE_TTL_MS });
+        return result;
+      };
+
+      this.expressServer = new ExpressServer(
+        this.logger,
+        metaAdapter,
+        messageLogService,
+        tenantStatusChecker,
+      );
       const botController = this.container.getBotController();
       this.expressServer.setupRoutes(
         async (tenantId, phoneNumber, text, metaMessageId) =>
@@ -132,6 +202,9 @@ export class Bootstrap {
         attempts: loginAttemptsRepository,
         audit: auditLog,
         requireAdmin,
+        posAuthService,
+        requirePosSession,
+        posCookieName: config.admin.posCookieName,
         logger: this.logger,
       });
       this.expressServer.setupAuthRoutes(authRouter);
@@ -154,16 +227,33 @@ export class Bootstrap {
       this.expressServer.setupAdminRoutes(adminRouter);
       this.logger.info('✅ API Admin montada en /api/admin');
 
+      const posRouter = createPosRouter({
+        requirePosSession,
+        requireModule: requirePosModule,
+        posProducts: posProductRepository,
+        posCategories: posCategoryRepository,
+        posConfig: posTenantConfigRepository,
+        logger: this.logger,
+      });
+      this.expressServer.setupPosRoutes(posRouter);
+      this.logger.info('✅ API POS montada en /api/pos (Sprint 5.1a)');
+
       this.expressServer.setupStaticAssets();
 
       await this.expressServer.start();
 
-      // CLI multi-tenant para desarrollo
-      this.readlineAdapter = new ReadlineAdapter(this.logger);
-      this.logger.info('✅ Bot iniciado\n');
-      await this.readlineAdapter.start(async (tenantId, phoneNumber, text) =>
-        botController.processMessage(tenantId, phoneNumber, text),
-      );
+      // CLI multi-tenant SOLO en desarrollo. En prod no hay stdin real.
+      if (config.isDevelopment) {
+        this.readlineAdapter = new ReadlineAdapter(this.logger);
+        this.logger.info('✅ Bot iniciado (modo dev con CLI interactivo)\n');
+        await this.readlineAdapter.start(async (tenantId, phoneNumber, text) =>
+          botController.processMessage(tenantId, phoneNumber, text),
+        );
+      } else {
+        this.logger.info('✅ Bot iniciado (modo producción, sin CLI)\n');
+        // En prod el proceso se mantiene vivo por el servidor Express,
+        // no por readline. PM2 lo respawnea si muere.
+      }
     } catch (error) {
       if (this.logger) {
         this.logger.error({ err: error }, '❌ Error en bootstrap');

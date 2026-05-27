@@ -51,6 +51,9 @@ const envSchema = z.object({
   ADMIN_JWT_TTL_SECONDS: z.coerce.number().int().positive().default(28800),
   // Cookie name. En prod usar prefijo __Host- para impone Secure+Path=/+sin Domain.
   ADMIN_COOKIE_NAME: z.string().default('seguritech_session'),
+  // Cookie del POS — separada para que cajero y admin puedan coexistir en
+  // el mismo navegador sin pisarse (Sprint 5.1a).
+  ADMIN_POS_COOKIE_NAME: z.string().default('seguritech_pos_session'),
   // Lockout por intentos fallidos
   ADMIN_LOGIN_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   ADMIN_LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
@@ -134,6 +137,7 @@ export const config = {
     jwtSecret: envVars.ADMIN_JWT_SECRET || '',
     jwtTtlSeconds: envVars.ADMIN_JWT_TTL_SECONDS,
     cookieName: envVars.ADMIN_COOKIE_NAME,
+    posCookieName: envVars.ADMIN_POS_COOKIE_NAME,
     loginMaxAttempts: envVars.ADMIN_LOGIN_MAX_ATTEMPTS,
     loginLockoutMinutes: envVars.ADMIN_LOGIN_LOCKOUT_MINUTES,
     bcryptCost: envVars.ADMIN_BCRYPT_COST,
