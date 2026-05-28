@@ -125,6 +125,16 @@ export {
   TenantStatus,
 } from './TenantRepository';
 
+/**
+ * Puerto para la capa modular de servicios (whatsapp_bot, messenger_bot, pos).
+ */
+export {
+  TenantServiceRepository,
+  TenantService,
+  ServiceType,
+  ServiceStatus,
+} from './TenantServiceRepository';
+
 export {
   MetaCredentialsRepository,
   MetaCredentials,
