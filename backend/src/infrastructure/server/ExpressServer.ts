@@ -92,7 +92,7 @@ export class ExpressServer {
     if (status === 'inactive') {
       this.logger.warn(
         { tenantId },
-        '🚫 Webhook recibido para tenant inactivo (paused/archived/draft). Mensaje descartado.',
+        '🚫 Webhook para tenant sin servicio whatsapp_bot activo. Mensaje descartado.',
       );
       res.status(200).json({ success: true, skipped: 'tenant_inactive' });
       return true;
@@ -100,7 +100,7 @@ export class ExpressServer {
     if (status === 'not_found') {
       this.logger.warn(
         { tenantId },
-        '🚫 Webhook recibido para tenant inexistente. Mensaje descartado.',
+        '🚫 Webhook para tenant sin servicio whatsapp_bot (o inexistente). Mensaje descartado.',
       );
       res.status(200).json({ success: true, skipped: 'tenant_not_found' });
       return true;

@@ -6,6 +6,7 @@ import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUserRepository';
 import { SupabaseBotFlowRepository } from '@/infrastructure/repositories/SupabaseBotFlowRepository';
 import { SupabaseTenantRepository } from '@/infrastructure/repositories/SupabaseTenantRepository';
+import { SupabaseTenantServiceRepository } from '@/infrastructure/repositories/SupabaseTenantServiceRepository';
 import { SupabaseMetaCredentialsRepository } from '@/infrastructure/repositories/SupabaseMetaCredentialsRepository';
 import { SupabaseMessagesRepository } from '@/infrastructure/repositories/SupabaseMessagesRepository';
 import { SupabaseAdminUsersRepository } from '@/infrastructure/repositories/SupabaseAdminUsersRepository';
@@ -64,6 +65,10 @@ export class Bootstrap {
       const messageLogService = new MessageLogService(supabase, this.logger);
       const botFlowRepository = new SupabaseBotFlowRepository(supabase, this.logger);
       const tenantRepository = new SupabaseTenantRepository(supabase, this.logger);
+      const tenantServiceRepository = new SupabaseTenantServiceRepository(
+        supabase,
+        this.logger,
+      );
       const messagesRepository = new SupabaseMessagesRepository(supabase, this.logger);
 
       // === Notification port: Meta (si hay clave de cifrado) o Console ===
@@ -169,16 +174,24 @@ export class Bootstrap {
         if (cached && cached.expiresAt > now) {
           return cached.status;
         }
-        const dbStatus = await tenantRepository.findStatusById(tenantId);
+
+        // El gating mira el servicio whatsapp_bot, no el tenant.
+        const serviceStatus = await tenantServiceRepository.findServiceStatus(
+          tenantId,
+          'whatsapp_bot',
+        );
+
         let result: 'active' | 'inactive' | 'not_found';
-        if (dbStatus === null) {
+        if (serviceStatus === null) {
+          // El tenant no tiene servicio whatsapp_bot (o no existe).
           result = 'not_found';
-        } else if (dbStatus === 'live' || dbStatus === 'sandbox') {
+        } else if (serviceStatus === 'active') {
           result = 'active';
         } else {
-          // 'paused', 'archived', 'draft' → inactive
+          // draft / configuring / paused / archived → bloqueado
           result = 'inactive';
         }
+
         statusCache.set(tenantId, { status: result, expiresAt: now + STATUS_CACHE_TTL_MS });
         return result;
       };
@@ -217,6 +230,7 @@ export class Bootstrap {
         simulateMessageUseCase: this.container.getSimulateMessageUseCase(),
         createTenantUseCase: this.container.getCreateTenantUseCase(),
         tenantRepository,
+        tenantServiceRepository,
         botFlowRepository,
         messagesRepository,
         metaCredentialsRepository,

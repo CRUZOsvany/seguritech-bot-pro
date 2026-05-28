@@ -287,6 +287,24 @@ export class SupabaseTenantRepository implements TenantRepository {
         if (flowErr) throw new Error(`bot_flow: ${flowErr.message}`);
       }
 
+      // 4. Crear servicio whatsapp_bot en estado 'draft' (capa modular fase 1).
+      // Se activa cuando alguien lo promueva via PATCH /services/:type.
+      const { error: svcErr } = await this.supabase
+        .from('tenant_services')
+        .insert({
+          tenant_id: tenantId,
+          service_type: 'whatsapp_bot',
+          status: 'draft',
+        });
+      if (svcErr) {
+        this.logger.error(
+          { svcErr, tenantId },
+          'createAtomic: service insert failed (tenant queda sin fila de servicio)',
+        );
+        // No abortamos: el tenant ya está creado y el bot_configuration existe.
+        // El backfill / un retry pueden reparar la fila de servicio después.
+      }
+
       this.logger.info(
         { tenantId, template: input.template_slug ?? null },
         '✅ Tenant creado atómicamente',
