@@ -355,6 +355,14 @@ export class PerformanceSecurityTest {
       upsert: async () => { throw new Error('not implemented in perf test'); },
       deactivateForTenant: async () => { /* noop */ },
       listTemplates: async () => [],
+      // Bloque A1 — no se ejercen en este script de perf/seguridad.
+      listFlowsByTenant: async () => [],
+      getDraft: async () => null,
+      saveDraft: async () => { /* noop */ },
+      publishDraft: async () => { throw new Error('not implemented in perf test'); },
+      listVersions: async () => [],
+      getVersionFlow: async () => null,
+      rollback: async () => { throw new Error('not implemented in perf test'); },
     };
     // Stub TenantRepository (no se ejerce el path admin en este script).
     const tenantRepository: TenantRepository = {
