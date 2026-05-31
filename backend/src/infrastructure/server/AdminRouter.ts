@@ -326,6 +326,26 @@ export function createAdminRouter(params: {
 
     try {
       await setTenantStatusUseCase.execute({ tenantId, status });
+      // DEC-D: suspender/archivar el tenant cascada a sus servicios.
+      // Activar (live/sandbox/draft) NO reactiva servicios (granular por servicio).
+      if (status === 'paused' || status === 'archived') {
+        const svcs = await tenantServiceRepository.listByTenant(tenantId);
+        for (const svc of svcs) {
+          if (status === 'archived' && svc.status !== 'archived') {
+            await tenantServiceRepository.setStatus(
+              tenantId,
+              svc.serviceType,
+              'archived',
+            );
+          } else if (status === 'paused' && svc.status === 'active') {
+            await tenantServiceRepository.setStatus(
+              tenantId,
+              svc.serviceType,
+              'paused',
+            );
+          }
+        }
+      }
       audit.log({
         ...c,
         action: 'tenant.status.change',
