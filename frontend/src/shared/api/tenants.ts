@@ -182,3 +182,15 @@ export async function enableService(
   );
   return res.service;
 }
+
+export async function setServiceStatus(
+  tenantId: string,
+  serviceType: ServiceType,
+  status: ServiceStatus,
+): Promise<void> {
+  await apiFetch<{ ok: boolean }>(
+    'PATCH',
+    `/api/admin/tenants/${tenantId}/services/${serviceType}`,
+    { status },
+  );
+}
