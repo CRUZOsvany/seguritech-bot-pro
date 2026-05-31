@@ -58,6 +58,14 @@ begin
     raise notice 'Tenant piloto YA EXISTÍA, reusando id: %', v_tenant_id;
   end if;
 
+  -- DEC-A/B: el piloto necesita el servicio POS operativo (status active),
+  -- no basta enabled_modules. Idempotente.
+  insert into public.tenant_services (tenant_id, service_type, status, enabled_at)
+  values (v_tenant_id, 'pos', 'active', now())
+  on conflict (tenant_id, service_type)
+  do update set status = 'active',
+                enabled_at = coalesce(public.tenant_services.enabled_at, now());
+
   -- 1. Configuración POS del tenant
   insert into public.pos_tenant_config
     (tenant_id, mould, business_name, business_address, business_phone,

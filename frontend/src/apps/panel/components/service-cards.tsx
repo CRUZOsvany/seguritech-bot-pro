@@ -5,6 +5,8 @@ import {
   ShoppingCart,
   Loader2,
   ArrowRight,
+  Play,
+  Pause,
 } from 'lucide-react';
 import {
   Card,
@@ -20,6 +22,7 @@ import {
   type TenantServiceItem,
 } from '@/shared/api/tenants';
 import { useEnableService } from '../hooks/use-enable-service';
+import { useSetServiceStatus } from '../hooks/use-set-service-status';
 
 interface Props {
   tenantId: string;
@@ -74,6 +77,7 @@ const STATUS_LABELS: Record<TenantServiceItem['status'], string> = {
 
 export function ServiceCards({ tenantId, services }: Props) {
   const enableMutation = useEnableService();
+  const statusMutation = useSetServiceStatus();
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
@@ -83,6 +87,23 @@ export function ServiceCards({ tenantId, services }: Props) {
         const isEnabling =
           enableMutation.isPending &&
           enableMutation.variables?.serviceType === meta.type;
+        const isMutatingStatus =
+          statusMutation.isPending &&
+          statusMutation.variables?.serviceType === meta.type;
+        const busy = isEnabling || isMutatingStatus;
+
+        const activate = () =>
+          statusMutation.mutate({
+            tenantId,
+            serviceType: meta.type,
+            status: 'active',
+          });
+        const pause = () =>
+          statusMutation.mutate({
+            tenantId,
+            serviceType: meta.type,
+            status: 'paused',
+          });
 
         return (
           <Card key={meta.type} className="flex flex-col">
@@ -118,7 +139,7 @@ export function ServiceCards({ tenantId, services }: Props) {
             <CardContent className="flex flex-1 flex-col justify-between gap-4">
               <CardDescription>{meta.description}</CardDescription>
 
-              <div className="flex justify-end">
+              <div className="flex flex-wrap justify-end gap-2">
                 {!meta.available ? (
                   <Button variant="outline" size="sm" disabled>
                     Próximamente
@@ -127,12 +148,9 @@ export function ServiceCards({ tenantId, services }: Props) {
                   <Button
                     size="sm"
                     onClick={() =>
-                      enableMutation.mutate({
-                        tenantId,
-                        serviceType: meta.type,
-                      })
+                      enableMutation.mutate({ tenantId, serviceType: meta.type })
                     }
-                    disabled={isEnabling}
+                    disabled={busy}
                   >
                     {isEnabling ? (
                       <>
@@ -144,12 +162,42 @@ export function ServiceCards({ tenantId, services }: Props) {
                     )}
                   </Button>
                 ) : (
-                  <Button asChild size="sm" variant="outline">
-                    <Link to={meta.configPath!} params={{ id: tenantId }}>
-                      Configurar
-                      <ArrowRight className="ml-1 h-3 w-3" />
-                    </Link>
-                  </Button>
+                  <>
+                    {existing.status === 'active' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={pause}
+                        disabled={busy}
+                      >
+                        {isMutatingStatus ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Pause className="mr-1 h-3 w-3" />
+                        )}
+                        Pausar
+                      </Button>
+                    )}
+                    {(existing.status === 'configuring' ||
+                      existing.status === 'paused') && (
+                      <Button size="sm" onClick={activate} disabled={busy}>
+                        {isMutatingStatus ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : (
+                          <Play className="mr-1 h-3 w-3" />
+                        )}
+                        Activar
+                      </Button>
+                    )}
+                    {existing.status !== 'archived' && (
+                      <Button asChild size="sm" variant="outline">
+                        <Link to={meta.configPath!} params={{ id: tenantId }}>
+                          Configurar
+                          <ArrowRight className="ml-1 h-3 w-3" />
+                        </Link>
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </CardContent>

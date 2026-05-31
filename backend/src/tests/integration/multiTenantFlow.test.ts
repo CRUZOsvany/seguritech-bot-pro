@@ -1,4 +1,7 @@
 // @ts-nocheck
+// TODO (2026-05-30): sigue pendiente de re-escritura sobre SimulateMessageUseCase.
+// La infra de testing legacy ya no existe; este test continúa skipped hasta migrar
+// el escenario multi-tenant al nuevo use case (no re-habilitar a ciegas).
 // TODO: re-evaluar en Sprint 4 cuando exista FlowInterpreter.
 // Sprint 1: este test queda skipped porque:
 //   1) Dependía del repositorio de testing legacy basado en SQL en memoria, ya eliminado.

@@ -7,6 +7,10 @@ import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageU
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
+import {
+  assertServiceTransition,
+  ServiceTransitionError,
+} from '@/domain/services/serviceFsm';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MetaCredentialsRepository } from '@/domain/ports';
 import type { MessagesRepository } from '@/domain/ports';
@@ -322,6 +326,26 @@ export function createAdminRouter(params: {
 
     try {
       await setTenantStatusUseCase.execute({ tenantId, status });
+      // DEC-D: suspender/archivar el tenant cascada a sus servicios.
+      // Activar (live/sandbox/draft) NO reactiva servicios (granular por servicio).
+      if (status === 'paused' || status === 'archived') {
+        const svcs = await tenantServiceRepository.listByTenant(tenantId);
+        for (const svc of svcs) {
+          if (status === 'archived' && svc.status !== 'archived') {
+            await tenantServiceRepository.setStatus(
+              tenantId,
+              svc.serviceType,
+              'archived',
+            );
+          } else if (status === 'paused' && svc.status === 'active') {
+            await tenantServiceRepository.setStatus(
+              tenantId,
+              svc.serviceType,
+              'paused',
+            );
+          }
+        }
+      }
       audit.log({
         ...c,
         action: 'tenant.status.change',
@@ -521,6 +545,21 @@ export function createAdminRouter(params: {
       }
 
       try {
+        const current = await tenantServiceRepository.findServiceStatus(
+          tenantId,
+          serviceType as 'whatsapp_bot' | 'messenger_bot' | 'pos',
+        );
+        if (current === null) {
+          res.status(404).json({
+            error: 'El servicio no existe para este tenant. Habilítalo primero.',
+          });
+          return;
+        }
+        assertServiceTransition(
+          current,
+          status as 'draft' | 'configuring' | 'active' | 'paused' | 'archived',
+        );
+
         await tenantServiceRepository.setStatus(
           tenantId,
           serviceType as 'whatsapp_bot' | 'messenger_bot' | 'pos',
@@ -531,10 +570,14 @@ export function createAdminRouter(params: {
           action: 'service.set_status',
           targetType: 'tenant',
           targetId: tenantId,
-          metadata: { serviceType, status },
+          metadata: { serviceType, status, from: current },
         });
         res.json({ ok: true });
       } catch (err) {
+        if (err instanceof ServiceTransitionError) {
+          res.status(409).json({ error: err.message, code: err.code });
+          return;
+        }
         logger.error({ err, tenantId, serviceType, status }, 'PATCH service failed');
         res.status(500).json({ error: 'Error al cambiar status del servicio' });
       }

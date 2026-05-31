@@ -11,8 +11,10 @@ import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantReposi
  *   - 'paused':   suspensión temporal (mora/pago), bot NO responde
  *   - 'archived': retirado del servicio, bot NO responde
  *
- * Webhook gating (Sprint 5.5): `live + sandbox = active`,
- * `paused + archived + draft = inactive`.
+ * NOTA (DEC-D): el gating del webhook NO mira tenant.status, mira el status del
+ * servicio whatsapp_bot en tenant_services. tenant.status es estado COMERCIAL.
+ * El cascade tenant→servicios (paused/archived) vive en el endpoint PATCH
+ * /tenants/:id/status del AdminRouter, no aquí.
  *
  * Este use case persiste el estado; el caller (AdminRouter) es responsable
  * de validar el valor recibido del cliente HTTP. Las transiciones permitidas

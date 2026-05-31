@@ -38,6 +38,16 @@ jobs:
       - name: Build backend
         run: npm run build --workspace backend
 
+      - name: Lint frontend
+        run: npm run lint --workspace frontend
+        continue-on-error: true
+
+      - name: Type check frontend
+        run: npm run type-check --workspace frontend
+
+      - name: Build frontend
+        run: npm run build:panel --workspace frontend
+
       - name: Upload coverage
         uses: codecov/codecov-action@v4
         if: always()
