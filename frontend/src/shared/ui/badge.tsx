@@ -19,11 +19,16 @@ const badgeVariants = cva(
         ghost:
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
-        // Estados FSM del tenant (alineados con migration 006)
+        // Estados FSM del tenant (alineados con migration 006) y de los
+        // servicios modulares (tenant_services, migration 012).
         "fsm-draft":
           "border-transparent bg-gray-100 text-gray-700",
         "fsm-sandbox":
           "border-transparent bg-amber-100 text-amber-800",
+        "fsm-configuring":
+          "border-transparent bg-sky-100 text-sky-800",
+        "fsm-active":
+          "border-transparent bg-emerald-100 text-emerald-800",
         "fsm-live":
           "border-transparent bg-emerald-100 text-emerald-800",
         "fsm-paused":
