@@ -250,20 +250,25 @@ export class SupabaseTenantRepository implements TenantRepository {
     const tenantId = tenant.id as string;
 
     try {
-      // 2. Insert bot_configuration
-      const bc = input.bot_configuration;
-      const { error: bcErr } = await this.supabase.from('bot_configurations').insert({
-        tenant_id: tenantId,
-        numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
-        nombre_bot: bc.nombre_bot ?? 'Asistente',
-        tono_bot: bc.tono_bot ?? 'amigable',
-        mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
-        mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
-        mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
-        mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
-        mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
-      });
-      if (bcErr) throw new Error(`bot_configuration: ${bcErr.message}`);
+      // 2. Insert bot_configuration SOLO si el caller lo proveyó.
+      //    En el flujo "tenant pelado" (FASE 2A) este bloque queda diferido a
+      //    cuando el operador habilite el servicio whatsapp_bot y configure
+      //    sus mensajes (FASE 2B).
+      if (input.bot_configuration) {
+        const bc = input.bot_configuration;
+        const { error: bcErr } = await this.supabase.from('bot_configurations').insert({
+          tenant_id: tenantId,
+          numero_whatsapp_asignado: bc.numero_whatsapp_asignado,
+          nombre_bot: bc.nombre_bot ?? 'Asistente',
+          tono_bot: bc.tono_bot ?? 'amigable',
+          mensaje_bienvenida: bc.mensaje_bienvenida ?? null,
+          mensaje_menu_principal: bc.mensaje_menu_principal ?? null,
+          mensaje_fuera_horario: bc.mensaje_fuera_horario ?? null,
+          mensaje_no_entendio: bc.mensaje_no_entendio ?? null,
+          mensaje_confirmacion_pedido: bc.mensaje_confirmacion_pedido ?? null,
+        });
+        if (bcErr) throw new Error(`bot_configuration: ${bcErr.message}`);
+      }
 
       // 3. Opcional: clonar template como flow activo
       if (input.template_slug) {

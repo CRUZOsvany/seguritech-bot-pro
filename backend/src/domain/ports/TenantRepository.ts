@@ -66,7 +66,8 @@ export type TenantGiro =
 
 /**
  * Input para crear un tenant en una sola llamada atómica.
- * bot_configuration se crea SIEMPRE; el flow se asigna si template_slug viene.
+ * bot_configuration es OPCIONAL desde FASE 2A: se difiere a cuando el operador
+ * habilite el servicio whatsapp_bot. El flow se asigna si template_slug viene.
  */
 export interface CreateTenantInput {
   nombre_negocio: string;
@@ -75,7 +76,7 @@ export interface CreateTenantInput {
   horario_semana?: string;
   horario_sabado?: string;
   abre_domingo?: boolean;
-  bot_configuration: {
+  bot_configuration?: {
     numero_whatsapp_asignado: string;
     nombre_bot?: string;
     tono_bot?: 'formal' | 'amigable' | 'directo';

@@ -26,16 +26,18 @@ const CreateTenantSchema = z.object({
   horario_semana: z.string().max(120).optional(),
   horario_sabado: z.string().max(120).optional(),
   abre_domingo: z.boolean().optional(),
-  bot_configuration: z.object({
-    numero_whatsapp_asignado: z.string().min(8).max(20),
-    nombre_bot: z.string().max(60).optional(),
-    tono_bot: z.enum(['formal', 'amigable', 'directo']).optional(),
-    mensaje_bienvenida: z.string().max(1024).optional(),
-    mensaje_menu_principal: z.string().max(1024).optional(),
-    mensaje_fuera_horario: z.string().max(1024).optional(),
-    mensaje_no_entendio: z.string().max(1024).optional(),
-    mensaje_confirmacion_pedido: z.string().max(1024).optional(),
-  }),
+  bot_configuration: z
+    .object({
+      numero_whatsapp_asignado: z.string().min(8).max(20),
+      nombre_bot: z.string().max(60).optional(),
+      tono_bot: z.enum(['formal', 'amigable', 'directo']).optional(),
+      mensaje_bienvenida: z.string().max(1024).optional(),
+      mensaje_menu_principal: z.string().max(1024).optional(),
+      mensaje_fuera_horario: z.string().max(1024).optional(),
+      mensaje_no_entendio: z.string().max(1024).optional(),
+      mensaje_confirmacion_pedido: z.string().max(1024).optional(),
+    })
+    .optional(),
   template_slug: z.string().max(80).optional(),
 });
 
