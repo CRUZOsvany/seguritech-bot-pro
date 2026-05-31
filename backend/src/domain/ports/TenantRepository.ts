@@ -15,6 +15,18 @@ export interface TenantSummary {
   status: string;
   webhook_verified: boolean;
   has_active_flow: boolean;
+  /**
+   * Status operativo del servicio whatsapp_bot (tenant_services). Es lo que
+   * decide si el bot responde (DEC-B), distinto de `status` (FSM comercial del
+   * tenant). null si el servicio no está habilitado para el tenant.
+   */
+  whatsapp_status:
+    | 'draft'
+    | 'configuring'
+    | 'active'
+    | 'paused'
+    | 'archived'
+    | null;
 }
 
 /**

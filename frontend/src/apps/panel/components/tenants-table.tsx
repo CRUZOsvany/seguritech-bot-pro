@@ -32,6 +32,7 @@ export function TenantsTable({ tenants }: Props) {
           <TableHead>Negocio</TableHead>
           <TableHead>Giro</TableHead>
           <TableHead>Status</TableHead>
+          <TableHead className="text-center">Bot</TableHead>
           <TableHead className="text-center">Webhook</TableHead>
           <TableHead className="text-center">Molde</TableHead>
           <TableHead className="text-right">Acciones</TableHead>
@@ -51,6 +52,15 @@ export function TenantsTable({ tenants }: Props) {
               <Badge variant={`fsm-${t.status}` as const}>
                 {STATUS_LABELS[t.status]}
               </Badge>
+            </TableCell>
+            <TableCell className="text-center">
+              {t.whatsapp_status ? (
+                <Badge variant={`fsm-${t.whatsapp_status}` as const}>
+                  {t.whatsapp_status}
+                </Badge>
+              ) : (
+                <span className="text-xs text-muted-foreground">—</span>
+              )}
             </TableCell>
             <TableCell className="text-center">
               {t.webhook_verified ? (

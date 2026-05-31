@@ -25,7 +25,7 @@ export class SupabaseTenantRepository implements TenantRepository {
   ) {}
 
   async findAll(): Promise<TenantSummary[]> {
-    const [tenantsRes, flowsRes] = await Promise.all([
+    const [tenantsRes, flowsRes, servicesRes] = await Promise.all([
       this.supabase
         .from('tenants')
         .select('id, nombre_negocio, giro, status, webhook_verified')
@@ -35,6 +35,10 @@ export class SupabaseTenantRepository implements TenantRepository {
         .from('bot_flows')
         .select('tenant_id')
         .eq('is_active', true),
+      this.supabase
+        .from('tenant_services')
+        .select('tenant_id, status')
+        .eq('service_type', 'whatsapp_bot'),
     ]);
 
     if (tenantsRes.error) {
@@ -44,6 +48,16 @@ export class SupabaseTenantRepository implements TenantRepository {
 
     const activeFlowTenants = new Set(
       (flowsRes.data ?? []).map((r: { tenant_id: string }) => r.tenant_id),
+    );
+
+    // Anti-N+1: una sola query extra a tenant_services, join en memoria.
+    const whatsappStatusMap = new Map<string, TenantSummary['whatsapp_status']>(
+      (servicesRes.data ?? []).map(
+        (r: { tenant_id: string; status: TenantSummary['whatsapp_status'] }) => [
+          r.tenant_id,
+          r.status,
+        ],
+      ),
     );
 
     type TenantListRow = {
@@ -61,11 +75,12 @@ export class SupabaseTenantRepository implements TenantRepository {
       status: t.status,
       webhook_verified: t.webhook_verified ?? false,
       has_active_flow: activeFlowTenants.has(t.id),
+      whatsapp_status: whatsappStatusMap.get(t.id) ?? null,
     }));
   }
 
   async findById(id: string): Promise<TenantSummary | null> {
-    const [tenantRes, flowRes] = await Promise.all([
+    const [tenantRes, flowRes, svcRes] = await Promise.all([
       this.supabase
         .from('tenants')
         .select('id, nombre_negocio, giro, status, webhook_verified')
@@ -77,6 +92,12 @@ export class SupabaseTenantRepository implements TenantRepository {
         .select('id')
         .eq('tenant_id', id)
         .eq('is_active', true)
+        .maybeSingle(),
+      this.supabase
+        .from('tenant_services')
+        .select('status')
+        .eq('tenant_id', id)
+        .eq('service_type', 'whatsapp_bot')
         .maybeSingle(),
     ]);
 
@@ -102,11 +123,13 @@ export class SupabaseTenantRepository implements TenantRepository {
       status: t.status,
       webhook_verified: t.webhook_verified ?? false,
       has_active_flow: !!flowRes.data,
+      whatsapp_status:
+        (svcRes.data?.status as TenantSummary['whatsapp_status']) ?? null,
     };
   }
 
   async findFullDetail(id: string): Promise<TenantDetail | null> {
-    const [tenantRes, bcRes, mcRes, flowRes] = await Promise.all([
+    const [tenantRes, bcRes, mcRes, flowRes, svcRes] = await Promise.all([
       this.supabase
         .from('tenants')
         .select(
@@ -136,6 +159,12 @@ export class SupabaseTenantRepository implements TenantRepository {
         .eq('tenant_id', id)
         .eq('is_active', true)
         .maybeSingle(),
+      this.supabase
+        .from('tenant_services')
+        .select('status')
+        .eq('tenant_id', id)
+        .eq('service_type', 'whatsapp_bot')
+        .maybeSingle(),
     ]);
 
     if (tenantRes.error) {
@@ -156,6 +185,9 @@ export class SupabaseTenantRepository implements TenantRepository {
       status: t.status,
       webhook_verified: t.webhook_verified ?? false,
       has_active_flow: !!flow,
+      whatsapp_status:
+        ((svcRes.data as { status?: string } | null)
+          ?.status as TenantSummary['whatsapp_status']) ?? null,
       direccion: t.direccion ?? null,
       horario_semana: t.horario_semana ?? null,
       horario_sabado: t.horario_sabado ?? null,

@@ -34,6 +34,12 @@ export interface TenantSummary {
   status: TenantStatus;
   webhook_verified: boolean;
   has_active_flow: boolean;
+  /**
+   * Status operativo del servicio whatsapp_bot (lo que decide si el bot
+   * responde, DEC-B). Distinto de `status` (FSM comercial del tenant).
+   * null si el servicio no está habilitado.
+   */
+  whatsapp_status: ServiceStatus | null;
 }
 
 export type TenantStatus =
@@ -102,6 +108,34 @@ export async function createTenant(
 // proyección en el repo.
 // ============================================================
 
+export type TonoBot = 'formal' | 'amigable' | 'directo';
+
+export interface BotConfiguration {
+  numero_whatsapp_asignado: string;
+  nombre_bot: string | null;
+  tono_bot: TonoBot | null;
+  mensaje_bienvenida: string | null;
+  mensaje_menu_principal: string | null;
+  mensaje_fuera_horario: string | null;
+  mensaje_no_entendio: string | null;
+  mensaje_confirmacion_pedido: string | null;
+}
+
+export interface MetaCredentialsInfo {
+  phone_number_id: string;
+  waba_id: string;
+  display_phone_number: string;
+  is_active: boolean;
+  rotated_at: string | null;
+}
+
+export interface ActiveFlowInfo {
+  id: string;
+  nombre: string;
+  source_template_id: string | null;
+  updated_at: string;
+}
+
 export interface TenantDetail {
   id: string;
   nombre_negocio: string;
@@ -113,6 +147,9 @@ export interface TenantDetail {
   status: TenantStatus;
   webhook_verified: boolean;
   has_active_flow: boolean;
+  bot_configuration: BotConfiguration | null;
+  meta_credentials: MetaCredentialsInfo | null;
+  active_flow: ActiveFlowInfo | null;
   created_at: string;
   updated_at: string;
 }
@@ -193,4 +230,124 @@ export async function setServiceStatus(
     `/api/admin/tenants/${tenantId}/services/${serviceType}`,
     { status },
   );
+}
+
+// ============================================================
+// Config WhatsApp (Fase 2C)
+// ============================================================
+
+export interface BotConfigPatch {
+  numero_whatsapp_asignado?: string;
+  nombre_bot?: string;
+  tono_bot?: TonoBot;
+  mensaje_bienvenida?: string;
+  mensaje_menu_principal?: string;
+  mensaje_fuera_horario?: string;
+  mensaje_no_entendio?: string;
+  mensaje_confirmacion_pedido?: string;
+}
+
+export async function updateBotConfiguration(
+  tenantId: string,
+  bot_configuration: BotConfigPatch,
+): Promise<void> {
+  await apiFetch<{ ok: boolean }>('PATCH', `/api/admin/tenants/${tenantId}`, {
+    bot_configuration,
+  });
+}
+
+export interface Template {
+  slug: string;
+  giro: string;
+  nombre: string;
+  descripcion: string;
+}
+
+export async function listTemplates(): Promise<Template[]> {
+  const res = await apiFetch<{ templates: Template[] }>(
+    'GET',
+    '/api/admin/templates',
+  );
+  return res.templates;
+}
+
+export async function assignMolde(
+  tenantId: string,
+  templateSlug: string,
+): Promise<void> {
+  await apiFetch('POST', `/api/admin/tenants/${tenantId}/molde`, {
+    templateSlug,
+  });
+}
+
+export async function removeMolde(tenantId: string): Promise<void> {
+  await apiFetch('DELETE', `/api/admin/tenants/${tenantId}/molde`);
+}
+
+export interface MetaCredentialsInput {
+  phoneNumberId: string;
+  wabaId: string;
+  displayPhoneNumber: string;
+  accessToken: string;
+}
+
+export async function upsertMetaCredentials(
+  tenantId: string,
+  input: MetaCredentialsInput,
+): Promise<{ rotatedAt: string }> {
+  const res = await apiFetch<{ ok: boolean; rotatedAt: string }>(
+    'POST',
+    `/api/admin/tenants/${tenantId}/meta-credentials`,
+    input,
+  );
+  return { rotatedAt: res.rotatedAt };
+}
+
+export async function revokeMetaCredentials(tenantId: string): Promise<void> {
+  await apiFetch('DELETE', `/api/admin/tenants/${tenantId}/meta-credentials`);
+}
+
+// --- Simulador ---
+export type InterpreterOutput =
+  | { kind: 'text'; text: string }
+  | { kind: 'buttons'; text: string; buttons: { id: string; title: string }[] }
+  | {
+      kind: 'list';
+      text: string;
+      buttonLabel: string;
+      sections: Array<{
+        title: string;
+        items: { id: string; title: string; description?: string }[];
+      }>;
+    }
+  | { kind: 'image'; url: string; caption?: string }
+  | { kind: 'location'; latitude: number; longitude: number; name?: string; address?: string }
+  | { kind: 'document'; url: string; filename: string; caption?: string }
+  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string };
+
+export interface SimulateResult {
+  outputs: InterpreterOutput[];
+  nextNodeId: string;
+  context: Record<string, unknown>;
+  flowEnded: boolean;
+}
+
+export async function simulate(
+  tenantId: string,
+  phoneNumber: string,
+  content: string,
+): Promise<SimulateResult> {
+  return apiFetch<SimulateResult>('POST', '/api/admin/simulate', {
+    tenantId,
+    phoneNumber,
+    content,
+    persist: false,
+  });
+}
+
+export async function simulateReset(
+  tenantId: string,
+  phoneNumber: string,
+): Promise<void> {
+  await apiFetch('POST', '/api/admin/simulate/reset', { tenantId, phoneNumber });
 }

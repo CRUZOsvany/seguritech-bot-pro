@@ -202,6 +202,6 @@ function NewTenantPage() {
   );
 }
 
-export const Route = createLazyRoute('/tenants/new')({
+export const Route = createLazyRoute('/_authed/tenants/new')({
   component: NewTenantPage,
 });
