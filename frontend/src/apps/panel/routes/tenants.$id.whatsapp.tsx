@@ -502,6 +502,6 @@ function Bubble({ turn, onChip }: { turn: Turn; onChip: (label: string) => void 
   }
 }
 
-export const Route = createLazyRoute('/tenants/$id/whatsapp')({
+export const Route = createLazyRoute('/_authed/tenants/$id/whatsapp')({
   component: WhatsAppPanelPage,
 });

@@ -169,6 +169,6 @@ function TenantDetailPage() {
   );
 }
 
-export const Route = createLazyRoute('/tenants/$id')({
+export const Route = createLazyRoute('/_authed/tenants/$id')({
   component: TenantDetailPage,
 });

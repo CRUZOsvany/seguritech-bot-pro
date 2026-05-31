@@ -39,6 +39,6 @@ function PosPanelPage() {
   );
 }
 
-export const Route = createLazyRoute('/tenants/$id/pos')({
+export const Route = createLazyRoute('/_authed/tenants/$id/pos')({
   component: PosPanelPage,
 });
