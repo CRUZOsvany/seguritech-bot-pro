@@ -381,18 +381,18 @@ export class SupabaseTenantRepository implements TenantRepository {
   }
 
   async isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean> {
+    // DEC-A: fuente de verdad = tenant_services. DEC-B: 'active' = operativo.
+    const serviceType = module === 'pos' ? 'pos' : 'whatsapp_bot';
     const { data, error } = await this.supabase
-      .from('tenants')
-      .select('enabled_modules')
-      .eq('id', id)
-      .is('deleted_at', null)
+      .from('tenant_services')
+      .select('status')
+      .eq('tenant_id', id)
+      .eq('service_type', serviceType)
       .maybeSingle();
     if (error) {
       this.logger.error({ error, id, module }, 'isModuleEnabled failed');
       throw new Error(`isModuleEnabled: ${error.message}`);
     }
-    if (!data) return false;
-    const modules = (data.enabled_modules as string[] | null) ?? [];
-    return modules.includes(module);
+    return data?.status === 'active';
   }
 }

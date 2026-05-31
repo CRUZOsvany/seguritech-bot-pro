@@ -149,7 +149,8 @@ export interface TenantRepository {
 
   /**
    * Verifica si un módulo está habilitado en el tenant (Sprint 5.1a).
-   * Lee `tenants.enabled_modules TEXT[]` (migración 011). Soft-deleted = false.
+   * DEC-A: lee `tenant_services`. True si existe el servicio mapeado
+   * (pos → pos, bot → whatsapp_bot) con status === 'active' (DEC-B).
    *
    * Usado por:
    *   - moduleGuard middleware (POS routes)
