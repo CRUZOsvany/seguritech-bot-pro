@@ -34,6 +34,12 @@ export interface TenantSummary {
   status: TenantStatus;
   webhook_verified: boolean;
   has_active_flow: boolean;
+  /**
+   * Status operativo del servicio whatsapp_bot (lo que decide si el bot
+   * responde, DEC-B). Distinto de `status` (FSM comercial del tenant).
+   * null si el servicio no está habilitado.
+   */
+  whatsapp_status: ServiceStatus | null;
 }
 
 export type TenantStatus =
