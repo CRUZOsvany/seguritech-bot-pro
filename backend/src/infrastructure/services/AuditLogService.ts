@@ -1,6 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type pino from 'pino';
 
+/**
+ * admin_id es columna UUID (FK a admin_users). Las sesiones no-cookie
+ * (x-api-key → sub='cli', Cloudflare Access → sub='') traen un sub que NO es
+ * UUID; insertarlo revienta el INSERT. Sanitizamos a null en esos casos.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export interface AuditEvent {
   adminId?: string | null;
   adminEmail: string;
@@ -31,7 +38,7 @@ export class AuditLogService {
     void this.supabase
       .from('admin_audit_log')
       .insert({
-        admin_id: event.adminId ?? null,
+        admin_id: event.adminId && UUID_RE.test(event.adminId) ? event.adminId : null,
         admin_email: event.adminEmail,
         action: event.action,
         target_type: event.targetType ?? null,

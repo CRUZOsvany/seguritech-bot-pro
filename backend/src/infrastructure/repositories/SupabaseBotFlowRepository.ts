@@ -5,6 +5,15 @@ import { BotFlowRepository, BotFlowChannel } from '@/domain/ports/BotFlowReposit
 import { validateFlow } from '@/domain/validators/flowSchema';
 
 /**
+ * created_by es columna UUID (FK a admin_users). Las sesiones no-cookie
+ * (x-api-key → sub='cli', Cloudflare Access → sub='') traen un sub que NO es
+ * UUID; insertarlo revienta el INSERT. Sanitizamos a null en esos casos.
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const toUuidOrNull = (id: string | null): string | null =>
+  id && UUID_RE.test(id) ? id : null;
+
+/**
  * Adapter de BotFlowRepository contra Supabase.
  * service_role bypasea RLS — uso server-side exclusivo.
  */
@@ -264,7 +273,7 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
       flow_id: flowId,
       version_number: versionNumber,
       flow_json: flow,
-      created_by: createdBy,
+      created_by: toUuidOrNull(createdBy),
       note: note ?? null,
     });
     if (insErr) {
@@ -377,7 +386,7 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
       flow_id: flowId,
       version_number: newVersion,
       flow_json: flow,
-      created_by: createdBy,
+      created_by: toUuidOrNull(createdBy),
       note: `rollback a v${versionNumber}`,
     });
     if (insErr) {
