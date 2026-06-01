@@ -6,6 +6,17 @@ import type {
 } from '@/domain/ports';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
 import { Message, User, UserState } from '@/domain/entities';
+import type { BotFlow } from '@/domain/entities/flow';
+import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchema';
+
+/**
+ * Fuente del flow a simular:
+ *  - 'active'  (default): el flow publicado y activo del tenant (comportamiento previo).
+ *  - 'draft'   : el borrador en edición (requiere flowId). Se valida en vivo;
+ *                si es inválido se devuelve `error` sin reventar.
+ *  - 'version' : una versión histórica publicada (requiere versionId).
+ */
+export type SimulateSource = 'active' | 'draft' | 'version';
 
 export interface SimulateInput {
   tenantId: string;
@@ -16,6 +27,12 @@ export interface SimulateInput {
    * mensaje real). Si false, el User es efímero y no toca la BD.
    */
   persist: boolean;
+  /** Bloque A1: qué flow simular. Ausente ⇒ 'active'. */
+  source?: SimulateSource;
+  /** Requerido si source='draft'. */
+  flowId?: string;
+  /** Requerido si source='version'. */
+  versionId?: string;
 }
 
 export interface SimulateResult {
@@ -61,16 +78,48 @@ export class SimulateMessageUseCase {
       };
     }
 
-    // 2. Cargar flow activo
-    const flow = await this.botFlowRepository.findActiveByTenant(tenantId);
+    // 2. Resolver el flow a simular según `source` (default: activo).
+    const mkError = (error: string): SimulateResult => ({
+      outputs: [],
+      nextNodeId: '',
+      context: {},
+      flowEnded: true,
+      error,
+    });
+
+    const source: SimulateSource = input.source ?? 'active';
+    let flow: BotFlow | null = null;
+    try {
+      if (source === 'draft') {
+        if (!input.flowId) return mkError("source='draft' requiere flowId");
+        const raw = await this.botFlowRepository.getDraft(input.flowId, tenantId);
+        if (raw == null) {
+          return mkError(`El flow "${input.flowId}" no tiene draft para simular`);
+        }
+        flow = validateFlow(raw); // puede lanzar FlowValidationError
+      } else if (source === 'version') {
+        if (!input.versionId) return mkError("source='version' requiere versionId");
+        flow = await this.botFlowRepository.getVersionFlow(input.versionId, tenantId);
+        if (!flow) return mkError(`La versión "${input.versionId}" no existe`);
+      } else {
+        flow = await this.botFlowRepository.findActiveByTenant(tenantId);
+        if (!flow) {
+          return mkError(
+            `No hay bot_flow activo para el tenant "${tenantId}". Asigna un molde primero.`,
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof FlowValidationError) {
+        return mkError(`Draft inválido: ${err.message}`);
+      }
+      throw err;
+    }
+
+    // Tras la resolución, flow está garantizado; el guard narrowea el tipo
+    // para el FlowInterpreter (que exige BotFlow, no BotFlow | null).
     if (!flow) {
-      return {
-        outputs: [],
-        nextNodeId: '',
-        context: {},
-        flowEnded: true,
-        error: `No hay bot_flow activo para el tenant "${tenantId}". Asigna un molde primero.`,
-      };
+      return mkError('No se pudo resolver el flow a simular');
     }
 
     // 3. Cargar o crear user (en BD si persist, en memoria si no)
