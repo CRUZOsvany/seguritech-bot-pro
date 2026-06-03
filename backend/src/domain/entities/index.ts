@@ -15,10 +15,11 @@ export interface Message {
  * Representa un usuario del chatbot.
  * Mantiene el estado conversacional y siempre asociado a un tenant.
  *
- * Campos legacy (Sprint A): currentState. Solo lo consume el
- * HandleMessageUseCase @deprecated (Sprint 6 desconectó la fallback).
- * Pendiente de remoción en Sprint 7 junto con la limpieza de la columna
- * current_state.
+ * Campos legacy (Sprint A): currentState. Su único consumidor era el
+ * HandleMessageUseCase, eliminado en ADR-012 (la fallback a la FSM
+ * hardcodeada se desconectó en Sprint 6 y el código muerto se borró después).
+ * El campo y la columna current_state quedan pendientes de remoción en
+ * Sprint 7 (requiere migración de DB).
  *
  * Campos de Sprint B: currentNodeId y context. Mapean a las columnas
  * current_node_id y context jsonb de bot_users (migración 002). Quedan
