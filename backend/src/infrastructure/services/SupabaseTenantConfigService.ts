@@ -35,7 +35,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
 
     this.logger.debug({ tenantId }, 'TenantConfig cache MISS — cargando');
 
-    const [tenantRes, configRes, catalogRes] = await Promise.all([
+    const [tenantRes, configRes, catalogRes, ownerRes] = await Promise.all([
       this.supabase
         .from('tenants')
         .select('nombre_negocio')
@@ -51,6 +51,11 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('disponible', true),
+      this.supabase
+        .from('owner_data')
+        .select('whatsapp_dueno')
+        .eq('tenant_id', tenantId)
+        .maybeSingle(),
     ]);
 
     if (configRes.error) {
@@ -83,8 +88,16 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       );
     }
 
+    if (ownerRes.error) {
+      this.logger.warn(
+        { error: ownerRes.error, tenantId },
+        'Error cargando owner_data — sin ownerPhone (no se enviará aviso al dueño)',
+      );
+    }
+
     const c = configRes.data;
     const nombreNegocio = (tenantRes.data?.nombre_negocio as string | undefined) ?? '';
+    const ownerPhone = (ownerRes.data?.whatsapp_dueno as string | undefined) || undefined;
 
     const catalog: CatalogItem[] = (catalogRes.data || []).map((row: any) => ({
       id: row.id,
@@ -113,6 +126,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
         c.mensaje_confirmacion_pedido ??
         '✅ Pedido confirmado. Te contactaremos pronto.',
       catalog,
+      ownerPhone,
     };
 
     this.cache.set(tenantId, config);

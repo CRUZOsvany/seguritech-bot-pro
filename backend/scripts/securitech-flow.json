@@ -1,0 +1,207 @@
+{
+  "version": "1.0",
+  "start_node_id": "saludo",
+  "nodes": [
+    {
+      "id": "saludo",
+      "type": "send_text",
+      "content": {
+        "text": "¡Hola! Bienvenido a SECURITECH, tu proveedor de tecnología en Chilpancingo. ¿En qué te apoyamos hoy?"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "menu_principal" }
+      ]
+    },
+    {
+      "id": "menu_principal",
+      "type": "send_buttons",
+      "content": {
+        "text": "Elige una opción 👇",
+        "buttons": [
+          { "id": "camaras", "title": "Cámaras" },
+          { "id": "mantenimiento", "title": "Mantenimiento" },
+          { "id": "asesor", "title": "Hablar con asesor" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "camaras" }, "next_node_id": "rama_camaras" },
+        { "condition": { "type": "button", "value": "mantenimiento" }, "next_node_id": "intro_mantenimiento" },
+        { "condition": { "type": "button", "value": "asesor" }, "next_node_id": "handoff_asesor" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "rama_camaras",
+      "type": "send_buttons",
+      "content": {
+        "text": "Tenemos 3 planes de cámaras de seguridad. ¿Cuál te interesa? 📹",
+        "buttons": [
+          { "id": "plan_basico", "title": "Plan Básico" },
+          { "id": "plan_estandar", "title": "Plan Estándar" },
+          { "id": "plan_premium", "title": "Plan Premium" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "plan_basico" }, "next_node_id": "intro_basico" },
+        { "condition": { "type": "button", "value": "plan_estandar" }, "next_node_id": "intro_estandar" },
+        { "condition": { "type": "button", "value": "plan_premium" }, "next_node_id": "intro_premium" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "intro_basico",
+      "type": "send_text",
+      "content": {
+        "text": "Plan Básico — desde $4,500 MXN. 1 cámara WiFi ColorVu 4MP (graba a color de noche), monitoreo desde tu celular e instalación incluida. ¿Te paso una cotización a tu medida?"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "captura_basico" }
+      ]
+    },
+    {
+      "id": "captura_basico",
+      "type": "wait_input",
+      "content": {
+        "prompt": "¡Perfecto! Para tu cotización, mándame en un solo mensaje tu *nombre* y tu *colonia* 📍",
+        "save_to_context": "contacto_basico"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "handoff_basico" }
+      ]
+    },
+    {
+      "id": "handoff_basico",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "¡Gracias! Un asesor de SECURITECH te contactará por aquí en menos de 2 horas (horario 9:00–18:00, L–S).",
+        "owner_alert_template": "🔔 Nuevo lead SECURITECH — Cámaras / Plan Básico (desde $4,500).\nContacto del cliente: {{contacto_basico}}\nWhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "end" }
+      ]
+    },
+    {
+      "id": "intro_estandar",
+      "type": "send_text",
+      "content": {
+        "text": "Plan Estándar — desde $8,900 MXN. 2 cámaras WiFi ColorVu 4MP, cobertura interior y exterior, app configurada en tu teléfono. ¿Te cotizamos?"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "captura_estandar" }
+      ]
+    },
+    {
+      "id": "captura_estandar",
+      "type": "wait_input",
+      "content": {
+        "prompt": "¡Excelente elección! Mándame en un solo mensaje tu *nombre* y tu *colonia* 📍 y te preparo la cotización.",
+        "save_to_context": "contacto_estandar"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "handoff_estandar" }
+      ]
+    },
+    {
+      "id": "handoff_estandar",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "¡Gracias! Un asesor de SECURITECH te contactará por aquí en menos de 2 horas (horario 9:00–18:00, L–S).",
+        "owner_alert_template": "🔔 Nuevo lead SECURITECH — Cámaras / Plan Estándar (desde $8,900).\nContacto del cliente: {{contacto_estandar}}\nWhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "end" }
+      ]
+    },
+    {
+      "id": "intro_premium",
+      "type": "send_text",
+      "content": {
+        "text": "Plan Premium — desde $14,500 MXN. 3 cámaras + grabador NVR + disco 1TB, grabación 24/7 y garantía de 6 meses. ¿Te cotizamos?"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "captura_premium" }
+      ]
+    },
+    {
+      "id": "captura_premium",
+      "type": "wait_input",
+      "content": {
+        "prompt": "¡Gran elección! Mándame en un solo mensaje tu *nombre* y tu *colonia* 📍 y armamos tu cotización.",
+        "save_to_context": "contacto_premium"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "handoff_premium" }
+      ]
+    },
+    {
+      "id": "handoff_premium",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "¡Gracias! Un asesor de SECURITECH te contactará por aquí en menos de 2 horas (horario 9:00–18:00, L–S).",
+        "owner_alert_template": "🔔 Nuevo lead SECURITECH — Cámaras / Plan Premium (desde $14,500).\nContacto del cliente: {{contacto_premium}}\nWhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "end" }
+      ]
+    },
+    {
+      "id": "intro_mantenimiento",
+      "type": "send_text",
+      "content": {
+        "text": "Mantenimiento preventivo de PC/laptop desde $450 MXN: limpieza interna, pasta térmica, optimización y antivirus, con garantía de 30 días. Cuéntanos qué equipo necesitas revisar."
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "captura_mantenimiento" }
+      ]
+    },
+    {
+      "id": "captura_mantenimiento",
+      "type": "wait_input",
+      "content": {
+        "prompt": "Para agendarte, mándame en un solo mensaje tu *nombre* y tu *colonia* 📍 (y si quieres, qué equipo es).",
+        "save_to_context": "contacto_mantenimiento"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "handoff_mantenimiento" }
+      ]
+    },
+    {
+      "id": "handoff_mantenimiento",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "¡Gracias! Un asesor de SECURITECH te contactará por aquí en menos de 2 horas (horario 9:00–18:00, L–S).",
+        "owner_alert_template": "🔔 Nuevo lead SECURITECH — Mantenimiento PC/laptop (desde $450).\nContacto del cliente: {{contacto_mantenimiento}}\nWhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "end" }
+      ]
+    },
+    {
+      "id": "handoff_asesor",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "¡Gracias! Un asesor de SECURITECH te contactará por aquí en menos de 2 horas (horario 9:00–18:00, L–S).",
+        "owner_alert_template": "🔔 SECURITECH — un cliente pidió hablar directamente con un asesor.\nWhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "end" }
+      ]
+    },
+    {
+      "id": "no_entendi",
+      "type": "send_text",
+      "content": {
+        "text": "Disculpa, no te entendí 🤔. Te dejo el menú de nuevo:"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "menu_principal" }
+      ]
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "content": {},
+      "transitions": []
+    }
+  ]
+}

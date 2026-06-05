@@ -134,6 +134,18 @@ type MetaSendPayload =
   | MetaLocationPayload
   | MetaDocumentPayload;
 
+/**
+ * México (+52) y Argentina (+54): WhatsApp entrega el wa_id con un dígito extra
+ * (52 1 NNNNNNNNNN / 54 9 NNNNNNNNNN) pero el ENVÍO debe ir sin él, o Meta
+ * responde (#131030) recipient not in allowed list. Normalizamos al enviar.
+ */
+function normalizeWaId(to: string): string {
+  const d = to.replace(/\D/g, '');
+  if (d.startsWith('521') && d.length === 13) return '52' + d.slice(3);
+  if (d.startsWith('549') && d.length === 13) return '54' + d.slice(3);
+  return d;
+}
+
 export class MetaWhatsAppAdapter implements NotificationPort {
   private readonly metaApiUrl: string;
 
@@ -461,6 +473,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     phoneNumber: string,
   ): Promise<void> {
     const url = `${this.metaApiUrl}/${creds.phoneNumberId}/messages`;
+    payload.to = normalizeWaId(payload.to); // MX/AR: quita el dígito legacy (#131030)
 
     try {
       const response = await fetch(url, {
