@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import pino from 'pino';
 import { Message, User, UserState } from '@/domain/entities';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
@@ -89,7 +90,12 @@ export class BotController {
         });
 
         // Enviar outputs
-        const lastText = await this.dispatchOutputs(tenantId, from, result.outputs);
+        const lastText = await this.dispatchOutputs(
+          tenantId,
+          from,
+          result.outputs,
+          config.ownerPhone,
+        );
 
         this.logger.info(
           {
@@ -145,6 +151,7 @@ export class BotController {
     tenantId: string,
     to: string,
     outputs: InterpreterOutput[],
+    ownerPhone?: string | null,
   ): Promise<string | null> {
     let lastText: string | null = null;
 
@@ -219,7 +226,24 @@ export class BotController {
       case 'escape_to_human':
         await this.notificationPort.sendMessage(tenantId, to, output.userResponse);
         lastText = output.userResponse;
-        // owner_alert se ignora en V1
+        // Aviso al dueño por WhatsApp — best-effort: NUNCA rompe el flujo del cliente.
+        // El destino (ownerPhone) viene de owner_data.whatsapp_dueno vía TenantConfig.
+        if (ownerPhone && output.ownerAlert?.trim()) {
+          try {
+            await this.notificationPort.sendMessage(tenantId, ownerPhone, output.ownerAlert);
+            this.logger.info({ tenantId }, 'Aviso de lead enviado al dueño');
+          } catch (err) {
+            this.logger.error(
+              { err, tenantId },
+              'No se pudo enviar el aviso al dueño (el cliente sí recibió su cierre)',
+            );
+          }
+        } else if (!ownerPhone) {
+          this.logger.warn(
+            { tenantId },
+            'escape_to_human sin ownerPhone (owner_data.whatsapp_dueno) — aviso no enviado',
+          );
+        }
         break;
       }
     }
@@ -228,6 +252,6 @@ export class BotController {
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    return randomUUID();
   }
 }

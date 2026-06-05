@@ -84,6 +84,8 @@ export interface TenantConfig {
   notUnderstoodMessage: string;
   orderConfirmationMessage: string;
   catalog: CatalogItem[];
+  /** WhatsApp del dueño (owner_data.whatsapp_dueno) para avisos de leads. Opcional. */
+  ownerPhone?: string;
 }
 
 /**

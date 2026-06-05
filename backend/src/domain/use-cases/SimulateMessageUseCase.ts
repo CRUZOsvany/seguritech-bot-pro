@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import type pino from 'pino';
 import type {
   UserRepository,
@@ -226,6 +227,6 @@ export class SimulateMessageUseCase {
   }
 
   private generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+    return randomUUID();
   }
 }
