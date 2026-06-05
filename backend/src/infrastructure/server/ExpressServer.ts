@@ -285,6 +285,8 @@ export class ExpressServer {
           res.status(400).json({ error: 'Missing parameters' });
           return;
         }
+        // Sprint 5.5 — gate de tenant pausado/archivado/draft (consistencia con /webhook/:tenantId).
+        if (await this.rejectIfTenantInactive(tenantId, res)) return;
         const response = await processMessage(tenantId, phoneNumber, message);
         res.json({ success: true, tenantId, response, timestamp: new Date().toISOString() });
       } catch (error) {

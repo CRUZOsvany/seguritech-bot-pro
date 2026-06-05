@@ -57,6 +57,20 @@ describe('Webhook status gating (Sprint 5.5)', () => {
     expect(processMessage).not.toHaveBeenCalled();
   });
 
+  it('gatea también la rama de payload simple de POST /webhook (sin tenant en path)', async () => {
+    const { app, processMessage, statusChecker } = buildApp('inactive');
+
+    const res = await request(app)
+      .post('/webhook')
+      .send({ tenantId: 'tenant-paused-789', phoneNumber: '521234567890', message: 'hola' })
+      .set('Content-Type', 'application/json');
+
+    expect(res.status).toBe(200);
+    expect(res.body.skipped).toBe('tenant_inactive');
+    expect(statusChecker).toHaveBeenCalledWith('tenant-paused-789');
+    expect(processMessage).not.toHaveBeenCalled();
+  });
+
   // El happy-path "active" requiere wiring completo de Meta adapter / messageLogService;
   // queda cubierto por los demás tests de integración existentes.
 });
