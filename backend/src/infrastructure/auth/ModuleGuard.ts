@@ -6,9 +6,9 @@ import type { TenantRepository } from '@/domain/ports/TenantRepository';
  * Middleware que valida que el módulo está habilitado para el tenant del
  * request (Sprint 5.1a).
  *
- * Strict: NO bypass para super_admin. Razón: un super_admin sin 'pos' en
- * enabled_modules del tenant no debería poder operar el POS. Si lo necesita
- * para debug, debe habilitar el módulo en el tenant explícitamente.
+ * Strict: NO bypass para super_admin. Razón: un super_admin sin el servicio
+ * 'pos' en estado 'active' en tenant_services no debería poder operar el POS.
+ * Si lo necesita para debug, debe activar el servicio del tenant explícitamente.
  *
  * Lee tenantId de req.posUser (preferente) o req.admin. Si ambos faltan
  * o el tenantId es null (super_admin sin tenant) → 403.
