@@ -100,13 +100,94 @@ export function EndNode({ data }: NodeProps<DesignerRFNode>) {
   );
 }
 
+export function SendCtaUrlNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'send_cta_url') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="line-clamp-2">{node.content.body || <Empty />}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground truncate">
+        🔗 {node.content.button.display_text} → {node.content.button.url}
+      </p>
+    </NodeShell>
+  );
+}
+
+export function SendLocationRequestNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'send_location_request') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="line-clamp-3">{node.content.body || <Empty />}</p>
+    </NodeShell>
+  );
+}
+
+export function SendMediaCarouselNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'send_media_carousel') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="line-clamp-2">{node.content.body || <Empty />}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        {node.content.cards.length} card(s)
+      </p>
+    </NodeShell>
+  );
+}
+
+export function SendReactionNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'send_reaction') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="text-2xl">{node.content.emoji || <Empty />}</p>
+      <p className="text-[10px] text-muted-foreground">→ último mensaje</p>
+    </NodeShell>
+  );
+}
+
+export function RequestCallPermissionNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'request_call_permission') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="line-clamp-2">{node.content.body || <Empty />}</p>
+      {node.content.footer && (
+        <p className="mt-1 text-[10px] text-muted-foreground truncate">
+          {node.content.footer}
+        </p>
+      )}
+    </NodeShell>
+  );
+}
+
+export function SendWhatsappFlowNode({ data }: NodeProps<DesignerRFNode>) {
+  const { node } = data;
+  if (node.type !== 'send_whatsapp_flow') return <NodeShell data={data} />;
+  return (
+    <NodeShell data={data}>
+      <p className="line-clamp-2">{node.content.body || <Empty />}</p>
+      <p className="mt-1 text-[10px] text-muted-foreground">
+        CTA: {node.content.flow_cta} · {node.content.mode}
+      </p>
+    </NodeShell>
+  );
+}
+
 /** Registro consumido por <ReactFlow nodeTypes={...} />. */
 export const nodeTypes = {
-  send_text: SendTextNode,
-  send_buttons: SendButtonsNode,
-  send_list: SendListNode,
-  send_media: SendMediaNode,
-  wait_input: WaitInputNode,
-  escape_to_human: EscapeToHumanNode,
-  end: EndNode,
+  send_text:                SendTextNode,
+  send_buttons:             SendButtonsNode,
+  send_list:                SendListNode,
+  send_media:               SendMediaNode,
+  wait_input:               WaitInputNode,
+  escape_to_human:          EscapeToHumanNode,
+  end:                      EndNode,
+  send_cta_url:             SendCtaUrlNode,
+  send_location_request:    SendLocationRequestNode,
+  send_media_carousel:      SendMediaCarouselNode,
+  send_reaction:            SendReactionNode,
+  request_call_permission:  RequestCallPermissionNode,
+  send_whatsapp_flow:       SendWhatsappFlowNode,
 } satisfies NodeTypes;
