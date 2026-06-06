@@ -15,6 +15,8 @@ export type TransitionCondition =
   | { type: 'list_item'; value: string }
   | { type: 'list_item_any'; save_to_context?: string }
   | { type: 'keyword'; values: string[] }
+  | { type: 'call_permission_granted' }
+  | { type: 'call_permission_denied' }
   | { type: 'default' };
 
 export interface Transition {
@@ -71,6 +73,86 @@ export interface EndNode extends FlowNodeBase {
   transitions: [];
 }
 
+// ============================================================================
+// NODOS WHATSAPP v23.0 — espejo de backend/src/domain/entities/flow.ts
+// DEC-3: se mantiene sincronizado manualmente. La validación profunda
+// (límites Meta) la hace el backend al publicar.
+// ============================================================================
+
+export interface SendCtaUrlNode extends FlowNodeBase {
+  type: 'send_cta_url';
+  content: {
+    header?:
+      | { type: 'text'; text: string }
+      | { type: 'image'; link: string }
+      | { type: 'video'; link: string }
+      | { type: 'document'; link: string };
+    body: string;
+    footer?: string;
+    button: {
+      display_text: string;
+      url: string;
+    };
+  };
+}
+
+export interface SendLocationRequestNode extends FlowNodeBase {
+  type: 'send_location_request';
+  content: {
+    body: string;
+  };
+}
+
+export interface MediaCarouselCard {
+  header: { type: 'image'; link: string } | { type: 'video'; link: string };
+  body: string;
+  buttons: Array<
+    | { type: 'quick_reply'; id: string; title: string }
+    | { type: 'cta_url'; display_text: string; url: string }
+  >;
+}
+
+export interface SendMediaCarouselNode extends FlowNodeBase {
+  type: 'send_media_carousel';
+  content: {
+    body: string;
+    cards: MediaCarouselCard[];
+  };
+}
+
+export interface SendReactionNode extends FlowNodeBase {
+  type: 'send_reaction';
+  content: {
+    emoji: string;
+    target: 'last_user_message';
+  };
+}
+
+export interface RequestCallPermissionNode extends FlowNodeBase {
+  type: 'request_call_permission';
+  content: {
+    body: string;
+    footer?: string;
+  };
+}
+
+export interface SendWhatsappFlowNode extends FlowNodeBase {
+  type: 'send_whatsapp_flow';
+  content: {
+    header?: string;
+    body: string;
+    footer?: string;
+    whatsapp_flow_id: string;
+    flow_cta: string;
+    mode: 'draft' | 'published';
+    flow_action?: 'navigate' | 'data_exchange';
+    flow_action_payload?: {
+      screen?: string;
+      data?: Record<string, unknown>;
+    };
+  };
+}
+
 export type FlowNode =
   | SendTextNode
   | SendButtonsNode
@@ -78,7 +160,13 @@ export type FlowNode =
   | SendMediaNode
   | WaitInputNode
   | EscapeToHumanNode
-  | EndNode;
+  | EndNode
+  | SendCtaUrlNode
+  | SendLocationRequestNode
+  | SendMediaCarouselNode
+  | SendReactionNode
+  | RequestCallPermissionNode
+  | SendWhatsappFlowNode;
 
 export type FlowNodeType = FlowNode['type'];
 
