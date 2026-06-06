@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowLeft, Play, Pause, Loader2, Send, RotateCcw, KeyRound, Trash2,
+  ArrowLeft, Play, Pause, Loader2, Send, RotateCcw, KeyRound, Trash2, Workflow,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -382,6 +382,13 @@ function MoldeCard({
             </Button>
           </div>
         )}
+        <div className="border-t pt-3">
+          <Button asChild size="sm" variant="outline">
+            <Link to="/tenants/$id/designer" params={{ id: tenantId }}>
+              <Workflow className="mr-1 h-3 w-3" /> Abrir Bot Designer
+            </Link>
+          </Button>
+        </div>
       </CardContent>
     </Card>
   );

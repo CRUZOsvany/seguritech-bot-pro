@@ -67,6 +67,13 @@ const tenantPosRoute = createRoute({
   path: '/tenants/$id/pos',
 }).lazy(() => import('./routes/tenants.$id.pos').then((d) => d.Route));
 
+const tenantDesignerRoute = createRoute({
+  getParentRoute: () => authedLayoutRoute,
+  path: '/tenants/$id/designer',
+}).lazy(() =>
+  import('./routes/tenants.$id.designer').then((d) => d.Route),
+);
+
 /**
  * Árbol de rutas final.
  */
@@ -80,6 +87,7 @@ const routeTree = rootRoute.addChildren([
     tenantDetailRoute,
     tenantWhatsappRoute,
     tenantPosRoute,
+    tenantDesignerRoute,
   ]),
 ]);
 
