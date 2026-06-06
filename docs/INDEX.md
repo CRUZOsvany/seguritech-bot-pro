@@ -9,6 +9,7 @@
 - [Arquitectura visual multi-tenant](architecture/ARQUITECTURA_VISUAL_MULTI_TENANT.md)
 
 ## Desarrollo
+- [Cómo arrancar el proyecto (local)](development/ARRANCAR_PROYECTO.md)
 - [Guía del desarrollador](development/DEVELOPER_GUIDE.md)
 - [Referencia del equipo](development/REFERENCIA_EQUIPO.md)
 

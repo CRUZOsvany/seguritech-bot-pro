@@ -4,6 +4,10 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 export default defineConfig({
+  // El panel se sirve bajo /app (Express monta backend/public/app en /app) y el
+  // router usa basepath '/app'. Sin esto, los assets se emiten como /assets/...
+  // (absolutos) y dan 404 al servirse en /app → pantalla en blanco.
+  base: '/app/',
   plugins: [
     react(),
     tailwindcss(),
