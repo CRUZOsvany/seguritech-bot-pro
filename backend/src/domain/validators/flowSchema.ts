@@ -47,6 +47,12 @@ const TransitionConditionSchema = z.discriminatedUnion('type', [
     values: z.array(z.string().min(1)).min(1),
   }),
   z.object({
+    type: z.literal('call_permission_granted'),
+  }),
+  z.object({
+    type: z.literal('call_permission_denied'),
+  }),
+  z.object({
     type: z.literal('default'),
   }),
 ]);

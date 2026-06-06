@@ -98,4 +98,112 @@ export class ConsoleNotificationAdapter implements NotificationPort {
         '\n',
     );
   }
+
+  // ----- WhatsApp v23.0 (Prompt 3) — stubs de consola -----
+
+  async sendCtaUrl(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    button: { display_text: string; url: string },
+    opts?: {
+      header?: { type: 'text'; text: string } | { type: 'image' | 'video' | 'document'; link: string };
+      footer?: string;
+    },
+  ): Promise<void> {
+    console.log(
+      `\n🔗 [${tenantId} -> ${phoneNumber}] CTA_URL:` +
+        (opts?.header ? `\n  header=${JSON.stringify(opts.header)}` : '') +
+        `\n  ${body}` +
+        `\n  [${button.display_text}] → ${button.url}` +
+        (opts?.footer ? `\n  footer=${opts.footer}` : '') +
+        '\n',
+    );
+  }
+
+  async sendLocationRequest(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+  ): Promise<void> {
+    console.log(
+      `\n📍 [${tenantId} -> ${phoneNumber}] LOCATION_REQUEST:\n  ${body}\n  [Enviar ubicación]\n`,
+    );
+  }
+
+  async sendMediaCarousel(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    cards: Array<{
+      header: { type: 'image' | 'video'; link: string };
+      body: string;
+      buttons: Array<
+        | { type: 'quick_reply'; id: string; title: string }
+        | { type: 'cta_url'; display_text: string; url: string }
+      >;
+    }>,
+  ): Promise<void> {
+    const lines: string[] = [`\n🖼️  [${tenantId} -> ${phoneNumber}] MEDIA_CAROUSEL:`, body, ''];
+    cards.forEach((card, i) => {
+      lines.push(`▶ Card ${i + 1} (${card.header.type}: ${card.header.link})`);
+      lines.push(`   ${card.body}`);
+      for (const btn of card.buttons) {
+        lines.push(
+          btn.type === 'quick_reply'
+            ? `   ▸ ${btn.title}`
+            : `   ▸ ${btn.display_text} → ${btn.url}`,
+        );
+      }
+    });
+    console.log(lines.join('\n') + '\n');
+  }
+
+  async sendReaction(
+    tenantId: string,
+    phoneNumber: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<void> {
+    console.log(
+      `\n${emoji || '✖'} [${tenantId} -> ${phoneNumber}] REACTION on ${messageId}: "${emoji}"\n`,
+    );
+  }
+
+  async sendCallPermissionRequest(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    footer?: string,
+  ): Promise<void> {
+    console.log(
+      `\n📞 [${tenantId} -> ${phoneNumber}] CALL_PERMISSION_REQUEST:\n  ${body}` +
+        (footer ? `\n  footer=${footer}` : '') +
+        '\n',
+    );
+  }
+
+  async sendWhatsappFlow(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    flow_id_meta: string,
+    flow_cta: string,
+    opts?: {
+      header?: string;
+      footer?: string;
+      mode?: 'draft' | 'published';
+      flow_action?: 'navigate' | 'data_exchange';
+      flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
+    },
+  ): Promise<void> {
+    console.log(
+      `\n🧩 [${tenantId} -> ${phoneNumber}] WHATSAPP_FLOW:` +
+        (opts?.header ? `\n  header=${opts.header}` : '') +
+        `\n  ${body}` +
+        `\n  flow_id=${flow_id_meta} cta=[${flow_cta}] mode=${opts?.mode ?? 'published'}` +
+        (opts?.footer ? `\n  footer=${opts.footer}` : '') +
+        '\n',
+    );
+  }
 }

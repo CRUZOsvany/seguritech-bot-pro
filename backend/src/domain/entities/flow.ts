@@ -66,6 +66,8 @@ export type TransitionCondition =
   | { type: 'list_item'; value: string }
   | { type: 'list_item_any'; save_to_context?: FlowVariableKey | string }
   | { type: 'keyword'; values: string[] }
+  | { type: 'call_permission_granted' }
+  | { type: 'call_permission_denied' }
   | { type: 'default' };
 
 export interface Transition {

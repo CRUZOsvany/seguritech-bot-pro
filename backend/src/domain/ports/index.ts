@@ -95,6 +95,97 @@ export interface NotificationPort {
     filename: string,
     caption?: string,
   ): Promise<void>;
+
+  /**
+   * Envía un botón CTA (Call-to-Action) que abre una URL externa.
+   * Canal: WhatsApp. Mapea a interactive type "cta_url" (Meta v23.0).
+   *
+   * header es opcional. Si se omite, Meta no incluye header en el mensaje.
+   */
+  sendCtaUrl(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    button: { display_text: string; url: string },
+    opts?: {
+      header?: { type: 'text'; text: string } | { type: 'image' | 'video' | 'document'; link: string };
+      footer?: string;
+    },
+  ): Promise<void>;
+
+  /**
+   * Envía un mensaje con botón "Enviar ubicación".
+   * El cliente responde con un mensaje location que llega al webhook.
+   * Canal: WhatsApp. Mapea a interactive type "location_request_message".
+   */
+  sendLocationRequest(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+  ): Promise<void>;
+
+  /**
+   * Envía un carrusel horizontal de 1-10 cards.
+   * Cada card tiene header media (image|video) + body + 1-2 botones.
+   * Todas las cards DEBEN usar el mismo tipo de botón (validado en flowSchema).
+   * Canal: WhatsApp. Mapea a interactive type "media_carousel".
+   */
+  sendMediaCarousel(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    cards: Array<{
+      header: { type: 'image' | 'video'; link: string };
+      body: string;
+      buttons: Array<
+        | { type: 'quick_reply'; id: string; title: string }
+        | { type: 'cta_url'; display_text: string; url: string }
+      >;
+    }>,
+  ): Promise<void>;
+
+  /**
+   * Envía una reacción emoji al último mensaje del cliente.
+   * emoji="" deshace la reacción anterior.
+   * Canal: WhatsApp. Mapea a message type "reaction".
+   */
+  sendReaction(
+    tenantId: string,
+    phoneNumber: string,
+    messageId: string,
+    emoji: string,
+  ): Promise<void>;
+
+  /**
+   * Solicita permiso al cliente para iniciar una llamada de WhatsApp.
+   * Canal: WhatsApp. Mapea a interactive type "call_permission_request".
+   */
+  sendCallPermissionRequest(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    footer?: string,
+  ): Promise<void>;
+
+  /**
+   * Lanza un WhatsApp Flow (formulario multipantalla) publicado en Meta.
+   * flow_id_meta es el ID interno de Meta (obtenido de Meta Business Manager).
+   * Canal: WhatsApp. Mapea a interactive type "flow".
+   */
+  sendWhatsappFlow(
+    tenantId: string,
+    phoneNumber: string,
+    body: string,
+    flow_id_meta: string,
+    flow_cta: string,
+    opts?: {
+      header?: string;
+      footer?: string;
+      mode?: 'draft' | 'published';
+      flow_action?: 'navigate' | 'data_exchange';
+      flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
+    },
+  ): Promise<void>;
 }
 
 /**

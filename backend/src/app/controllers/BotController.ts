@@ -95,6 +95,7 @@ export class BotController {
           from,
           result.outputs,
           config.ownerPhone,
+          metaMessageId,
         );
 
         this.logger.info(
@@ -152,6 +153,7 @@ export class BotController {
     to: string,
     outputs: InterpreterOutput[],
     ownerPhone?: string | null,
+    lastUserMessageId?: string, // nuevo: para send_reaction
   ): Promise<string | null> {
     let lastText: string | null = null;
 
@@ -244,6 +246,70 @@ export class BotController {
             'escape_to_human sin ownerPhone (owner_data.whatsapp_dueno) — aviso no enviado',
           );
         }
+        break;
+
+      case 'cta_url':
+        await this.notificationPort.sendCtaUrl(
+          tenantId,
+          to,
+          output.body,
+          output.button,
+          {
+            ...(output.header ? { header: output.header } : {}),
+            ...(output.footer ? { footer: output.footer } : {}),
+          },
+        );
+        lastText = output.body;
+        break;
+
+      case 'location_request':
+        await this.notificationPort.sendLocationRequest(tenantId, to, output.body);
+        lastText = output.body;
+        break;
+
+      case 'media_carousel':
+        await this.notificationPort.sendMediaCarousel(tenantId, to, output.body, output.cards);
+        lastText = output.body;
+        break;
+
+      case 'reaction':
+        if (lastUserMessageId) {
+          await this.notificationPort.sendReaction(tenantId, to, lastUserMessageId, output.emoji);
+        } else {
+          this.logger.warn(
+            { tenantId },
+            'send_reaction sin messageId del usuario — reacción omitida',
+          );
+        }
+        // Reactions no tienen texto de respuesta
+        break;
+
+      case 'call_permission_request':
+        await this.notificationPort.sendCallPermissionRequest(
+          tenantId,
+          to,
+          output.body,
+          output.footer,
+        );
+        lastText = output.body;
+        break;
+
+      case 'whatsapp_flow':
+        await this.notificationPort.sendWhatsappFlow(
+          tenantId,
+          to,
+          output.body,
+          output.flow_id_meta,
+          output.flow_cta,
+          {
+            header: output.header,
+            footer: output.footer,
+            mode: output.mode,
+            flow_action: output.flow_action,
+            flow_action_payload: output.flow_action_payload,
+          },
+        );
+        lastText = output.body;
         break;
       }
     }
