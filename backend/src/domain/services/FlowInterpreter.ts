@@ -460,6 +460,22 @@ export class FlowInterpreter {
 
     case 'end':
       return [];
+
+    // ------------------------------------------------------------------------
+    // Tipos WhatsApp v23.0 (Prompt 2). Cableado real en Prompt 3.
+    // Hoy son placeholders que retornan [] y loguean warn.
+    // ------------------------------------------------------------------------
+    case 'send_cta_url':
+    case 'send_location_request':
+    case 'send_media_carousel':
+    case 'send_reaction':
+    case 'request_call_permission':
+    case 'send_whatsapp_flow':
+      this.logger.warn(
+        { nodeId: node.id, nodeType: node.type },
+        `Tipo de nodo "${node.type}" no soportado por el runtime (Prompt 3 lo implementa). Nodo ${node.id} retorna [].`,
+      );
+      return [];
     }
   }
 
