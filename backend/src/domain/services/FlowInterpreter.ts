@@ -37,7 +37,41 @@ export type InterpreterOutput =
       filename: string;
       caption?: string;
     }
-  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string };
+  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string }
+  // ---- Nuevos v23.0 ----
+  | {
+      kind: 'cta_url';
+      body: string;
+      button: { display_text: string; url: string };
+      header?: { type: 'text'; text: string } | { type: 'image' | 'video' | 'document'; link: string };
+      footer?: string;
+    }
+  | { kind: 'location_request'; body: string }
+  | {
+      kind: 'media_carousel';
+      body: string;
+      cards: Array<{
+        header: { type: 'image' | 'video'; link: string };
+        body: string;
+        buttons: Array<
+          | { type: 'quick_reply'; id: string; title: string }
+          | { type: 'cta_url'; display_text: string; url: string }
+        >;
+      }>;
+    }
+  | { kind: 'reaction'; emoji: string; target: 'last_user_message' }
+  | { kind: 'call_permission_request'; body: string; footer?: string }
+  | {
+      kind: 'whatsapp_flow';
+      body: string;
+      flow_id_meta: string;
+      flow_cta: string;
+      header?: string;
+      footer?: string;
+      mode: 'draft' | 'published';
+      flow_action?: 'navigate' | 'data_exchange';
+      flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
+    };
 
 export interface InterpreterResult {
   outputs: InterpreterOutput[];
@@ -52,8 +86,16 @@ export interface InterpreterResult {
 
 const ESCAPE_WORDS = ['menu', 'salir', 'cancelar', 'inicio'] as const;
 
-// Nodos que esperan input del usuario (paran el avance del intérprete)
-const WAIT_NODE_TYPES = new Set(['send_buttons', 'send_list', 'wait_input']);
+// Nodos que esperan input del usuario (paran el avance del intérprete).
+// request_call_permission espera la respuesta de permiso (granted/denied).
+// Los demás v23.0 (cta_url, carousel, reaction, location_request, whatsapp_flow)
+// NO paran: el usuario puede responder más tarde o no responder.
+const WAIT_NODE_TYPES = new Set([
+  'send_buttons',
+  'send_list',
+  'wait_input',
+  'request_call_permission',
+]);
 
 // ============================================================================
 // INTERPRETER
@@ -331,6 +373,12 @@ export class FlowInterpreter {
       }
       return false;
     }
+
+    case 'call_permission_granted':
+      return message.content === '__CALL_PERMISSION_GRANTED__';
+
+    case 'call_permission_denied':
+      return message.content === '__CALL_PERMISSION_DENIED__';
     }
   }
 
@@ -462,20 +510,109 @@ export class FlowInterpreter {
       return [];
 
     // ------------------------------------------------------------------------
-    // Tipos WhatsApp v23.0 (Prompt 2). Cableado real en Prompt 3.
-    // Hoy son placeholders que retornan [] y loguean warn.
+    // Tipos WhatsApp v23.0 (Prompt 3) — cableado real
     // ------------------------------------------------------------------------
-    case 'send_cta_url':
-    case 'send_location_request':
-    case 'send_media_carousel':
-    case 'send_reaction':
-    case 'request_call_permission':
-    case 'send_whatsapp_flow':
-      this.logger.warn(
-        { nodeId: node.id, nodeType: node.type },
-        `Tipo de nodo "${node.type}" no soportado por el runtime (Prompt 3 lo implementa). Nodo ${node.id} retorna [].`,
+    case 'send_cta_url': {
+      const body = await resolveText(node.content.body);
+      const button = {
+        display_text: node.content.button.display_text.slice(0, 20),
+        url: node.content.button.url,
+      };
+      let resolvedHeader:
+        | { type: 'text'; text: string }
+        | { type: 'image' | 'video' | 'document'; link: string }
+        | undefined;
+      if (node.content.header) {
+        const h = node.content.header;
+        resolvedHeader = h.type === 'text'
+          ? { type: 'text' as const, text: await resolveText(h.text) }
+          : { type: h.type, link: h.link };
+      }
+      const footer = node.content.footer ? await resolveText(node.content.footer) : undefined;
+      const output: InterpreterOutput = {
+        kind: 'cta_url',
+        body,
+        button,
+        ...(resolvedHeader ? { header: resolvedHeader } : {}),
+        ...(footer ? { footer } : {}),
+      };
+      return [output];
+    }
+
+    case 'send_location_request': {
+      const body = await resolveText(node.content.body);
+      return [{ kind: 'location_request', body }];
+    }
+
+    case 'send_media_carousel': {
+      const body = await resolveText(node.content.body);
+      const cards = await Promise.all(
+        node.content.cards.map(async (card) => ({
+          header: card.header,
+          body: await resolveText(card.body),
+          buttons: await Promise.all(
+            card.buttons.map(async (btn) => {
+              if (btn.type === 'quick_reply') {
+                return {
+                  type: 'quick_reply' as const,
+                  id: btn.id,
+                  title: await resolveText(btn.title),
+                };
+              }
+              return {
+                type: 'cta_url' as const,
+                display_text: await resolveText(btn.display_text),
+                url: btn.url,
+              };
+            }),
+          ),
+        })),
       );
-      return [];
+      return [{ kind: 'media_carousel', body, cards }];
+    }
+
+    case 'send_reaction': {
+      return [
+        {
+          kind: 'reaction',
+          emoji: node.content.emoji,
+          target: node.content.target,
+        },
+      ];
+    }
+
+    case 'request_call_permission': {
+      const body = await resolveText(node.content.body);
+      const footer = node.content.footer ? await resolveText(node.content.footer) : undefined;
+      return [
+        {
+          kind: 'call_permission_request',
+          body,
+          ...(footer ? { footer } : {}),
+        },
+      ];
+    }
+
+    case 'send_whatsapp_flow': {
+      const body = await resolveText(node.content.body);
+      const header = node.content.header ? await resolveText(node.content.header) : undefined;
+      const footer = node.content.footer ? await resolveText(node.content.footer) : undefined;
+      return [
+        {
+          kind: 'whatsapp_flow',
+          body,
+          flow_id_meta: node.content.whatsapp_flow_id,
+          flow_cta: node.content.flow_cta,
+          mode: node.content.mode,
+          ...(header ? { header } : {}),
+          ...(footer ? { footer } : {}),
+          ...(node.content.flow_action ? { flow_action: node.content.flow_action } : {}),
+          ...(node.content.flow_action_payload
+            ? { flow_action_payload: node.content.flow_action_payload }
+            : {}),
+        },
+      ];
+    }
     }
   }
 
