@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, type ReactNode } from 'react';
 import { createLazyRoute, Link } from '@tanstack/react-router';
 import {
   ReactFlow,
@@ -16,6 +16,7 @@ import { Button } from '@/shared/ui/button';
 import { Badge } from '@/shared/ui/badge';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Textarea } from '@/shared/ui/textarea';
+import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { ApiError } from '@/shared/api/client';
 import type { PublishErrorBody } from '@/shared/api/flows';
@@ -233,8 +234,8 @@ function DesignerCanvas({
 }
 
 /**
- * Inspector mínimo (Fase 5): al seleccionar un nodo, edita su campo de texto
- * principal vía updateNodeContent. Sin agregar/borrar nodos (eso es A2.2).
+ * Inspector (Fase 5 / Prompt 5): al seleccionar un nodo, edita sus campos
+ * específicos por tipo vía updateNodeContent. Sin agregar/borrar nodos (A2.2).
  */
 function Inspector() {
   const selectedId = useDesignerStore((s) => s.selectedId);
@@ -246,13 +247,12 @@ function Inspector() {
   if (!selected) {
     return (
       <div className="rounded-md border p-3 text-xs text-muted-foreground">
-        Selecciona un nodo para editar su texto.
+        Selecciona un nodo para editar su contenido.
       </div>
     );
   }
 
   const node = selected.data.node;
-  const field = mainTextField(node);
 
   return (
     <div className="flex flex-col gap-2 rounded-md border p-3">
@@ -262,45 +262,247 @@ function Inspector() {
         </Badge>
         <code className="text-[10px] text-muted-foreground">{node.id}</code>
       </div>
-      {field ? (
-        <div className="flex flex-col gap-1">
-          <Label htmlFor="node-text" className="text-xs">{field.label}</Label>
-          <Textarea
-            id="node-text"
-            rows={5}
-            value={field.value}
-            onChange={(e) =>
-              updateNodeContent(node.id, { [field.key]: e.target.value })
-            }
-          />
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          Este tipo de nodo no tiene texto editable aquí (se completa en A2.2).
-        </p>
-      )}
+      <NodeInspectorForm node={node} onUpdate={(patch) => updateNodeContent(node.id, patch)} />
     </div>
   );
 }
 
-/** Devuelve el campo de texto principal editable de un nodo, o null. */
-function mainTextField(
-  node: FlowNode,
-): { key: string; label: string; value: string } | null {
+/** Formulario de edición específico por tipo de nodo. */
+function NodeInspectorForm({
+  node,
+  onUpdate,
+}: {
+  node: FlowNode;
+  onUpdate: (patch: Record<string, unknown>) => void;
+}) {
   switch (node.type) {
     case 'send_text':
-      return { key: 'text', label: 'Texto', value: node.content.text };
+      return (
+        <InspField label="Texto">
+          <Textarea rows={4} value={node.content.text}
+            onChange={(e) => onUpdate({ text: e.target.value })} />
+        </InspField>
+      );
+
     case 'send_buttons':
-      return { key: 'text', label: 'Texto', value: node.content.text };
+      return (
+        <>
+          <InspField label="Texto">
+            <Textarea rows={3} value={node.content.text}
+              onChange={(e) => onUpdate({ text: e.target.value })} />
+          </InspField>
+          <p className="text-[10px] text-muted-foreground">
+            {node.content.buttons.length} botón(es) — editar wireframe en A2.2
+          </p>
+        </>
+      );
+
     case 'send_list':
-      return { key: 'text', label: 'Texto', value: node.content.text };
+      return (
+        <>
+          <InspField label="Texto">
+            <Textarea rows={3} value={node.content.text}
+              onChange={(e) => onUpdate({ text: e.target.value })} />
+          </InspField>
+          <InspField label="Etiqueta del botón">
+            <Input value={node.content.button_label}
+              onChange={(e) => onUpdate({ button_label: e.target.value })} />
+          </InspField>
+          <p className="text-[10px] text-muted-foreground">
+            {node.content.sections.length} sección(es) — editar en A2.2
+          </p>
+        </>
+      );
+
+    case 'send_media': {
+      const c = node.content;
+      if (c.media_type === 'image' || c.media_type === 'document') {
+        return (
+          <>
+            <InspField label="URL">
+              <Input value={c.url} onChange={(e) => onUpdate({ url: e.target.value })} />
+            </InspField>
+            <InspField label="Caption">
+              <Input value={c.caption ?? ''}
+                onChange={(e) => onUpdate({ caption: e.target.value })} />
+            </InspField>
+          </>
+        );
+      }
+      if (c.media_type === 'location') {
+        return (
+          <>
+            <InspField label="Nombre">
+              <Input value={c.name ?? ''}
+                onChange={(e) => onUpdate({ name: e.target.value })} />
+            </InspField>
+            <InspField label="Latitud / Longitud">
+              <div className="flex gap-1">
+                <Input type="number" value={c.latitude}
+                  onChange={(e) => onUpdate({ latitude: parseFloat(e.target.value) || 0 })} />
+                <Input type="number" value={c.longitude}
+                  onChange={(e) => onUpdate({ longitude: parseFloat(e.target.value) || 0 })} />
+              </div>
+            </InspField>
+          </>
+        );
+      }
+      return <NotEditable />;
+    }
+
     case 'wait_input':
-      return { key: 'prompt', label: 'Prompt', value: node.content.prompt ?? '' };
+      return (
+        <>
+          <InspField label="Prompt (opcional)">
+            <Textarea rows={3} value={node.content.prompt ?? ''}
+              onChange={(e) => onUpdate({ prompt: e.target.value })} />
+          </InspField>
+          <InspField label="Guardar en contexto">
+            <Input value={node.content.save_to_context ?? ''}
+              onChange={(e) => onUpdate({ save_to_context: e.target.value })} />
+          </InspField>
+        </>
+      );
+
     case 'escape_to_human':
-      return { key: 'user_response', label: 'Respuesta al usuario', value: node.content.user_response };
-    default:
-      return null;
+      return (
+        <>
+          <InspField label="Respuesta al usuario">
+            <Textarea rows={3} value={node.content.user_response}
+              onChange={(e) => onUpdate({ user_response: e.target.value })} />
+          </InspField>
+          <InspField label="Alerta al dueño">
+            <Textarea rows={3} value={node.content.owner_alert_template}
+              onChange={(e) => onUpdate({ owner_alert_template: e.target.value })} />
+          </InspField>
+        </>
+      );
+
+    case 'end':
+      return <p className="text-[10px] text-muted-foreground">Fin del flujo. Sin campos.</p>;
+
+    // ── WhatsApp v23.0 ──────────────────────────────────────────────────────
+
+    case 'send_cta_url':
+      return (
+        <>
+          <InspField label="Cuerpo">
+            <Textarea rows={3} value={node.content.body}
+              onChange={(e) => onUpdate({ body: e.target.value })} />
+          </InspField>
+          <InspField label="Texto del botón">
+            <Input value={node.content.button.display_text}
+              onChange={(e) =>
+                onUpdate({ button: { ...node.content.button, display_text: e.target.value } })
+              } />
+          </InspField>
+          <InspField label="URL del botón">
+            <Input value={node.content.button.url}
+              onChange={(e) =>
+                onUpdate({ button: { ...node.content.button, url: e.target.value } })
+              } />
+          </InspField>
+          {node.content.footer !== undefined && (
+            <InspField label="Footer">
+              <Input value={node.content.footer}
+                onChange={(e) => onUpdate({ footer: e.target.value })} />
+            </InspField>
+          )}
+        </>
+      );
+
+    case 'send_location_request':
+      return (
+        <InspField label="Cuerpo">
+          <Textarea rows={4} value={node.content.body}
+            onChange={(e) => onUpdate({ body: e.target.value })} />
+        </InspField>
+      );
+
+    case 'send_media_carousel':
+      return (
+        <>
+          <InspField label="Cuerpo">
+            <Textarea rows={2} value={node.content.body}
+              onChange={(e) => onUpdate({ body: e.target.value })} />
+          </InspField>
+          <p className="text-[10px] text-muted-foreground">
+            {node.content.cards.length} card(s) — editar cards en A2.2
+          </p>
+        </>
+      );
+
+    case 'send_reaction':
+      return (
+        <InspField label="Emoji">
+          <Input value={node.content.emoji}
+            onChange={(e) => onUpdate({ emoji: e.target.value })} />
+        </InspField>
+      );
+
+    case 'request_call_permission':
+      return (
+        <>
+          <InspField label="Cuerpo">
+            <Textarea rows={3} value={node.content.body}
+              onChange={(e) => onUpdate({ body: e.target.value })} />
+          </InspField>
+          <InspField label="Footer (opcional)">
+            <Input value={node.content.footer ?? ''}
+              onChange={(e) => onUpdate({ footer: e.target.value || undefined })} />
+          </InspField>
+        </>
+      );
+
+    case 'send_whatsapp_flow':
+      return (
+        <>
+          <InspField label="Cuerpo">
+            <Textarea rows={3} value={node.content.body}
+              onChange={(e) => onUpdate({ body: e.target.value })} />
+          </InspField>
+          <InspField label="Texto del botón CTA">
+            <Input value={node.content.flow_cta}
+              onChange={(e) => onUpdate({ flow_cta: e.target.value })} />
+          </InspField>
+          <InspField label="ID del WA Flow">
+            <Input value={node.content.whatsapp_flow_id}
+              onChange={(e) => onUpdate({ whatsapp_flow_id: e.target.value })} />
+          </InspField>
+          <InspField label="Modo">
+            <select
+              className="w-full rounded-md border bg-background px-2 py-1 text-xs"
+              value={node.content.mode}
+              onChange={(e) => onUpdate({ mode: e.target.value as 'draft' | 'published' })}
+            >
+              <option value="draft">draft (pruebas)</option>
+              <option value="published">published (producción)</option>
+            </select>
+          </InspField>
+        </>
+      );
   }
+}
+
+/** Wrapper de campo de inspector: label encima, control abajo. */
+function InspField({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+        {label}
+      </Label>
+      {children}
+    </div>
+  );
+}
+
+/** Mensaje para tipos sin campos editables en esta versión. */
+function NotEditable() {
+  return (
+    <p className="text-[10px] text-muted-foreground">
+      Este tipo no tiene campos editables aquí (se completa en A2.2).
+    </p>
+  );
 }
 
 export const Route = createLazyRoute('/_authed/tenants/$id/designer')({
