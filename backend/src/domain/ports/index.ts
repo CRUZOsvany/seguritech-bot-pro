@@ -258,3 +258,10 @@ export type {
   InvoicingRequest,
   InvoicingResult,
 } from './pos';
+
+/**
+ * Puerto de persistencia para WhatsApp Flows (formularios multipantalla de Meta).
+ */
+export type {
+  WhatsAppFlowRepository,
+} from './WhatsAppFlowRepository';

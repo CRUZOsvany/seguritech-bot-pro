@@ -9,6 +9,7 @@ import { SupabaseTenantRepository } from '@/infrastructure/repositories/Supabase
 import { SupabaseTenantServiceRepository } from '@/infrastructure/repositories/SupabaseTenantServiceRepository';
 import { SupabaseMetaCredentialsRepository } from '@/infrastructure/repositories/SupabaseMetaCredentialsRepository';
 import { SupabaseMessagesRepository } from '@/infrastructure/repositories/SupabaseMessagesRepository';
+import { SupabaseWhatsAppFlowRepository } from '@/infrastructure/repositories/SupabaseWhatsAppFlowRepository';
 import { SupabaseAdminUsersRepository } from '@/infrastructure/repositories/SupabaseAdminUsersRepository';
 import { SupabaseAdminSessionsRepository } from '@/infrastructure/repositories/SupabaseAdminSessionsRepository';
 import { SupabaseLoginAttemptsRepository } from '@/infrastructure/repositories/SupabaseLoginAttemptsRepository';
@@ -70,6 +71,7 @@ export class Bootstrap {
         this.logger,
       );
       const messagesRepository = new SupabaseMessagesRepository(supabase, this.logger);
+      const whatsappFlowRepository = new SupabaseWhatsAppFlowRepository(supabase, this.logger);
 
       // === Notification port: Meta (si hay clave de cifrado) o Console ===
       let notificationPort: NotificationPort;
@@ -234,6 +236,7 @@ export class Bootstrap {
         botFlowRepository,
         messagesRepository,
         metaCredentialsRepository,
+        whatsappFlowRepository,
         audit: auditLog,
         supabase,
         logger: this.logger,

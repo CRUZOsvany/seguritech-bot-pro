@@ -9,6 +9,7 @@ import type { TenantServiceRepository } from '@/domain/ports/TenantServiceReposi
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MetaCredentialsRepository } from '@/domain/ports';
 import type { MessagesRepository } from '@/domain/ports';
+import type { WhatsAppFlowRepository } from '@/domain/ports/WhatsAppFlowRepository';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Mw } from './admin/helpers';
@@ -16,6 +17,7 @@ import { createTenantsRouter } from './admin/tenantsRouter';
 import { createServicesRouter } from './admin/servicesRouter';
 import { createMetaRouter } from './admin/metaRouter';
 import { createFlowsRouter } from './admin/flowsRouter';
+import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
 
 /**
  * Router de API admin interna del panel SegurITech.
@@ -43,6 +45,7 @@ export function createAdminRouter(params: {
   messagesRepository: MessagesRepository;
   /** Opcional: solo presente cuando META_TOKEN_ENCRYPTION_KEY está configurada. */
   metaCredentialsRepository?: MetaCredentialsRepository;
+  whatsappFlowRepository: WhatsAppFlowRepository;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -58,6 +61,7 @@ export function createAdminRouter(params: {
     botFlowRepository,
     messagesRepository,
     metaCredentialsRepository,
+    whatsappFlowRepository,
     audit,
     supabase,
     logger,
@@ -79,6 +83,9 @@ export function createAdminRouter(params: {
   );
   router.use(
     createMetaRouter({ metaCredentialsRepository, audit, logger }),
+  );
+  router.use(
+    createWhatsappFlowsRouter({ whatsappFlowRepository, audit, logger }),
   );
   router.use(
     createTenantsRouter({
