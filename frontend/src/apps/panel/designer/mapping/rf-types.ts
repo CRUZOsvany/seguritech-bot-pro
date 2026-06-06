@@ -59,6 +59,10 @@ export function conditionLabel(condition: TransitionCondition, node: FlowNode): 
         : 'cualquier ítem';
     case 'keyword':
       return condition.values.join(' / ');
+    case 'call_permission_granted':
+      return 'permiso concedido';
+    case 'call_permission_denied':
+      return 'permiso denegado';
     case 'default':
       return 'default';
   }
