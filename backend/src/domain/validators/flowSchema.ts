@@ -19,6 +19,16 @@ import type { BotFlow } from '@/domain/entities/flow';
 // SCHEMAS BASE
 // ============================================================================
 
+/**
+ * URL https válida, ≤ 2000 chars. Reutilizado por los nodos WhatsApp v23.0
+ * (cta_url, carousel media/botones). Meta exige https para todos los links.
+ */
+const httpsUrlSchema = z
+  .string()
+  .url('URL inválida')
+  .startsWith('https://', 'La URL debe iniciar con https://')
+  .max(2000, 'URL excede 2000 caracteres');
+
 const TransitionConditionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('button'),
@@ -195,24 +205,170 @@ const EndNodeSchema = z.object({
   transitions: z.array(TransitionSchema).max(0, 'end node no debe tener transiciones'),
 });
 
-// EndNodeSchema tipa `transitions` con .max(0), lo que produce una rama
-// estructuralmente más estrecha que las demás. TypeScript no infiere el
-// tuplo como `readonly [Option, ...Option[]]` requerido por
-// discriminatedUnion en zod 3.25+. El cast es seguro: todas las ramas son
-// ZodObject directos (sin .refine) — condición que zod valida en runtime
-// leyendo `.shape[discriminator]`.
-const FlowNodeSchema = z.discriminatedUnion(
-  'type',
-  [
+// ============================================================================
+// NODOS WHATSAPP v23.0
+//
+// Mismo patrón estructural que los 7 originales: id + content + transitions.
+// Las validaciones de límites Meta v23.0 viven en el campo `content`.
+// Reglas cross-card (mismo tipo de botón en todas las cards de un carrusel)
+// van en el wrapper .superRefine de FlowNodeSchema (más abajo).
+// ============================================================================
+
+const SendCtaUrlNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_cta_url'),
+  content: z.object({
+    header: z
+      .discriminatedUnion('type', [
+        z.object({ type: z.literal('text'), text: z.string().min(1).max(60) }),
+        z.object({ type: z.literal('image'), link: httpsUrlSchema }),
+        z.object({ type: z.literal('video'), link: httpsUrlSchema }),
+        z.object({ type: z.literal('document'), link: httpsUrlSchema }),
+      ])
+      .optional(),
+    body: z.string().min(1).max(1024),
+    footer: z.string().max(60).optional(),
+    button: z.object({
+      display_text: z.string().min(1).max(20),
+      url: httpsUrlSchema,
+    }),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
+const SendLocationRequestNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_location_request'),
+  content: z
+    .object({
+      body: z.string().min(1).max(1024),
+    })
+    .strict(), // Meta: header/footer NO PERMITIDOS; rechazar claves extra
+  transitions: z.array(TransitionSchema),
+});
+
+const MediaCarouselButtonSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('quick_reply'),
+    id: z.string().min(1).max(256),
+    title: z.string().min(1).max(20),
+  }),
+  z.object({
+    type: z.literal('cta_url'),
+    display_text: z.string().min(1).max(20),
+    url: httpsUrlSchema,
+  }),
+]);
+
+const MediaCarouselCardSchema = z.object({
+  header: z.discriminatedUnion('type', [
+    z.object({ type: z.literal('image'), link: httpsUrlSchema }),
+    z.object({ type: z.literal('video'), link: httpsUrlSchema }),
+  ]),
+  body: z.string().min(1).max(1024),
+  buttons: z.array(MediaCarouselButtonSchema).min(1).max(2),
+});
+
+const SendMediaCarouselNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_media_carousel'),
+  content: z.object({
+    body: z.string().min(1).max(1024),
+    cards: z.array(MediaCarouselCardSchema).min(1).max(10),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
+// Emoji compuesto válido: pictogramas, ZWJ ‍, variation selector ️,
+// keycap ⃣. Cap a 16 chars de longitud cruda como guard razonable
+// (un emoji familia 👨‍👩‍👧‍👦 son 11 chars en UTF-16).
+const SendReactionNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_reaction'),
+  content: z.object({
+    emoji: z
+      .string()
+      .max(16, 'El emoji excede 16 chars (UTF-16)')
+      .refine(
+        (val) => val === '' || /^[\p{Extended_Pictographic}‍️⃣]+$/u.test(val),
+        'Debe ser un emoji Unicode válido o string vacío',
+      ),
+    target: z.literal('last_user_message'),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
+const RequestCallPermissionNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('request_call_permission'),
+  content: z.object({
+    body: z.string().min(1).max(1024),
+    footer: z.string().max(60).optional(),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
+const SendWhatsappFlowNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('send_whatsapp_flow'),
+  content: z.object({
+    header: z.string().max(60).optional(),
+    body: z.string().min(1).max(1024),
+    footer: z.string().max(60).optional(),
+    whatsapp_flow_id: z.string().uuid('whatsapp_flow_id debe ser UUID válido'),
+    flow_cta: z.string().min(1).max(20),
+    mode: z.enum(['draft', 'published']),
+    flow_action: z.enum(['navigate', 'data_exchange']).optional(),
+    flow_action_payload: z
+      .object({
+        screen: z.string().optional(),
+        data: z.record(z.unknown()).optional(),
+      })
+      .optional(),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
+// ============================================================================
+// UNION DE NODOS — TODOS comparten shape: id + content + transitions
+// ============================================================================
+
+export const FlowNodeSchema = z
+  .discriminatedUnion('type', [
     SendTextNodeSchema,
     SendButtonsNodeSchema,
     SendListNodeSchema,
     SendMediaNodeSchema,
+    SendCtaUrlNodeSchema,
+    SendLocationRequestNodeSchema,
+    SendMediaCarouselNodeSchema,
+    SendReactionNodeSchema,
     WaitInputNodeSchema,
     EscapeToHumanNodeSchema,
+    RequestCallPermissionNodeSchema,
     EndNodeSchema,
-  ] as unknown as readonly [z.ZodDiscriminatedUnionOption<'type'>, ...z.ZodDiscriminatedUnionOption<'type'>[]],
-);
+    SendWhatsappFlowNodeSchema,
+  ])
+  // Regla cross-card del carrusel: todas las cards deben usar el mismo tipo
+  // de botón (todo quick_reply o todo cta_url).
+  .superRefine((node, ctx) => {
+    if (node.type !== 'send_media_carousel') return;
+    const cards = node.content.cards;
+    if (cards.length === 0) return;
+    const firstButtonType = cards[0]?.buttons[0]?.type;
+    if (!firstButtonType) return;
+    cards.forEach((card, i) => {
+      for (const btn of card.buttons) {
+        if (btn.type !== firstButtonType) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['content', 'cards', i, 'buttons'],
+            message: `Todas las cards del carrusel deben usar el mismo tipo de botón (${firstButtonType}). Encontrado: ${btn.type}.`,
+          });
+        }
+      }
+    });
+  });
 
 // ============================================================================
 // FLOW (con validación cruzada de referencias)

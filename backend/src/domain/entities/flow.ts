@@ -175,14 +175,177 @@ export interface EndNode extends FlowNodeBase {
   transitions: []; // siempre vacío
 }
 
+// ============================================================================
+// NODOS WHATSAPP v23.0
+//
+// Mapean a tipos interactivos de Meta Cloud API v23.0. Comparten el patrón
+// estructural de los 7 originales: extienden FlowNodeBase (id + transitions[]).
+// Canal: WhatsApp únicamente. El cableado runtime en FlowInterpreter vive en
+// el Prompt 3 (hoy son placeholders que retornan []).
+// ============================================================================
+
+/**
+ * Mensaje con botón Call-to-Action que abre una URL externa.
+ * Canal: WhatsApp. Mapea a interactive type "cta_url".
+ *
+ * Límites Meta v23.0:
+ * - header (opcional): text ≤60 chars | image/video/document = link https
+ * - body ≤1024 chars
+ * - footer ≤60 chars
+ * - button.display_text ≤20 chars
+ * - button.url = https://, ≤2000 chars
+ *
+ * Transiciones: por lo general 0-1 transiciones (default), porque el cliente
+ * abre la URL en el navegador y no responde por el chat hasta más tarde.
+ */
+export interface SendCtaUrlNode extends FlowNodeBase {
+  type: 'send_cta_url';
+  content: {
+    header?:
+      | { type: 'text'; text: string }
+      | { type: 'image'; link: string }
+      | { type: 'video'; link: string }
+      | { type: 'document'; link: string };
+    body: string;
+    footer?: string;
+    button: {
+      display_text: string;
+      url: string;
+    };
+  };
+}
+
+/**
+ * Mensaje con botón "Enviar ubicación". El cliente responde con un mensaje
+ * tipo 'location' que el FlowInterpreter (Prompt 3) capturará.
+ * Canal: WhatsApp. Mapea a interactive type "location_request_message".
+ *
+ * Límites Meta v23.0:
+ * - body ≤1024 chars
+ * - header y footer NO PERMITIDOS por Meta (enforzado con .strict() en Zod)
+ */
+export interface SendLocationRequestNode extends FlowNodeBase {
+  type: 'send_location_request';
+  content: {
+    body: string;
+  };
+}
+
+/**
+ * Carrusel horizontal de 1-10 cards. Cada card: header media (image/video) +
+ * texto + 1-2 botones (quick_reply o cta_url). Todas las cards DEBEN usar el
+ * mismo tipo de botón (regla cross-card validada en FlowNodeSchema wrapper).
+ * Canal: WhatsApp. Mapea a interactive type "media_carousel".
+ *
+ * Routing: las transiciones del nodo manejan los quick_reply via
+ * { condition: { type: 'button', value: '<button_id>' }, ... } (mismo patrón
+ * que send_buttons). Los cta_url no producen transición (abren navegador).
+ */
+export interface MediaCarouselCard {
+  header: { type: 'image'; link: string } | { type: 'video'; link: string };
+  body: string;
+  buttons: Array<
+    | { type: 'quick_reply'; id: string; title: string }
+    | { type: 'cta_url'; display_text: string; url: string }
+  >;
+}
+
+export interface SendMediaCarouselNode extends FlowNodeBase {
+  type: 'send_media_carousel';
+  content: {
+    body: string;
+    cards: MediaCarouselCard[];
+  };
+}
+
+/**
+ * Reacción emoji al último mensaje del cliente.
+ * Canal: WhatsApp. Mapea a message type "reaction".
+ *
+ * En V1, target siempre 'last_user_message' — el message_id concreto lo
+ * resuelve el FlowInterpreter en runtime. Versiones futuras pueden referenciar
+ * un message_id arbitrario.
+ *
+ * Límites Meta v23.0:
+ * - emoji: 1 cluster Unicode (puede incluir ZWJ ‍, VS ️).
+ *   String vacío "" deshace la reacción.
+ */
+export interface SendReactionNode extends FlowNodeBase {
+  type: 'send_reaction';
+  content: {
+    emoji: string;
+    target: 'last_user_message';
+  };
+}
+
+/**
+ * Solicita permiso explícito al cliente para iniciar una llamada de WhatsApp.
+ * Canal: WhatsApp. Mapea a interactive type "call_permission_request".
+ *
+ * Límites Meta v23.0:
+ * - body ≤1024 chars
+ * - footer ≤60 chars
+ */
+export interface RequestCallPermissionNode extends FlowNodeBase {
+  type: 'request_call_permission';
+  content: {
+    body: string;
+    footer?: string;
+  };
+}
+
+/**
+ * Lanza un WhatsApp Flow (formulario multipantalla) publicado en Meta
+ * Business Manager. Los datos del formulario llegan vía webhook.
+ * Canal: WhatsApp. Mapea a interactive type "flow".
+ *
+ * whatsapp_flow_id es UUID interno (FK a la futura tabla `whatsapp_flows`
+ * del Prompt 4). El FlowInterpreter (Prompt 3) lo resuelve a flow_id_meta
+ * en runtime. La validación de existencia de la FK se hace a nivel
+ * repository, no en Zod.
+ *
+ * Límites Meta v23.0:
+ * - header (opcional) ≤60 chars
+ * - body ≤1024 chars
+ * - footer (opcional) ≤60 chars
+ * - flow_cta ≤20 chars
+ * - mode: 'draft' (testing) | 'published' (producción)
+ */
+export interface SendWhatsappFlowNode extends FlowNodeBase {
+  type: 'send_whatsapp_flow';
+  content: {
+    header?: string;
+    body: string;
+    footer?: string;
+    whatsapp_flow_id: string;
+    flow_cta: string;
+    mode: 'draft' | 'published';
+    flow_action?: 'navigate' | 'data_exchange';
+    flow_action_payload?: {
+      screen?: string;
+      data?: Record<string, unknown>;
+    };
+  };
+}
+
+// ============================================================================
+// UNION DE NODOS
+// ============================================================================
+
 export type FlowNode =
   | SendTextNode
   | SendButtonsNode
   | SendListNode
   | SendMediaNode
+  | SendCtaUrlNode
+  | SendLocationRequestNode
+  | SendMediaCarouselNode
+  | SendReactionNode
   | WaitInputNode
   | EscapeToHumanNode
-  | EndNode;
+  | RequestCallPermissionNode
+  | EndNode
+  | SendWhatsappFlowNode;
 
 // ============================================================================
 // FLOW (raíz)
