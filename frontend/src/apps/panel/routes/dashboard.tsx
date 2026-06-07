@@ -17,7 +17,7 @@ function DashboardPage() {
   const { data: tenants, isLoading, error } = useTenants();
 
   return (
-    <Card>
+    <Card className="shadow-card">
       <CardHeader>
         <div className="flex items-center justify-between gap-4">
           <div>

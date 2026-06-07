@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
-import { LogOut } from 'lucide-react';
+import { LogOut, Bot } from 'lucide-react';
 import { useSession } from '@/shared/auth/useSession';
 import { logout } from '@/shared/api/auth';
 import { Button } from '@/shared/ui/button';
@@ -21,10 +21,13 @@ export function AppHeader() {
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex h-14 max-w-[1100px] items-center justify-between px-6">
         <div className="flex items-center gap-6">
-          <h1 className="text-sm font-semibold tracking-tight">
+          <h1 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Bot className="h-4 w-4" aria-hidden />
+            </span>
             SegurITech Bot Pro · Panel
           </h1>
-          <nav className="flex items-center gap-1">
+          <nav className="flex items-center gap-1.5">
             <Link
               to="/dashboard"
               className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"

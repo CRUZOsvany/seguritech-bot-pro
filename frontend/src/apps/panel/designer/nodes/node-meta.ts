@@ -1,30 +1,34 @@
+import type { LucideIcon } from 'lucide-react';
+import {
+  Type, MousePointerClick, List, Image, Keyboard, Headset, Flag,
+  ExternalLink, MapPin, Images, Smile, Phone, Workflow,
+} from 'lucide-react';
 import type { FlowNodeType } from '../flow-types';
 
 /**
- * Metadatos visuales por tipo de nodo.
+ * Metadatos visuales por tipo de nodo. Texto del header siempre blanco.
  *
- * Paleta de colores:
- *   Originales (7): send_text morado · send_buttons azul · send_list verde ·
- *   send_media gris · wait_input naranja · escape_to_human rojo · end neutro.
- *
- *   v23.0 (6): send_cta_url índigo · send_location_request cian ·
- *   send_media_carousel violeta · send_reaction amarillo ·
- *   request_call_permission rosa · send_whatsapp_flow esmeralda.
+ * Todas las entradas (originales + v23.0) usan tokens de marca --color-node-*
+ * de globals.css (Tailwind 4 genera las utilidades bg-node-*). UNA sola fuente,
+ * consumida por node-meta, NodeShell, el Inspector y el MiniMap.
  */
-export const NODE_META: Record<FlowNodeType, { label: string; header: string }> = {
+export const NODE_META: Record<
+  FlowNodeType,
+  { label: string; header: string; icon: LucideIcon }
+> = {
   // — Originales —
-  send_text:         { label: 'Enviar texto',      header: 'bg-purple-500' },
-  send_buttons:      { label: 'Botones',            header: 'bg-blue-500' },
-  send_list:         { label: 'Lista',              header: 'bg-green-600' },
-  send_media:        { label: 'Media',              header: 'bg-gray-500' },
-  wait_input:        { label: 'Esperar input',      header: 'bg-orange-500' },
-  escape_to_human:   { label: 'Escalar a humano',   header: 'bg-red-500' },
-  end:               { label: 'Fin',                header: 'bg-neutral-400' },
+  send_text:       { label: 'Enviar texto',     header: 'bg-node-text',    icon: Type },
+  send_buttons:    { label: 'Botones',          header: 'bg-node-buttons', icon: MousePointerClick },
+  send_list:       { label: 'Lista',            header: 'bg-node-list',    icon: List },
+  send_media:      { label: 'Media',            header: 'bg-node-media',   icon: Image },
+  wait_input:      { label: 'Esperar input',    header: 'bg-node-wait',    icon: Keyboard },
+  escape_to_human: { label: 'Escalar a humano', header: 'bg-node-escape',  icon: Headset },
+  end:             { label: 'Fin',              header: 'bg-node-end',     icon: Flag },
   // — WhatsApp v23.0 —
-  send_cta_url:           { label: 'CTA URL',           header: 'bg-indigo-500' },
-  send_location_request:  { label: 'Pedir ubicación',   header: 'bg-cyan-600' },
-  send_media_carousel:    { label: 'Carrusel',          header: 'bg-violet-500' },
-  send_reaction:          { label: 'Reacción',          header: 'bg-yellow-500' },
-  request_call_permission:{ label: 'Permiso llamada',   header: 'bg-pink-500' },
-  send_whatsapp_flow:     { label: 'WA Flow',           header: 'bg-emerald-600' },
+  send_cta_url:            { label: 'CTA URL',         header: 'bg-node-cta',      icon: ExternalLink },
+  send_location_request:   { label: 'Pedir ubicación', header: 'bg-node-location', icon: MapPin },
+  send_media_carousel:     { label: 'Carrusel',        header: 'bg-node-carousel', icon: Images },
+  send_reaction:           { label: 'Reacción',        header: 'bg-node-reaction', icon: Smile },
+  request_call_permission: { label: 'Permiso llamada', header: 'bg-node-call',     icon: Phone },
+  send_whatsapp_flow:      { label: 'WA Flow',         header: 'bg-node-flow',     icon: Workflow },
 };

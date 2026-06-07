@@ -106,12 +106,12 @@ export function ServiceCards({ tenantId, services }: Props) {
           });
 
         return (
-          <Card key={meta.type} className="flex flex-col">
+          <Card key={meta.type} className="flex flex-col shadow-card transition-shadow hover:shadow-md">
             <CardHeader>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="rounded-md bg-muted p-2">
-                    <Icon className="h-5 w-5 text-foreground" aria-hidden />
+                  <div className="rounded-lg bg-primary/10 p-2.5 text-primary">
+                    <Icon className="h-5 w-5" aria-hidden />
                   </div>
                   <div>
                     <CardTitle className="text-base">{meta.name}</CardTitle>

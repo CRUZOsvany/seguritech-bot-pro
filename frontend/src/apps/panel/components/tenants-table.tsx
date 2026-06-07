@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -28,19 +28,19 @@ export function TenantsTable({ tenants }: Props) {
   return (
     <Table>
       <TableHeader>
-        <TableRow>
-          <TableHead>Negocio</TableHead>
-          <TableHead>Giro</TableHead>
-          <TableHead>Status</TableHead>
-          <TableHead className="text-center">Bot</TableHead>
-          <TableHead className="text-center">Webhook</TableHead>
-          <TableHead className="text-center">Molde</TableHead>
-          <TableHead className="text-right">Acciones</TableHead>
+        <TableRow className="hover:bg-transparent">
+          <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Negocio</TableHead>
+          <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Giro</TableHead>
+          <TableHead className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Status</TableHead>
+          <TableHead className="text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Bot</TableHead>
+          <TableHead className="text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Webhook</TableHead>
+          <TableHead className="text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Molde</TableHead>
+          <TableHead className="text-right text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Acciones</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {tenants.map((t) => (
-          <TableRow key={t.id}>
+          <TableRow key={t.id} className="hover:bg-muted/40">
             <TableCell>
               <div className="font-medium">{t.nombre_negocio}</div>
               <code className="text-[10px] text-muted-foreground">
@@ -64,16 +64,26 @@ export function TenantsTable({ tenants }: Props) {
             </TableCell>
             <TableCell className="text-center">
               {t.webhook_verified ? (
-                <span title="Verificado" aria-label="Verificado">✅</span>
+                <CheckCircle2
+                  className="mx-auto h-4 w-4 text-emerald-600"
+                  aria-label="Verificado"
+                />
               ) : (
-                <span title="Pendiente" aria-label="Pendiente">⏳</span>
+                <Clock
+                  className="mx-auto h-4 w-4 text-muted-foreground"
+                  aria-label="Pendiente"
+                />
               )}
             </TableCell>
             <TableCell className="text-center">
               {t.has_active_flow ? (
-                <span className="text-xs text-emerald-700">✅ asignado</span>
+                <span className="inline-flex items-center gap-1 text-xs text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> asignado
+                </span>
               ) : (
-                <span className="text-xs text-amber-700">⚠ sin molde</span>
+                <span className="inline-flex items-center gap-1 text-xs text-amber-700">
+                  <AlertTriangle className="h-3.5 w-3.5" aria-hidden /> sin molde
+                </span>
               )}
             </TableCell>
             <TableCell className="text-right">
