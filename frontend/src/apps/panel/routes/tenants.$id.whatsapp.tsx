@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
+  Bot, LayoutDashboard, MessageSquare, Plug, Route as RouteIcon,
+  ChevronDown, ChevronRight, ExternalLink,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -15,6 +17,9 @@ import { Label } from '@/shared/ui/label';
 import { Badge } from '@/shared/ui/badge';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Textarea } from '@/shared/ui/textarea';
+import {
+  Tabs, TabsList, TabsTrigger, TabsContent,
+} from '@/shared/ui/tabs';
 import { useTenant } from '../hooks/use-tenant';
 import { useTenantServices } from '../hooks/use-tenant-services';
 import { useSetServiceStatus } from '../hooks/use-set-service-status';
@@ -29,17 +34,21 @@ import { type BotConfigPatch } from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
 import { formatRelativeTime, formatAbsoluteTime } from '@/shared/lib/format-date';
 
-const botConfigSchema = z.object({
+const identitySchema = z.object({
   numero_whatsapp_asignado: z.string().min(8).max(20),
   nombre_bot: z.string().max(60).optional().or(z.literal('')),
   tono_bot: z.enum(['formal', 'amigable', 'directo']).optional().or(z.literal('')),
+});
+type IdentityForm = z.infer<typeof identitySchema>;
+
+const messagesSchema = z.object({
   mensaje_bienvenida: z.string().max(1024).optional().or(z.literal('')),
   mensaje_menu_principal: z.string().max(1024).optional().or(z.literal('')),
   mensaje_fuera_horario: z.string().max(1024).optional().or(z.literal('')),
   mensaje_no_entendio: z.string().max(1024).optional().or(z.literal('')),
   mensaje_confirmacion_pedido: z.string().max(1024).optional().or(z.literal('')),
 });
-type BotConfigForm = z.infer<typeof botConfigSchema>;
+type MessagesForm = z.infer<typeof messagesSchema>;
 
 const metaSchema = z.object({
   phoneNumberId: z.string().min(5).max(40),
@@ -124,18 +133,76 @@ function WhatsAppPanelPage() {
         </CardContent>
       </Card>
 
-      {/* 2. Credenciales Meta (solo super_admin) */}
-      {isSuperAdmin && <MetaCredentialsCard tenantId={id} meta={tenant.meta_credentials} />}
+      <Tabs orientation="vertical" defaultValue="resumen" className="w-full">
+        <TabsList className="w-[170px] shrink-0">
+          <TabsTrigger value="resumen"><LayoutDashboard className="h-4 w-4" /> Resumen</TabsTrigger>
+          <TabsTrigger value="identidad"><Bot className="h-4 w-4" /> Identidad</TabsTrigger>
+          {isSuperAdmin && (
+            <TabsTrigger value="conexion"><Plug className="h-4 w-4" /> Conexión Meta</TabsTrigger>
+          )}
+          <TabsTrigger value="mensajes"><MessageSquare className="h-4 w-4" /> Mensajes</TabsTrigger>
+          <TabsTrigger value="flujo"><RouteIcon className="h-4 w-4" /> Flujo</TabsTrigger>
+        </TabsList>
 
-      {/* 3. Mensajes del bot */}
-      <BotMessagesCard tenantId={id} config={tenant.bot_configuration} />
+        <TabsContent value="resumen">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Resumen</CardTitle>
+              <CardDescription>Estado general del bot de este cliente.</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 text-sm">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs text-muted-foreground">Número asignado</p>
+                  <p>{tenant.bot_configuration?.numero_whatsapp_asignado ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Nombre del bot</p>
+                  <p>{tenant.bot_configuration?.nombre_bot ?? '—'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Molde activo</p>
+                  <p>{tenant.active_flow?.nombre ?? 'sin molde'}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Webhook</p>
+                  <p>{tenant.webhook_verified ? 'verificado' : 'pendiente'}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 border-t pt-3">
+                <Button asChild size="sm" variant="outline">
+                  <a href={`/simulator/${encodeURIComponent(id)}`} target="_blank" rel="noopener noreferrer">
+                    Simular <ExternalLink className="ml-1 h-3 w-3" />
+                  </a>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/tenants/$id/designer" params={{ id }}>
+                    <Workflow className="mr-1 h-3 w-3" /> Abrir Bot Designer
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* 4. Molde */}
-      <MoldeCard
-        tenantId={id}
-        giro={tenant.giro}
-        activeFlow={tenant.active_flow}
-      />
+        <TabsContent value="identidad">
+          <BotIdentityCard tenantId={id} config={tenant.bot_configuration} />
+        </TabsContent>
+
+        {isSuperAdmin && (
+          <TabsContent value="conexion">
+            <MetaCredentialsCard tenantId={id} meta={tenant.meta_credentials} />
+          </TabsContent>
+        )}
+
+        <TabsContent value="mensajes">
+          <BotMessagesCard tenantId={id} config={tenant.bot_configuration} />
+        </TabsContent>
+
+        <TabsContent value="flujo">
+          <MoldeCard tenantId={id} giro={tenant.giro} activeFlow={tenant.active_flow} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
@@ -238,26 +305,20 @@ function MetaCredentialsCard({
   );
 }
 
-function BotMessagesCard({
+function BotIdentityCard({
   tenantId, config,
 }: { tenantId: string; config: import('@/shared/api/tenants').BotConfiguration | null }) {
   const update = useUpdateBotConfig(tenantId);
-  const { register, handleSubmit, formState } = useForm<BotConfigForm>({
-    resolver: zodResolver(botConfigSchema),
+  const { register, handleSubmit, formState } = useForm<IdentityForm>({
+    resolver: zodResolver(identitySchema),
     defaultValues: {
       numero_whatsapp_asignado: config?.numero_whatsapp_asignado ?? '',
       nombre_bot: config?.nombre_bot ?? '',
       tono_bot: config?.tono_bot ?? undefined,
-      mensaje_bienvenida: config?.mensaje_bienvenida ?? '',
-      mensaje_menu_principal: config?.mensaje_menu_principal ?? '',
-      mensaje_fuera_horario: config?.mensaje_fuera_horario ?? '',
-      mensaje_no_entendio: config?.mensaje_no_entendio ?? '',
-      mensaje_confirmacion_pedido: config?.mensaje_confirmacion_pedido ?? '',
     },
   });
 
   const onSubmit = handleSubmit((data) => {
-    // Enviar solo campos con valor (vacío → no tocar).
     const patch: BotConfigPatch = {};
     Object.entries(data).forEach(([k, v]) => {
       if (typeof v === 'string' && v.trim() !== '') {
@@ -267,19 +328,11 @@ function BotMessagesCard({
     update.mutate(patch);
   });
 
-  const fields: Array<[keyof BotConfigForm, string]> = [
-    ['mensaje_bienvenida', 'Mensaje de bienvenida'],
-    ['mensaje_menu_principal', 'Menú principal'],
-    ['mensaje_fuera_horario', 'Fuera de horario'],
-    ['mensaje_no_entendio', 'No entendió'],
-    ['mensaje_confirmacion_pedido', 'Confirmación de pedido'],
-  ];
-
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Mensajes del bot</CardTitle>
-        <CardDescription>Número asignado, tono y mensajes de plantilla.</CardDescription>
+        <CardTitle className="text-base">Identidad</CardTitle>
+        <CardDescription>Quién es el bot: número, nombre y tono.</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
@@ -308,12 +361,86 @@ function BotMessagesCard({
               </select>
             </div>
           </div>
-          {fields.map(([key, label]) => (
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" disabled={update.isPending}>
+              {update.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Guardar identidad
+            </Button>
+            {update.isSuccess && <span className="text-xs text-emerald-600">Guardado ✓</span>}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
+function BotMessagesCard({
+  tenantId, config,
+}: { tenantId: string; config: import('@/shared/api/tenants').BotConfiguration | null }) {
+  const update = useUpdateBotConfig(tenantId);
+  const [showSecondary, setShowSecondary] = useState(false);
+  const { register, handleSubmit } = useForm<MessagesForm>({
+    resolver: zodResolver(messagesSchema),
+    defaultValues: {
+      mensaje_bienvenida: config?.mensaje_bienvenida ?? '',
+      mensaje_menu_principal: config?.mensaje_menu_principal ?? '',
+      mensaje_fuera_horario: config?.mensaje_fuera_horario ?? '',
+      mensaje_no_entendio: config?.mensaje_no_entendio ?? '',
+      mensaje_confirmacion_pedido: config?.mensaje_confirmacion_pedido ?? '',
+    },
+  });
+
+  const onSubmit = handleSubmit((data) => {
+    const patch: BotConfigPatch = {};
+    Object.entries(data).forEach(([k, v]) => {
+      if (typeof v === 'string' && v.trim() !== '') {
+        (patch as Record<string, string>)[k] = v;
+      }
+    });
+    update.mutate(patch);
+  });
+
+  const primaryFields: Array<[keyof MessagesForm, string]> = [
+    ['mensaje_bienvenida', 'Mensaje de bienvenida'],
+    ['mensaje_menu_principal', 'Menú principal'],
+  ];
+  const secondaryFields: Array<[keyof MessagesForm, string]> = [
+    ['mensaje_fuera_horario', 'Fuera de horario'],
+    ['mensaje_no_entendio', 'No entendió'],
+    ['mensaje_confirmacion_pedido', 'Confirmación de pedido'],
+  ];
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Mensajes</CardTitle>
+        <CardDescription>Lo que el bot dice de entrada. El cliente final ve estos textos.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="flex flex-col gap-3">
+          {primaryFields.map(([key, label]) => (
             <div key={key} className="flex flex-col gap-1">
               <Label htmlFor={key}>{label}</Label>
               <Textarea id={key} rows={2} {...register(key)} />
             </div>
           ))}
+
+          <button
+            type="button"
+            onClick={() => setShowSecondary((v) => !v)}
+            className="flex items-center gap-1 self-start text-sm text-muted-foreground hover:text-foreground"
+          >
+            {showSecondary ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            Mensajes secundarios (fuera de horario, no entendió, confirmación)
+          </button>
+
+          {showSecondary &&
+            secondaryFields.map(([key, label]) => (
+              <div key={key} className="flex flex-col gap-1">
+                <Label htmlFor={key}>{label}</Label>
+                <Textarea id={key} rows={2} {...register(key)} />
+              </div>
+            ))}
+
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={update.isPending}>
               {update.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />} Guardar mensajes
