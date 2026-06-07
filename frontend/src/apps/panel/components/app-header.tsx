@@ -4,9 +4,11 @@ import { LogOut, Bot } from 'lucide-react';
 import { useSession } from '@/shared/auth/useSession';
 import { logout } from '@/shared/api/auth';
 import { Button } from '@/shared/ui/button';
+import { envBadge } from '@/shared/lib/env';
 
 export function AppHeader() {
   const { data: session } = useSession();
+  const env = envBadge();
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -27,17 +29,23 @@ export function AppHeader() {
             </span>
             SegurITech Bot Pro · Panel
           </h1>
+          <span
+            className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ${env.className}`}
+            title={`Entorno: ${env.label}`}
+          >
+            {env.label}
+          </span>
           <nav className="flex items-center gap-1.5">
             <Link
               to="/dashboard"
-              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
               activeProps={{ className: 'bg-accent text-foreground' }}
             >
               Clientes
             </Link>
             <Link
               to="/tenants/new"
-              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
+              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
               activeProps={{ className: 'bg-accent text-foreground' }}
             >
               + Nuevo
