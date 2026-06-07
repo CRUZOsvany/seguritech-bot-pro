@@ -1,11 +1,13 @@
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { createLazyRoute, Link } from '@tanstack/react-router';
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   BackgroundVariant,
   Controls,
   MiniMap,
+  useReactFlow,
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -27,6 +29,9 @@ import { nodeTypes } from '../designer/nodes';
 import { NODE_META } from '../designer/nodes/node-meta';
 import { EMPTY_FLOW, isBotFlowish, type FlowNode, type FlowNodeType } from '../designer/flow-types';
 import type { DesignerRFNode, DesignerNodeData } from '../designer/mapping/rf-types';
+import { NodePalette } from '../designer/NodePalette';
+import { TransitionsEditor } from '../designer/TransitionsEditor';
+import { NodeContextMenu, type ContextMenuState } from '../designer/NodeContextMenu';
 
 /**
  * Color del MiniMap por tipo de nodo. Fuente única: los tokens --color-node-*
@@ -108,7 +113,9 @@ function DesignerPage() {
       {!flow ? (
         <EmptyState id={id} />
       ) : (
-        <DesignerCanvas tenantId={id} flowId={flow.id} flowName={flow.nombre} />
+        <ReactFlowProvider>
+          <DesignerCanvas tenantId={id} flowId={flow.id} flowName={flow.nombre} />
+        </ReactFlowProvider>
       )}
     </div>
   );
@@ -149,6 +156,9 @@ function DesignerCanvas({
   const setSelected = useDesignerStore((s) => s.setSelected);
   const dirty = useDesignerStore((s) => s.dirty);
   const toBotFlow = useDesignerStore((s) => s.toBotFlow);
+  const addNode = useDesignerStore((s) => s.addNode);
+  const deleteNode = useDesignerStore((s) => s.deleteNode);
+  const selectedId = useDesignerStore((s) => s.selectedId);
 
   const save = useSaveDraft(tenantId);
   const publish = usePublish(tenantId);
@@ -159,6 +169,61 @@ function DesignerCanvas({
     publish.error instanceof ApiError
       ? ((publish.error.body as PublishErrorBody | undefined)?.issues ?? null)
       : null;
+
+  const { screenToFlowPosition } = useReactFlow();
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      const raw = e.dataTransfer.getData('application/seguritech-node');
+      if (!raw) return;
+      try {
+        const { type } = JSON.parse(raw) as { type: FlowNodeType };
+        const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        addNode(type, position);
+      } catch {
+        // payload malformado — ignorar
+      }
+    },
+    [addNode, screenToFlowPosition],
+  );
+
+  const onNodeContextMenu = useCallback(
+    (e: React.MouseEvent, node: DesignerRFNode) => {
+      e.preventDefault();
+      // Posición relativa al contenedor del canvas (el div con position relative)
+      const bounds = (e.currentTarget as HTMLElement).closest('.rf-wrapper')?.getBoundingClientRect();
+      setContextMenu({
+        x: e.clientX - (bounds?.left ?? 0),
+        y: e.clientY - (bounds?.top ?? 0),
+        nodeId: node.id,
+      });
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (
+        (e.key === 'Delete' || e.key === 'Backspace') &&
+        selectedId &&
+        // Evitar borrar si el foco está en un input/textarea
+        !['INPUT', 'TEXTAREA', 'SELECT'].includes(
+          (document.activeElement?.tagName ?? ''),
+        )
+      ) {
+        deleteNode(selectedId);
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [selectedId, deleteNode]);
 
   return (
     <Card className="shadow-card">
@@ -244,8 +309,15 @@ function DesignerCanvas({
             </p>
           </div>
         ) : (
-          <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <div className="h-[70vh] overflow-hidden rounded-lg border border-border/70 bg-muted/20 shadow-card">
+          <div className="grid gap-3 lg:grid-cols-[180px_1fr_280px]">
+            {/* Paleta izquierda */}
+            <NodePalette />
+
+            {/* Canvas */}
+            <div
+              className="rf-wrapper relative h-[70vh] overflow-hidden rounded-lg border border-border/70 bg-muted/20 shadow-card"
+              onClick={() => setContextMenu(null)}
+            >
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -253,7 +325,10 @@ function DesignerCanvas({
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 onNodeClick={onNodeClick}
-                onPaneClick={() => setSelected(null)}
+                onPaneClick={() => { setSelected(null); setContextMenu(null); }}
+                onDrop={onDrop}
+                onDragOver={onDragOver}
+                onNodeContextMenu={onNodeContextMenu}
                 fitView
                 proOptions={{ hideAttribution: true }}
               >
@@ -272,7 +347,12 @@ function DesignerCanvas({
                   nodeStrokeWidth={2}
                 />
               </ReactFlow>
+              {contextMenu && (
+                <NodeContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
+              )}
             </div>
+
+            {/* Inspector */}
             <Inspector />
           </div>
         )}
@@ -308,7 +388,7 @@ function Inspector() {
   const Icon = meta.icon;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-card">
+    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-card overflow-y-auto max-h-[70vh]">
       <div className="flex items-center justify-between gap-2">
         <span
           className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-white ${meta.header}`}
@@ -319,6 +399,9 @@ function Inspector() {
         <code className="truncate text-[10px] text-muted-foreground">{node.id}</code>
       </div>
       <NodeInspectorForm node={node} onUpdate={(patch) => updateNodeContent(node.id, patch)} />
+      <div className="mt-1 border-t pt-2">
+        <TransitionsEditor node={node} />
+      </div>
     </div>
   );
 }
