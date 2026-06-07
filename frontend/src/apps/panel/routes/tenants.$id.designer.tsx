@@ -38,6 +38,7 @@ import { TransitionsEditor } from '../designer/TransitionsEditor';
 import { NodeContextMenu, type ContextMenuState } from '../designer/NodeContextMenu';
 import { validateGraph } from '../designer/validation/graphValidator';
 import { ValidationPanel } from '../designer/validation/ValidationPanel';
+import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
 
 /**
  * Color del MiniMap por tipo de nodo. Fuente única: los tokens --color-node-*
@@ -365,6 +366,7 @@ function DesignerCanvas({
             </p>
           </div>
         ) : (
+          <>
           <div className="grid gap-3 lg:grid-cols-[180px_1fr_280px]">
             {/* Paleta izquierda */}
             <NodePalette />
@@ -424,6 +426,18 @@ function DesignerCanvas({
               <Inspector />
             )}
           </div>
+
+          {/* Simulador split-screen — siempre visible bajo el canvas */}
+          <div className="mt-3 border-t pt-3">
+            <div className="mb-2 flex items-center gap-2">
+              <Send className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+              <p className="text-xs font-medium text-muted-foreground">
+                Simulador — prueba el flujo PUBLICADO (no el draft actual)
+              </p>
+            </div>
+            <WhatsAppSimulator tenantId={tenantId} compact />
+          </div>
+          </>
         )}
       </CardContent>
     </Card>
