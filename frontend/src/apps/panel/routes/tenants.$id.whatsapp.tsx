@@ -28,6 +28,7 @@ import { useSession } from '@/shared/auth/useSession';
 import { type BotConfigPatch } from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
 import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
+import { formatRelativeTime, formatAbsoluteTime } from '@/shared/lib/format-date';
 
 const botConfigSchema = z.object({
   numero_whatsapp_asignado: z.string().min(8).max(20),
@@ -187,7 +188,11 @@ function MetaCredentialsCard({
             <p className="text-muted-foreground">WABA: <code className="text-xs">{meta.waba_id}</code></p>
             <p className="text-muted-foreground">
               {meta.is_active ? 'activas' : 'inactivas'}
-              {meta.rotated_at ? ` · rotadas ${new Date(meta.rotated_at).toLocaleString()}` : ''}
+              {meta.rotated_at && (
+                <span title={formatAbsoluteTime(meta.rotated_at)}>
+                  {' · rotadas '}{formatRelativeTime(meta.rotated_at)}
+                </span>
+              )}
             </p>
           </div>
         ) : (
