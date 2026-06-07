@@ -27,7 +27,7 @@ export function ValidationPanel({
   const clean = issues.length === 0;
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-card">
+    <div className="flex flex-col gap-2 rounded-lg border border-border/70 bg-card p-3 shadow-card animate-in fade-in slide-in-from-right-2 duration-200">
       <div className="flex items-center justify-between">
         <p className="flex items-center gap-1.5 text-xs font-semibold">
           {clean ? (
