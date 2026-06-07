@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { createLazyRoute, Link } from '@tanstack/react-router';
+import { createLazyRoute, Link, useNavigate } from '@tanstack/react-router';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -11,12 +11,11 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
-import { Badge } from '@/shared/ui/badge';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Textarea } from '@/shared/ui/textarea';
 import { Input } from '@/shared/ui/input';
@@ -87,6 +86,19 @@ function DesignerPage() {
 
   const loadFromBotFlow = useDesignerStore((s) => s.loadFromBotFlow);
   const reset = useDesignerStore((s) => s.reset);
+  const dirty = useDesignerStore((s) => s.dirty);
+  const navigate = useNavigate();
+
+  // Aviso del navegador al cerrar/recargar con cambios sin guardar.
+  useEffect(() => {
+    if (!dirty) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = ''; // requerido por Chrome/Firefox para mostrar el diálogo
+    }
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
 
   // Cargar el draft al canvas cuando llega (o flow vacío si no hay draft).
   useEffect(() => {
@@ -111,10 +123,21 @@ function DesignerPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Button asChild variant="ghost" size="sm" className="self-start">
-        <Link to="/tenants/$id/whatsapp" params={{ id }}>
-          <ArrowLeft className="mr-1 h-3 w-3" /> Volver a WhatsApp
-        </Link>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="self-start"
+        onClick={() => {
+          if (dirty) {
+            const ok = window.confirm(
+              'Tienes cambios sin guardar en el flujo. ¿Salir de todas formas? Los cambios se perderán.',
+            );
+            if (!ok) return;
+          }
+          navigate({ to: '/tenants/$id/whatsapp', params: { id } });
+        }}
+      >
+        <ArrowLeft className="mr-1 h-3 w-3" /> Volver a WhatsApp
       </Button>
 
       {!flow ? (
@@ -293,7 +316,12 @@ function DesignerCanvas({
               Válido
             </span>
           )}
-          {dirty && <Badge variant="outline">cambios sin guardar</Badge>}
+          {dirty && (
+            <span className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+              <AlertTriangle className="h-3 w-3" />
+              Cambios sin guardar
+            </span>
+          )}
           {save.isSuccess && !dirty && (
             <span className="text-xs text-emerald-600">Guardado ✓</span>
           )}
