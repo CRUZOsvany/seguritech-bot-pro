@@ -27,7 +27,6 @@ import {
 import { useSession } from '@/shared/auth/useSession';
 import { type BotConfigPatch } from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
-import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
 import { formatRelativeTime, formatAbsoluteTime } from '@/shared/lib/format-date';
 
 const botConfigSchema = z.object({
@@ -137,17 +136,6 @@ function WhatsAppPanelPage() {
         giro={tenant.giro}
         activeFlow={tenant.active_flow}
       />
-
-      {/* 5. Simulador */}
-      <Card className="shadow-card">
-        <CardHeader>
-          <CardTitle className="text-base">Simulador</CardTitle>
-          <CardDescription>Prueba el flujo publicado sin tocar WhatsApp real.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <WhatsAppSimulator tenantId={id} hasFlow={tenant.has_active_flow} />
-        </CardContent>
-      </Card>
     </div>
   );
 }
