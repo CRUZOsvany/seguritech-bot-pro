@@ -308,6 +308,8 @@ export async function revokeMetaCredentials(tenantId: string): Promise<void> {
 }
 
 // --- Simulador ---
+// Espejo EXACTO de InterpreterOutput del backend
+// (backend/src/domain/services/FlowInterpreter.ts) — 13 kinds.
 export type InterpreterOutput =
   | { kind: 'text'; text: string }
   | { kind: 'buttons'; text: string; buttons: { id: string; title: string }[] }
@@ -323,7 +325,41 @@ export type InterpreterOutput =
   | { kind: 'image'; url: string; caption?: string }
   | { kind: 'location'; latitude: number; longitude: number; name?: string; address?: string }
   | { kind: 'document'; url: string; filename: string; caption?: string }
-  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string };
+  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string }
+  // ── v23.0 ──
+  | {
+      kind: 'cta_url';
+      body: string;
+      button: { display_text: string; url: string };
+      header?: { type: 'text'; text: string } | { type: 'image' | 'video' | 'document'; link: string };
+      footer?: string;
+    }
+  | { kind: 'location_request'; body: string }
+  | {
+      kind: 'media_carousel';
+      body: string;
+      cards: Array<{
+        header: { type: 'image' | 'video'; link: string };
+        body: string;
+        buttons: Array<
+          | { type: 'quick_reply'; id: string; title: string }
+          | { type: 'cta_url'; display_text: string; url: string }
+        >;
+      }>;
+    }
+  | { kind: 'reaction'; emoji: string; target: 'last_user_message' }
+  | { kind: 'call_permission_request'; body: string; footer?: string }
+  | {
+      kind: 'whatsapp_flow';
+      body: string;
+      flow_id_meta: string;
+      flow_cta: string;
+      header?: string;
+      footer?: string;
+      mode: 'draft' | 'published';
+      flow_action?: 'navigate' | 'data_exchange';
+      flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
+    };
 
 export interface SimulateResult {
   outputs: InterpreterOutput[];
