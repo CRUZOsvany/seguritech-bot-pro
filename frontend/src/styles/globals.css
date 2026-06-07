@@ -123,10 +123,10 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   /* Tokens legacy del panel HTML (alineados con _shared.css) */
-  --color-bg: #f5f6f8;
-  --color-surface: #ffffff;
-  --color-text: #1f2328;
-  --color-text-muted: #6b7280;
+  --color-bg: #F8F6F1;       /* canvas marfil — body */
+  --color-surface: #FCFAF6;  /* surface marfil — cards (bg-surface) */
+  --color-text: #1F1D1A;     /* negro cálido */
+  --color-text-muted: #6B6760;
   --color-primary-hover: #1857c2;
   --color-danger: #d1242f;
   --color-danger-hover: #a31621;
@@ -147,6 +147,93 @@
   --primary: oklch(0.59 0.22 256);
   --primary-foreground: oklch(0.985 0 0);
   --ring: oklch(0.59 0.22 256);
+
+  /* Paleta papel marfil (light-only). Valores hex EXACTOS acordados con el
+     equipo. Válidos en Tailwind v4: @theme inline mapea --color-* a var()
+     directo, así que bg-background/bg-card/bg-popover heredan estos hex.
+     Jerarquía: canvas (body) < surface (cards) < elevated (popovers, blanco). */
+  --background: #F8F6F1;            /* canvas — body / app-shell */
+  --foreground: #1F1D1A;            /* negro cálido (no #000) */
+  --card: #FCFAF6;                  /* surface — cards, paneles */
+  --card-foreground: #1F1D1A;
+  --popover: #FFFFFF;               /* elevated — dropdowns/popovers, máx contraste */
+  --popover-foreground: #1F1D1A;
+  --secondary: #F1EEE7;             /* muted cálido — headers tabla, footers */
+  --secondary-foreground: #1F1D1A;
+  --muted: #F1EEE7;
+  --muted-foreground: #6B6760;
+  --accent: #F1EEE7;                /* hover neutro cálido (nav, select focus) */
+  --accent-foreground: #1F1D1A;
+  --border: #E5E1D8;
+  --input: #E5E1D8;
+}
+
+/* ============================================================
+   Tokens de marca del Bot Designer + elevación.
+   Tailwind 4 genera utilidades bg-node-*, shadow-node, shadow-card
+   a partir de estos --color-* / --shadow-*. UNA sola fuente,
+   consumida por node-meta, NodeShell, el Inspector y el MiniMap.
+   Headers de nodo: texto blanco → todas las L ≤ 0.62.
+   ============================================================ */
+@theme {
+  /* Colores de nodo (familia cohesiva, header texto blanco) */
+  --color-node-text:    oklch(0.55 0.16 285); /* violeta */
+  --color-node-buttons: oklch(0.55 0.17 250); /* azul marca */
+  --color-node-list:    oklch(0.58 0.12 165); /* verde-teal */
+  --color-node-media:   oklch(0.52 0.03 255); /* slate */
+  --color-node-wait:    oklch(0.60 0.13 70);  /* ámbar */
+  --color-node-escape:  oklch(0.57 0.20 25);  /* rojo */
+  --color-node-end:     oklch(0.55 0.02 255); /* neutro */
+
+  /* Nodos WhatsApp v23.0 (misma familia, header texto blanco, L ≤ 0.62) */
+  --color-node-cta:      oklch(0.52 0.16 275); /* índigo */
+  --color-node-location: oklch(0.58 0.10 220); /* cian */
+  --color-node-carousel: oklch(0.53 0.18 305); /* violeta */
+  --color-node-reaction: oklch(0.60 0.13 90);  /* ámbar-amarillo */
+  --color-node-call:     oklch(0.58 0.18 350); /* rosa */
+  --color-node-flow:     oklch(0.56 0.13 162); /* esmeralda */
+
+  /* Elevación (sombras suaves en capas) → utilidades shadow-* */
+  --shadow-node: 0 1px 2px oklch(0 0 0 / 0.06), 0 2px 6px oklch(0 0 0 / 0.06);
+  --shadow-card: 0 1px 2px oklch(0 0 0 / 0.04), 0 4px 12px oklch(0 0 0 / 0.05);
+}
+
+/* ============================================================
+   Aliases semánticos de la paleta marfil → utilidades Tailwind 4.
+   Genera bg-canvas, bg-elevated, bg-bg-muted/hover/active,
+   border-border-{subtle,default,strong}, text-text-{primary,secondary,
+   muted-fg,disabled,inverse}, accent-subtle/fg y familias *-subtle/*-fg.
+   (bg-surface ya existe vía --color-surface arriba.)
+   NOTA: el azul de marca sigue siendo --primary (bg-primary); NO se
+   redefine --color-accent (shadcn lo usa como hover neutro). Los defaults
+   de estado (--color-success/warning/danger) conservan los legacy (Regla 8).
+   ============================================================ */
+@theme {
+  --color-canvas:   #F8F6F1;
+  --color-elevated: #FFFFFF;
+  --color-bg-muted:  #F1EEE7;
+  --color-bg-hover:  #EFEBE2;
+  --color-bg-active: #E9E5DC;
+
+  --color-border-subtle:  #EEEAE1;
+  --color-border-default: #E5E1D8;
+  --color-border-strong:  #CFCAC0;
+
+  --color-text-primary:   #1F1D1A;
+  --color-text-secondary: #4A4641;
+  --color-text-muted-fg:  #6B6760;
+  --color-text-disabled:  #9C9890;
+  --color-text-inverse:   #FCFAF6;
+
+  --color-accent-subtle: #DBEAFE;
+  --color-accent-fg:     #1E40AF;
+
+  --color-success-subtle: #DCFCE7;
+  --color-success-fg:     #14532D;
+  --color-warning-subtle: #FEF3C7;
+  --color-warning-fg:     #78350F;
+  --color-danger-subtle:  #FEE2E2;
+  --color-danger-fg:      #7F1D1D;
 }
 
 /* Base globals */

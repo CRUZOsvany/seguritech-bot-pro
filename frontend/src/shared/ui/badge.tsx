@@ -21,20 +21,21 @@ const badgeVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         // Estados FSM del tenant (alineados con migration 006) y de los
         // servicios modulares (tenant_services, migration 012).
+        // Familia coherente: bg -50 · borde -200 · texto -700 (mismos pasos).
         "fsm-draft":
-          "border-transparent bg-gray-100 text-gray-700",
+          "border-gray-200 bg-gray-50 text-gray-700",
         "fsm-sandbox":
-          "border-transparent bg-amber-100 text-amber-800",
+          "border-amber-200 bg-amber-50 text-amber-700",
         "fsm-configuring":
-          "border-transparent bg-sky-100 text-sky-800",
+          "border-sky-200 bg-sky-50 text-sky-700",
         "fsm-active":
-          "border-transparent bg-emerald-100 text-emerald-800",
+          "border-emerald-200 bg-emerald-50 text-emerald-700",
         "fsm-live":
-          "border-transparent bg-emerald-100 text-emerald-800",
+          "border-emerald-200 bg-emerald-50 text-emerald-700",
         "fsm-paused":
-          "border-transparent bg-orange-100 text-orange-800",
+          "border-orange-200 bg-orange-50 text-orange-700",
         "fsm-archived":
-          "border-transparent bg-red-100 text-red-800",
+          "border-red-200 bg-red-50 text-red-700",
       },
     },
     defaultVariants: {

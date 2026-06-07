@@ -3,12 +3,13 @@ import { createLazyRoute, Link } from '@tanstack/react-router';
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   MiniMap,
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Loader2, Save, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/shared/ui/card';
@@ -24,8 +25,39 @@ import { useFlows, useDraft, useSaveDraft, usePublish } from '../hooks/use-flows
 import { useDesignerStore } from '../designer/store/designer-store';
 import { nodeTypes } from '../designer/nodes';
 import { NODE_META } from '../designer/nodes/node-meta';
-import { EMPTY_FLOW, isBotFlowish, type FlowNode } from '../designer/flow-types';
-import type { DesignerRFNode } from '../designer/mapping/rf-types';
+import { EMPTY_FLOW, isBotFlowish, type FlowNode, type FlowNodeType } from '../designer/flow-types';
+import type { DesignerRFNode, DesignerNodeData } from '../designer/mapping/rf-types';
+
+/**
+ * Color del MiniMap por tipo de nodo. Fuente única: los tokens --color-node-*
+ * de globals.css (DEC-P4) — se leen con getComputedStyle y se cachean, en vez
+ * de duplicar los oklch aquí.
+ */
+const NODE_TOKEN_VAR: Record<FlowNodeType, string> = {
+  send_text: '--color-node-text',
+  send_buttons: '--color-node-buttons',
+  send_list: '--color-node-list',
+  send_media: '--color-node-media',
+  wait_input: '--color-node-wait',
+  escape_to_human: '--color-node-escape',
+  end: '--color-node-end',
+  send_cta_url: '--color-node-cta',
+  send_location_request: '--color-node-location',
+  send_media_carousel: '--color-node-carousel',
+  send_reaction: '--color-node-reaction',
+  request_call_permission: '--color-node-call',
+  send_whatsapp_flow: '--color-node-flow',
+};
+const tokenCache: Record<string, string> = {};
+function nodeTokenColor(type: FlowNodeType): string {
+  const varName = NODE_TOKEN_VAR[type];
+  if (!tokenCache[varName]) {
+    tokenCache[varName] =
+      getComputedStyle(document.documentElement).getPropertyValue(varName).trim() ||
+      '#94a3b8';
+  }
+  return tokenCache[varName];
+}
 
 function DesignerPage() {
   const { id } = Route.useParams();
@@ -84,9 +116,12 @@ function DesignerPage() {
 
 function EmptyState({ id }: { id: string }) {
   return (
-    <Card>
+    <Card className="shadow-card">
       <CardHeader>
-        <CardTitle className="text-base">Bot Designer</CardTitle>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <FileQuestion className="h-4 w-4 text-muted-foreground" aria-hidden />
+          Bot Designer
+        </CardTitle>
         <CardDescription>Este cliente todavía no tiene un flujo.</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col items-start gap-3">
@@ -126,7 +161,7 @@ function DesignerCanvas({
       : null;
 
   return (
-    <Card>
+    <Card className="shadow-card">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
         <div>
           <CardTitle className="text-base">Bot Designer · {flowName}</CardTitle>
@@ -200,15 +235,17 @@ function DesignerCanvas({
         )}
 
         {nodes.length === 0 ? (
-          <Alert>
-            <AlertDescription>
-              El flujo no tiene nodos en el draft. Publica desde un molde asignado
-              o edita el draft en una versión futura del designer.
-            </AlertDescription>
-          </Alert>
+          <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-muted/20 px-6 py-12 text-center">
+            <Workflow className="h-7 w-7 text-muted-foreground/60" aria-hidden />
+            <p className="text-sm font-medium text-foreground">El flujo no tiene nodos en el draft</p>
+            <p className="max-w-sm text-xs text-muted-foreground">
+              Publica desde un molde asignado o edita el draft en una versión
+              futura del designer.
+            </p>
+          </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <div className="h-[70vh] overflow-hidden rounded-md border">
+            <div className="h-[70vh] overflow-hidden rounded-lg border border-border/70 bg-muted/20 shadow-card">
               <ReactFlow
                 nodes={nodes}
                 edges={edges}
@@ -220,9 +257,20 @@ function DesignerCanvas({
                 fitView
                 proOptions={{ hideAttribution: true }}
               >
-                <Background />
-                <Controls />
-                <MiniMap pannable zoomable />
+                <Background
+                  variant={BackgroundVariant.Dots}
+                  gap={20}
+                  size={1.5}
+                  color="oklch(0.86 0.02 255)"
+                />
+                <Controls className="!rounded-md !border !border-border/70 !bg-card !shadow-card [&_button]:!border-border/60" />
+                <MiniMap
+                  pannable
+                  zoomable
+                  className="!rounded-md !border !border-border/70 !bg-card !shadow-card"
+                  nodeColor={(n) => nodeTokenColor((n.data as DesignerNodeData).node.type)}
+                  nodeStrokeWidth={2}
+                />
               </ReactFlow>
             </div>
             <Inspector />
@@ -246,21 +294,29 @@ function Inspector() {
 
   if (!selected) {
     return (
-      <div className="rounded-md border p-3 text-xs text-muted-foreground">
-        Selecciona un nodo para editar su contenido.
+      <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border/70 bg-muted/20 p-6 text-center">
+        <Workflow className="h-6 w-6 text-muted-foreground/60" aria-hidden />
+        <p className="text-xs text-muted-foreground">
+          Selecciona un nodo del lienzo para editar su contenido.
+        </p>
       </div>
     );
   }
 
   const node = selected.data.node;
+  const meta = NODE_META[node.type];
+  const Icon = meta.icon;
 
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-3">
-      <div className="flex items-center justify-between">
-        <Badge className={`${NODE_META[node.type].header} text-white`}>
-          {NODE_META[node.type].label}
-        </Badge>
-        <code className="text-[10px] text-muted-foreground">{node.id}</code>
+    <div className="flex flex-col gap-3 rounded-lg border border-border/70 bg-card p-3 shadow-card">
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-white ${meta.header}`}
+        >
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {meta.label}
+        </span>
+        <code className="truncate text-[10px] text-muted-foreground">{node.id}</code>
       </div>
       <NodeInspectorForm node={node} onUpdate={(patch) => updateNodeContent(node.id, patch)} />
     </div>
