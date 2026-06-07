@@ -4,7 +4,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
-  ArrowLeft, Play, Pause, Loader2, Send, RotateCcw, KeyRound, Trash2, Workflow,
+  ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -25,13 +25,9 @@ import {
   useUpsertMetaCredentials, useRevokeMetaCredentials,
 } from '../hooks/use-meta-credentials';
 import { useSession } from '@/shared/auth/useSession';
-import {
-  simulate, simulateReset,
-  type InterpreterOutput, type BotConfigPatch,
-} from '@/shared/api/tenants';
+import { type BotConfigPatch } from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
-
-const SIM_PHONE = '5210000000000';
+import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
 
 const botConfigSchema = z.object({
   numero_whatsapp_asignado: z.string().min(8).max(20),
@@ -52,8 +48,6 @@ const metaSchema = z.object({
   accessToken: z.string().min(20).max(500),
 });
 type MetaForm = z.infer<typeof metaSchema>;
-
-type Turn = { from: 'user' | 'bot'; output?: InterpreterOutput; text?: string };
 
 function WhatsAppPanelPage() {
   const { id } = Route.useParams();
@@ -144,7 +138,15 @@ function WhatsAppPanelPage() {
       />
 
       {/* 5. Simulador */}
-      <SimulatorCard tenantId={id} hasFlow={tenant.has_active_flow} />
+      <Card className="shadow-card">
+        <CardHeader>
+          <CardTitle className="text-base">Simulador</CardTitle>
+          <CardDescription>Prueba el flujo publicado sin tocar WhatsApp real.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <WhatsAppSimulator tenantId={id} hasFlow={tenant.has_active_flow} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -392,121 +394,6 @@ function MoldeCard({
       </CardContent>
     </Card>
   );
-}
-
-function SimulatorCard({ tenantId, hasFlow }: { tenantId: string; hasFlow: boolean }) {
-  const [turns, setTurns] = useState<Turn[]>([]);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const send = async (content: string) => {
-    if (!content.trim()) return;
-    setBusy(true);
-    setErr(null);
-    setTurns((t) => [...t, { from: 'user', text: content }]);
-    setText('');
-    try {
-      const res = await simulate(tenantId, SIM_PHONE, content);
-      setTurns((t) => [...t, ...res.outputs.map((o) => ({ from: 'bot' as const, output: o }))]);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : 'Error al simular');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const reset = async () => {
-    await simulateReset(tenantId, SIM_PHONE).catch(() => {});
-    setTurns([]);
-    setErr(null);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Simulador</CardTitle>
-        <CardDescription>Prueba el flujo sin tocar WhatsApp real.</CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        {!hasFlow && (
-          <Alert><AlertDescription>Asigna un molde antes de simular.</AlertDescription></Alert>
-        )}
-        <div className="flex max-h-80 flex-col gap-2 overflow-y-auto rounded-md border p-3">
-          {turns.length === 0 && <p className="text-xs text-muted-foreground">Escribe un mensaje para empezar…</p>}
-          {turns.map((turn, i) => (
-            <Bubble key={i} turn={turn} onChip={(label) => send(label)} />
-          ))}
-        </div>
-        {err && <Alert variant="destructive"><AlertDescription>{err}</AlertDescription></Alert>}
-        <div className="flex gap-2">
-          <Input
-            value={text} onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(text); } }}
-            placeholder="hola" disabled={busy}
-          />
-          <Button size="sm" disabled={busy || !text.trim()} onClick={() => send(text)}>
-            {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={reset}>
-            <RotateCcw className="mr-1 h-3 w-3" /> Reiniciar
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function Bubble({ turn, onChip }: { turn: Turn; onChip: (label: string) => void }) {
-  if (turn.from === 'user') {
-    return (
-      <div className="self-end rounded-lg bg-primary px-3 py-1.5 text-sm text-primary-foreground">
-        {turn.text}
-      </div>
-    );
-  }
-  const o = turn.output!;
-  const base = 'self-start max-w-[80%] rounded-lg bg-muted px-3 py-1.5 text-sm';
-  switch (o.kind) {
-    case 'text':
-      return <div className={base}>{o.text}</div>;
-    case 'buttons':
-      return (
-        <div className={base}>
-          <p>{o.text}</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {o.buttons.map((b) => (
-              <button key={b.id} className="rounded border px-2 py-0.5 text-xs hover:bg-background" onClick={() => onChip(b.title)}>
-                {b.title}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    case 'list':
-      return (
-        <div className={base}>
-          <p>{o.text}</p>
-          <div className="mt-1 flex flex-col gap-1">
-            {o.sections.flatMap((s) => s.items).map((it) => (
-              <button key={it.id} className="rounded border px-2 py-0.5 text-left text-xs hover:bg-background" onClick={() => onChip(it.title)}>
-                {it.title}{it.description ? ` — ${it.description}` : ''}
-              </button>
-            ))}
-          </div>
-        </div>
-      );
-    case 'image':
-      return <div className={base}>🖼️ {o.caption ?? o.url}</div>;
-    case 'document':
-      return <div className={base}>📄 {o.filename}</div>;
-    case 'location':
-      return <div className={base}>📍 {o.name ?? `${o.latitude}, ${o.longitude}`}</div>;
-    case 'escape_to_human':
-      return <div className={base}>{o.userResponse} <span className="text-xs text-muted-foreground">🔔 alerta al dueño</span></div>;
-    default:
-      return null;
-  }
 }
 
 export const Route = createLazyRoute('/_authed/tenants/$id/whatsapp')({
