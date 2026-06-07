@@ -11,7 +11,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/shared/ui/card';
@@ -36,6 +36,8 @@ import type { DesignerRFNode, DesignerNodeData } from '../designer/mapping/rf-ty
 import { NodePalette } from '../designer/NodePalette';
 import { TransitionsEditor } from '../designer/TransitionsEditor';
 import { NodeContextMenu, type ContextMenuState } from '../designer/NodeContextMenu';
+import { validateGraph } from '../designer/validation/graphValidator';
+import { ValidationPanel } from '../designer/validation/ValidationPanel';
 
 /**
  * Color del MiniMap por tipo de nodo. Fuente única: los tokens --color-node-*
@@ -229,6 +231,32 @@ function DesignerCanvas({
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [selectedId, deleteNode]);
 
+  const [showValidation, setShowValidation] = useState(false);
+
+  // Validación de grafo en vivo. Se recalcula cuando cambian los nodos/edges
+  // del store; `toBotFlow` es referencia estable del store.
+  const validation = useMemo(() => validateGraph(toBotFlow()), [nodes, edges, toBotFlow]);
+
+  const handlePublishClick = useCallback(() => {
+    if (!validation.canPublish) {
+      // Hay errores → mostrar panel, NO publicar.
+      setShowValidation(true);
+      return;
+    }
+    if (validation.warningCount > 0) {
+      // Solo warnings → mostrar panel para confirmar.
+      setShowValidation(true);
+      return;
+    }
+    // Limpio → publicar directo.
+    publish.mutate({ flowId });
+  }, [validation, publish, flowId]);
+
+  const handlePublishAnyway = useCallback(() => {
+    setShowValidation(false);
+    publish.mutate({ flowId });
+  }, [publish, flowId]);
+
   return (
     <Card className="shadow-card">
       <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
@@ -240,6 +268,30 @@ function DesignerCanvas({
           </CardDescription>
         </div>
         <div className="flex items-center gap-2">
+          {validation.errorCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowValidation((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100"
+            >
+              <ShieldAlert className="h-3 w-3" />
+              {validation.errorCount} error{validation.errorCount === 1 ? '' : 'es'}
+            </button>
+          ) : validation.warningCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowValidation((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
+            >
+              <ShieldAlert className="h-3 w-3" />
+              {validation.warningCount} aviso{validation.warningCount === 1 ? '' : 's'}
+            </button>
+          ) : (
+            <span className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+              <ShieldCheck className="h-3 w-3" />
+              Válido
+            </span>
+          )}
           {dirty && <Badge variant="outline">cambios sin guardar</Badge>}
           {save.isSuccess && !dirty && (
             <span className="text-xs text-emerald-600">Guardado ✓</span>
@@ -260,7 +312,7 @@ function DesignerCanvas({
           <Button
             size="sm"
             disabled={publish.isPending}
-            onClick={() => publish.mutate({ flowId })}
+            onClick={handlePublishClick}
           >
             {publish.isPending ? (
               <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -356,8 +408,21 @@ function DesignerCanvas({
               )}
             </div>
 
-            {/* Inspector */}
-            <Inspector />
+            {/* Inspector o panel de validación */}
+            {showValidation ? (
+              <ValidationPanel
+                result={validation}
+                onClose={() => setShowValidation(false)}
+                onPublishAnyway={
+                  validation.canPublish && validation.warningCount > 0
+                    ? handlePublishAnyway
+                    : undefined
+                }
+                publishing={publish.isPending}
+              />
+            ) : (
+              <Inspector />
+            )}
           </div>
         )}
       </CardContent>
