@@ -1,0 +1,169 @@
+{
+  "version": "1.0",
+  "start_node_id": "bienvenida",
+  "nodes": [
+    {
+      "id": "bienvenida",
+      "type": "send_buttons",
+      "content": {
+        "text": "Hola 👋 Bienvenido a {{nombre_negocio}}.\n¿En qué te podemos ayudar?",
+        "buttons": [
+          { "id": "emergencia", "title": "🚨 Emergencia" },
+          { "id": "agendar", "title": "📅 Agendar servicio" },
+          { "id": "info", "title": "ℹ️ Información" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "menu_emergencia",
+      "type": "send_list",
+      "content": {
+        "text": "🚨 Atendemos emergencias 24/7. ¿Qué necesitas resolver ahora?",
+        "button_label": "Ver emergencias",
+        "sections": [
+          {
+            "type": "static",
+            "title": "Emergencias",
+            "items": [
+              { "id": "Apertura de puerta", "title": "Apertura de puerta", "description": "Casa, negocio o habitación" },
+              { "id": "Apertura de carro", "title": "Apertura de carro", "description": "Auto cerrado con llaves dentro" },
+              { "id": "Otra emergencia", "title": "Otra emergencia", "description": "Cuéntanos tu caso" }
+            ]
+          }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "list_item_any", "save_to_context": "tipo_emergencia" }, "next_node_id": "emerg_captura" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "emerg_captura",
+      "type": "wait_input",
+      "content": {
+        "prompt": "Entendido. Compártenos tu *dirección* (calle, número, colonia y una referencia visible) y un *teléfono* de contacto para llamarte de inmediato.",
+        "save_to_context": "datos_emergencia"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "emerg_escala" }
+      ]
+    },
+    {
+      "id": "emerg_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "🛠️ Listo. Un cerrajero de {{nombre_negocio}} te marca en unos minutos. Ten tu teléfono a la mano.",
+        "owner_alert_template": "🚨 EMERGENCIA: {{tipo_emergencia}}\n📍 {{datos_emergencia}}\n📱 WhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+    {
+      "id": "menu_servicios",
+      "type": "send_list",
+      "content": {
+        "text": "📅 ¿Qué servicio quieres agendar?",
+        "button_label": "Ver servicios",
+        "sections": [
+          {
+            "type": "static",
+            "title": "Servicios",
+            "items": [
+              { "id": "Chapas hogar/negocio", "title": "Chapas hogar/negocio", "description": "Instalación y cambio de chapas" },
+              { "id": "Chapas de carro", "title": "Chapas de carro", "description": "Cerraduras automotrices" },
+              { "id": "Reparación controles", "title": "Reparación controles", "description": "Controles que no responden" },
+              { "id": "Programación de llaves", "title": "Programación de llaves", "description": "Llaves y controles automotrices" },
+              { "id": "Módulos y computadoras", "title": "Módulos y computadoras", "description": "Venta y reparación automotriz" },
+              { "id": "Cajas fuertes", "title": "Cajas fuertes", "description": "Apertura, venta y mantenimiento" }
+            ]
+          }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "list_item_any", "save_to_context": "servicio" }, "next_node_id": "serv_captura" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "serv_captura",
+      "type": "wait_input",
+      "content": {
+        "prompt": "Perfecto. Cuéntanos brevemente qué necesitas, tu *zona o dirección*, un *teléfono* de contacto y si prefieres algún día u horario. Con eso te damos cotización.",
+        "save_to_context": "detalle_servicio"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "serv_escala" }
+      ]
+    },
+    {
+      "id": "serv_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "✅ Gracias. Un cerrajero de {{nombre_negocio}} te contactará para agendar y darte tu cotización.",
+        "owner_alert_template": "📅 AGENDAR: {{servicio}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+    {
+      "id": "info_servicios",
+      "type": "send_buttons",
+      "content": {
+        "text": "En {{nombre_negocio}} hacemos:\n• Apertura de puertas y autos (24/7)\n• Chapas de casa, negocio y auto\n• Programación de llaves y controles automotrices\n• Reparación de controles\n• Venta y reparación de módulos y computadoras\n• Apertura, venta y mantenimiento de cajas fuertes\n\n¿Qué deseas hacer?",
+        "buttons": [
+          { "id": "agendar", "title": "📅 Agendar" },
+          { "id": "emergencia", "title": "🚨 Emergencia" },
+          { "id": "salir", "title": "Salir" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "button", "value": "salir" }, "next_node_id": "despedida" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "no_entendi",
+      "type": "send_buttons",
+      "content": {
+        "text": "No te entendí 🤔. Dime qué necesitas:",
+        "buttons": [
+          { "id": "emergencia", "title": "🚨 Emergencia" },
+          { "id": "agendar", "title": "📅 Agendar servicio" },
+          { "id": "info", "title": "ℹ️ Información" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "default" }, "next_node_id": "despedida" }
+      ]
+    },
+    {
+      "id": "despedida",
+      "type": "send_text",
+      "content": {
+        "text": "Gracias por contactar a {{nombre_negocio}}. Estamos 24/7. 🔐"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+    {
+      "id": "fin",
+      "type": "end",
+      "content": {},
+      "transitions": []
+    }
+  ]
+}
