@@ -169,6 +169,30 @@
 }
 
 /* ============================================================
+   SegurITech — paleta oscura de marca (cálida, no negro puro).
+   Sobrescribe los tokens base cuando html tiene class="dark".
+   ============================================================ */
+.dark {
+  --background: #1A1714;
+  --foreground: #EDEAE3;
+  --card: #211E1A;
+  --card-foreground: #EDEAE3;
+  --popover: #2A2620;
+  --popover-foreground: #EDEAE3;
+  --secondary: #2A2620;
+  --secondary-foreground: #EDEAE3;
+  --muted: #2A2620;
+  --muted-foreground: #A8A29A;
+  --accent: #2F2B25;
+  --accent-foreground: #EDEAE3;
+  --border: #34302A;
+  --input: #34302A;
+  --primary: oklch(0.62 0.20 256);
+  --primary-foreground: #0F0E0C;
+  --ring: oklch(0.62 0.20 256);
+}
+
+/* ============================================================
    Tokens de marca del Bot Designer + elevación.
    Tailwind 4 genera utilidades bg-node-*, shadow-node, shadow-card
    a partir de estos --color-* / --shadow-*. UNA sola fuente,
@@ -244,8 +268,8 @@ html, body, #root {
   font-family: var(--font-sans);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--color-text);
-  background: var(--color-bg);
+  color: var(--foreground);
+  background: var(--background);
 }
 
 #root {
