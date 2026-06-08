@@ -1,8 +1,16 @@
 import { createLazyRoute } from '@tanstack/react-router';
 import { AlertCircle, Loader2 } from 'lucide-react';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useTenant } from '../hooks/use-tenant';
 import { useTenantServices } from '../hooks/use-tenant-services';
+import { useUpdateTenant } from '../hooks/use-update-tenant';
 import { ServiceCards } from '../components/service-cards';
+import {
+  CreateTenantSchema,
+  type CreateTenantInput,
+  GIRO_VALUES,
+} from '@/shared/api/tenants';
 import {
   Card,
   CardContent,
@@ -18,6 +26,17 @@ import {
 } from '@/shared/ui/tabs';
 import { Badge } from '@/shared/ui/badge';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
+import { Input } from '@/shared/ui/input';
+import { Label } from '@/shared/ui/label';
+import { Button } from '@/shared/ui/button';
+import { Checkbox } from '@/shared/ui/checkbox';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/shared/ui/select';
 
 const GIRO_LABELS: Record<string, string> = {
   ferreteria: 'Ferretería',
@@ -102,70 +121,108 @@ function TenantDetailPage() {
         </TabsContent>
 
         <TabsContent value="business" className="mt-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Datos del negocio</CardTitle>
-              <CardDescription>
-                Información general del cliente. La edición se habilita en un
-                próximo prompt.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <dl className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Nombre del negocio
-                  </dt>
-                  <dd>{tenant.nombre_negocio}</dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Giro
-                  </dt>
-                  <dd>{GIRO_LABELS[tenant.giro] ?? tenant.giro}</dd>
-                </div>
-                <div className="sm:col-span-2">
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Dirección
-                  </dt>
-                  <dd>
-                    {tenant.direccion ?? (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Horario semana
-                  </dt>
-                  <dd>
-                    {tenant.horario_semana ?? (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Horario sábado
-                  </dt>
-                  <dd>
-                    {tenant.horario_sabado ?? (
-                      <span className="text-muted-foreground">—</span>
-                    )}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs font-medium text-muted-foreground">
-                    Abre domingos
-                  </dt>
-                  <dd>{tenant.abre_domingo ? 'Sí' : 'No'}</dd>
-                </div>
-              </dl>
-            </CardContent>
-          </Card>
+          <BusinessDataCard tenant={tenant} />
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+function BusinessDataCard({
+  tenant,
+}: { tenant: import('@/shared/api/tenants').TenantDetail }) {
+  const update = useUpdateTenant(tenant.id);
+  const { register, handleSubmit, watch, setValue, formState } =
+    useForm<CreateTenantInput>({
+      resolver: zodResolver(CreateTenantSchema),
+      defaultValues: {
+        nombre_negocio: tenant.nombre_negocio ?? '',
+        giro: tenant.giro as (typeof GIRO_VALUES)[number],
+        direccion: tenant.direccion ?? '',
+        horario_semana: tenant.horario_semana ?? '',
+        horario_sabado: tenant.horario_sabado ?? '',
+        abre_domingo: tenant.abre_domingo ?? false,
+      },
+    });
+
+  const onSubmit = handleSubmit((data) => update.mutate(data));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Datos del negocio</CardTitle>
+        <CardDescription>
+          Nombre, giro y horarios del cliente. Se aplican al instante.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={onSubmit} className="grid gap-4">
+          <div className="grid gap-2">
+            <Label htmlFor="nombre_negocio">
+              Nombre del negocio <span className="text-destructive">*</span>
+            </Label>
+            <Input id="nombre_negocio" {...register('nombre_negocio')} />
+            {formState.errors.nombre_negocio && (
+              <p className="text-xs text-destructive">
+                {formState.errors.nombre_negocio.message}
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="giro">Giro</Label>
+            <Select
+              value={watch('giro')}
+              onValueChange={(v) =>
+                setValue('giro', v as (typeof GIRO_VALUES)[number])
+              }
+            >
+              <SelectTrigger id="giro"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {GIRO_VALUES.map((g) => (
+                  <SelectItem key={g} value={g}>{GIRO_LABELS[g] ?? g}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid gap-2">
+            <Label htmlFor="direccion">Dirección</Label>
+            <Input id="direccion" {...register('direccion')} />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="grid gap-2">
+              <Label htmlFor="horario_semana">Horario semana</Label>
+              <Input id="horario_semana" {...register('horario_semana')} />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="horario_sabado">Horario sábado</Label>
+              <Input id="horario_sabado" {...register('horario_sabado')} />
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="abre_domingo"
+              checked={watch('abre_domingo') ?? false}
+              onCheckedChange={(c) => setValue('abre_domingo', c === true)}
+            />
+            <Label htmlFor="abre_domingo" className="cursor-pointer font-normal">
+              Abre domingos
+            </Label>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <Button type="submit" size="sm" disabled={update.isPending}>
+              {update.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+              Guardar datos
+            </Button>
+            {update.isSuccess && <span className="text-xs text-emerald-600">Guardado ✓</span>}
+          </div>
+        </form>
+      </CardContent>
+    </Card>
   );
 }
 

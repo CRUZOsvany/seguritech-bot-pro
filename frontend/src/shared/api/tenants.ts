@@ -256,6 +256,22 @@ export async function updateBotConfiguration(
   });
 }
 
+export interface UpdateTenantInput {
+  nombre_negocio?: string;
+  giro?: (typeof GIRO_VALUES)[number];
+  direccion?: string | null;
+  horario_semana?: string | null;
+  horario_sabado?: string | null;
+  abre_domingo?: boolean;
+}
+
+export async function updateTenant(
+  tenantId: string,
+  input: UpdateTenantInput,
+): Promise<void> {
+  await apiFetch<{ ok: boolean }>('PATCH', `/api/admin/tenants/${tenantId}`, input);
+}
+
 export interface Template {
   slug: string;
   giro: string;
