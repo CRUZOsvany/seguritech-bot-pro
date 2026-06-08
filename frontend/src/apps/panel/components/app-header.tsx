@@ -1,14 +1,16 @@
 import { Link } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
-import { LogOut, Bot } from 'lucide-react';
+import { LogOut, Bot, Sun, Moon } from 'lucide-react';
 import { useSession } from '@/shared/auth/useSession';
 import { logout } from '@/shared/api/auth';
 import { Button } from '@/shared/ui/button';
 import { envBadge } from '@/shared/lib/env';
+import { useTheme } from '@/shared/lib/use-theme';
 
 export function AppHeader() {
   const { data: session } = useSession();
   const env = envBadge();
+  const { theme, toggle } = useTheme();
 
   const logoutMutation = useMutation({
     mutationFn: logout,
@@ -59,6 +61,14 @@ export function AppHeader() {
               {session.email} · {session.role}
             </span>
           )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggle}
+            aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
           <Button
             variant="outline"
             size="sm"
