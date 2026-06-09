@@ -379,7 +379,7 @@ export function createTenantsRouter(params: {
   // POST /api/admin/simulate
   // ============================================================
   router.post('/simulate', async (req: Request, res: Response) => {
-    const { tenantId, phoneNumber, content, persist, source, flowId, versionId } = req.body ?? {};
+    const { tenantId, phoneNumber, content, persist, source, flowId, versionId, state } = req.body ?? {};
 
     if (typeof tenantId !== 'string' || tenantId.trim() === '') {
       res.status(400).json({ error: 'tenantId requerido (string)' });
@@ -406,6 +406,12 @@ export function createTenantsRouter(params: {
       res.status(400).json({ error: "source='version' requiere versionId (string)" });
       return;
     }
+    // Estado encadenado del turno anterior (modo efímero). Opcional y, de venir,
+    // debe ser un objeto plano; `currentNodeId`/`context` se validan por forma.
+    if (state !== undefined && (typeof state !== 'object' || state === null || Array.isArray(state))) {
+      res.status(400).json({ error: 'state debe ser un objeto { currentNodeId?, context? }' });
+      return;
+    }
 
     try {
       const result = await simulateMessageUseCase.execute({
@@ -416,6 +422,7 @@ export function createTenantsRouter(params: {
         source,
         flowId,
         versionId,
+        state: state as { currentNodeId?: string; context?: Record<string, unknown> } | undefined,
       });
 
       if (result.error) {

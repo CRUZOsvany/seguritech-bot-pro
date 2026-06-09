@@ -384,16 +384,24 @@ export interface SimulateResult {
   flowEnded: boolean;
 }
 
+/** Estado de la conversación que el simulador encadena entre turnos. */
+export interface SimulateState {
+  currentNodeId?: string;
+  context?: Record<string, unknown>;
+}
+
 export async function simulate(
   tenantId: string,
   phoneNumber: string,
   content: string,
+  state?: SimulateState,
 ): Promise<SimulateResult> {
   return apiFetch<SimulateResult>('POST', '/api/admin/simulate', {
     tenantId,
     phoneNumber,
     content,
     persist: false,
+    ...(state ? { state } : {}),
   });
 }
 

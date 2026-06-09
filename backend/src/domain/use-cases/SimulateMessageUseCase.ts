@@ -34,6 +34,16 @@ export interface SimulateInput {
   flowId?: string;
   /** Requerido si source='version'. */
   versionId?: string;
+  /**
+   * Estado previo de la conversación, devuelto por la llamada anterior.
+   * Permite que el modo efímero (persist=false) avance sin tocar la BD: el
+   * frontend encadena `currentNodeId` + `context` entre turnos. Ignorado
+   * cuando persist=true (el estado vive en bot_users).
+   */
+  state?: {
+    currentNodeId?: string;
+    context?: Record<string, unknown>;
+  };
 }
 
 export interface SimulateResult {
@@ -123,10 +133,12 @@ export class SimulateMessageUseCase {
       return mkError('No se pudo resolver el flow a simular');
     }
 
-    // 3. Cargar o crear user (en BD si persist, en memoria si no)
+    // 3. Cargar o crear user (en BD si persist, en memoria si no).
+    //    En modo efímero, sembramos el estado que el frontend encadenó del
+    //    turno anterior para que la conversación avance sin escribir en BD.
     const user = persist
       ? await this.getOrCreatePersistentUser(tenantId, phoneNumber)
-      : await this.getOrCreateEphemeralUser(tenantId, phoneNumber);
+      : this.makeEphemeralUser(tenantId, phoneNumber, input.state);
 
     // 4. Construir Message
     const message: Message = {
@@ -210,17 +222,23 @@ export class SimulateMessageUseCase {
     return newUser;
   }
 
-  private async getOrCreateEphemeralUser(
+  /**
+   * Construye un User en memoria (nunca toca la BD) sembrado con el estado
+   * que el frontend encadenó del turno anterior. Sin `state` arranca de cero
+   * (primer mensaje de la conversación).
+   */
+  private makeEphemeralUser(
     tenantId: string,
     phoneNumber: string,
-  ): Promise<User> {
+    state?: SimulateInput['state'],
+  ): User {
     return {
       id: this.generateId(),
       tenantId,
       phoneNumber,
       currentState: UserState.INITIAL,
-      currentNodeId: undefined,
-      context: {},
+      currentNodeId: state?.currentNodeId,
+      context: state?.context ?? {},
       createdAt: new Date(),
       updatedAt: new Date(),
     };
