@@ -6,7 +6,7 @@
       "id": "bienvenida",
       "type": "send_buttons",
       "content": {
-        "text": "Hola 👋 Bienvenido a {{nombre_negocio}}.\n¿En qué te podemos ayudar?",
+        "text": "{{welcome_message}}\n\n{{menu_message}}",
         "buttons": [
           { "id": "emergencia", "title": "🚨 Emergencia" },
           { "id": "agendar", "title": "📅 Agendar servicio" },
@@ -17,6 +17,9 @@
         { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
         { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
         { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio"] }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios", "agendar servicio"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar", "cotizacion", "cotización"] }, "next_node_id": "info_servicios" },
         { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
@@ -128,6 +131,9 @@
         { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
         { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
         { "condition": { "type": "button", "value": "salir" }, "next_node_id": "despedida" },
+        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["emergencia", "urgencia", "urgente"] }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "keyword", "values": ["salir", "no", "gracias", "adios", "adiós"] }, "next_node_id": "despedida" },
         { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
@@ -135,7 +141,7 @@
       "id": "no_entendi",
       "type": "send_buttons",
       "content": {
-        "text": "No te entendí 🤔. Dime qué necesitas:",
+        "text": "{{not_understood_message}}",
         "buttons": [
           { "id": "emergencia", "title": "🚨 Emergencia" },
           { "id": "agendar", "title": "📅 Agendar servicio" },
@@ -146,7 +152,10 @@
         { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
         { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
         { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
-        { "condition": { "type": "default" }, "next_node_id": "despedida" }
+        { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio"] }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar"] }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
     {
