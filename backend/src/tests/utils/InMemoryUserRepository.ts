@@ -47,6 +47,21 @@ export class InMemoryUserRepository implements UserRepository {
     }
   }
 
+  async setHumanHandoff(
+    tenantId: string,
+    phoneNumber: string,
+    pausedUntil: Date | null,
+  ): Promise<void> {
+    for (const user of this.users.values()) {
+      if (user.tenantId === tenantId && user.phoneNumber === phoneNumber) {
+        user.humanPausedUntil = pausedUntil;
+        user.updatedAt = new Date();
+        this.users.set(user.id, user);
+        return;
+      }
+    }
+  }
+
   // Para tests: limpiar todos los datos
   clear(): void {
     this.users.clear();

@@ -1,5 +1,9 @@
 import { randomUUID } from 'crypto';
 import pino from 'pino';
+import { config } from '@/config/env';
+
+/** TTL de la pausa por handoff humano, en ms. Default global 120 min (env HANDOFF_PAUSE_MINUTES). */
+const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
 import { Message, User, UserState } from '@/domain/entities';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
 import {
@@ -73,6 +77,16 @@ export class BotController {
       // 4. Ruta principal: FlowInterpreter
       if (flow) {
         const user = await this.getOrCreateUser(tenantId, from);
+
+        // Gate de handoff humano: si el usuario está en pausa, el bot calla.
+        if (user.humanPausedUntil && user.humanPausedUntil > new Date()) {
+          this.logger.info(
+            { tenantId, from, pausedUntil: user.humanPausedUntil },
+            'Usuario en handoff humano — mensaje registrado, bot silenciado',
+          );
+          return null;
+        }
+
         const result = await this.flowInterpreter.execute({
           flow,
           user,
@@ -97,6 +111,17 @@ export class BotController {
           config.ownerPhone,
           metaMessageId,
         );
+
+        // Si algún output fue escape_to_human, activar pausa en BD.
+        const handoffTriggered = result.outputs.some((o) => o.kind === 'escape_to_human');
+        if (handoffTriggered) {
+          const pausedUntil = new Date(Date.now() + HUMAN_HANDOFF_TTL_MS);
+          await this.userRepository.setHumanHandoff(tenantId, from, pausedUntil);
+          this.logger.info(
+            { tenantId, from, pausedUntil },
+            'Handoff humano activado — bot silenciado 48 h',
+          );
+        }
 
         this.logger.info(
           {

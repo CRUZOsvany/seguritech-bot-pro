@@ -10,6 +10,8 @@ export interface UserRepository {
   findByPhoneNumber(tenantId: string, phoneNumber: string): Promise<User | null>;
   update(user: User): Promise<void>;
   resetUserState(tenantId: string, phoneNumber: string): Promise<void>;
+  /** Establece o limpia el handoff humano. pausedUntil=null reactiva el bot. */
+  setHumanHandoff(tenantId: string, phoneNumber: string, pausedUntil: Date | null): Promise<void>;
 }
 
 /**

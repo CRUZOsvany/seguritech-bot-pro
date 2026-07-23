@@ -33,6 +33,8 @@ export interface User {
   currentState: UserState;
   currentNodeId?: string;
   context?: Record<string, unknown>;
+  /** NULL/undefined = bot activo. Fecha futura = usuario en handoff humano (bot silenciado). */
+  humanPausedUntil?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
