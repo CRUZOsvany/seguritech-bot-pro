@@ -27,6 +27,7 @@ export class SupabaseUserRepository implements UserRepository {
       current_state: user.currentState,
       current_node_id: user.currentNodeId ?? null,
       context: user.context ?? {},
+      human_paused_until: null,
     });
 
     if (error) {
@@ -83,6 +84,7 @@ export class SupabaseUserRepository implements UserRepository {
         current_state: user.currentState,
         current_node_id: user.currentNodeId ?? null,
         context: user.context ?? {},
+        human_paused_until: user.humanPausedUntil ?? null,
       })
       .eq('tenant_id', user.tenantId)
       .eq('id', user.id);
@@ -121,6 +123,28 @@ export class SupabaseUserRepository implements UserRepository {
     }
   }
 
+  async setHumanHandoff(
+    tenantId: string,
+    phoneNumber: string,
+    pausedUntil: Date | null,
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from('bot_users')
+      .update({ human_paused_until: pausedUntil?.toISOString() ?? null })
+      .eq('tenant_id', tenantId)
+      .eq('phone_number', phoneNumber);
+
+    if (error) {
+      this.logger.error({ error, tenantId, phoneNumber }, 'setHumanHandoff failed');
+      throw new Error(`setHumanHandoff failed: ${error.message}`);
+    }
+
+    this.logger.debug(
+      { tenantId, phoneNumber, pausedUntil },
+      '[SupabaseUserRepository] human handoff actualizado',
+    );
+  }
+
   private mapRow(row: Record<string, any>): User {
     return {
       id: row.id,
@@ -129,6 +153,7 @@ export class SupabaseUserRepository implements UserRepository {
       currentState: row.current_state as UserState,
       currentNodeId: row.current_node_id ?? undefined,
       context: (row.context as Record<string, unknown> | null) ?? undefined,
+      humanPausedUntil: row.human_paused_until ? new Date(row.human_paused_until) : null,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
