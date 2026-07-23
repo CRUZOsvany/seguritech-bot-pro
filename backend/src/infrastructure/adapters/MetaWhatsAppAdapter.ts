@@ -307,7 +307,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     private readonly credsRepo: MetaCredentialsRepository,
     metaApiUrl?: string,
   ) {
-    this.metaApiUrl = metaApiUrl || 'https://graph.facebook.com/v21.0';
+    this.metaApiUrl = metaApiUrl || 'https://graph.facebook.com/v23.0';
   }
 
   // ========================================================================

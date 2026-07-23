@@ -16,7 +16,7 @@ const envSchema = z.object({
   WEBHOOK_PORT: z.string().default('3001'),
 
   // Meta Cloud API (WhatsApp oficial)
-  META_API_URL: z.string().url().default('https://graph.facebook.com/v21.0'),
+  META_API_URL: z.string().url().default('https://graph.facebook.com/v23.0'),
   META_VERIFY_TOKEN: z.string().min(32).optional(),
   META_APP_SECRET: z.string().min(32).optional(),
 
