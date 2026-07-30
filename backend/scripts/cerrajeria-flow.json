@@ -17,9 +17,9 @@
         { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
         { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
         { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
-        { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio"] }, "next_node_id": "menu_emergencia" },
-        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios", "agendar servicio"] }, "next_node_id": "menu_servicios" },
-        { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar", "cotizacion", "cotización"] }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio", "ayuda", "me quede afuera", "me quedé afuera", "se me perdieron las llaves", "se me perdio la llave", "se me perdió la llave", "no abre", "no puedo entrar", "estoy encerrado", "estoy encerrada"] }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios", "agendar servicio", "cambiar chapa", "cambio de chapa"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar", "cotizacion", "cotización", "cuanto cuesta", "cuánto cuesta"] }, "next_node_id": "info_servicios" },
         { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
@@ -50,10 +50,28 @@
       "id": "emerg_captura",
       "type": "wait_input",
       "content": {
-        "prompt": "Entendido. Compártenos tu *dirección* (calle, número, colonia y una referencia visible) y un *teléfono* de contacto para llamarte de inmediato.",
+        "prompt": "Entendido. Compártenos en un solo mensaje:\n📍 tu *dirección* (calle, número, colonia y una referencia visible)\n📱 un *teléfono* de contacto\n\nEjemplo: _Calle Guerrero 45, Col. Centro, cerca de la farmacia. Tel 747 123 4567_",
         "save_to_context": "datos_emergencia"
       },
       "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "emerg_confirma" }
+      ]
+    },
+    {
+      "id": "emerg_confirma",
+      "type": "send_buttons",
+      "content": {
+        "text": "Para confirmar antes de avisar al cerrajero, esto fue lo que recibí:\n\n📍 _{{datos_emergencia}}_\n\n¿Es correcto?",
+        "buttons": [
+          { "id": "correcto", "title": "✅ Sí, correcto" },
+          { "id": "corregir", "title": "✏️ Corregir" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "correcto" }, "next_node_id": "emerg_escala" },
+        { "condition": { "type": "button", "value": "corregir" }, "next_node_id": "emerg_captura" },
+        { "condition": { "type": "keyword", "values": ["si", "sí", "correcto", "es correcto", "ok"] }, "next_node_id": "emerg_escala" },
+        { "condition": { "type": "keyword", "values": ["no", "corregir", "cambiar", "esta mal", "está mal"] }, "next_node_id": "emerg_captura" },
         { "condition": { "type": "default" }, "next_node_id": "emerg_escala" }
       ]
     },
@@ -98,10 +116,28 @@
       "id": "serv_captura",
       "type": "wait_input",
       "content": {
-        "prompt": "Perfecto. Cuéntanos brevemente qué necesitas, tu *zona o dirección*, un *teléfono* de contacto y si prefieres algún día u horario. Con eso te damos cotización.",
+        "prompt": "Perfecto. Cuéntanos en un solo mensaje: qué necesitas, tu *zona o dirección*, un *teléfono* de contacto y si prefieres algún día u horario.\n\nEjemplo: _Cambio de chapa en Col. Centro, tel 747 123 4567, de preferencia mañana en la tarde_",
         "save_to_context": "detalle_servicio"
       },
       "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "serv_confirma" }
+      ]
+    },
+    {
+      "id": "serv_confirma",
+      "type": "send_buttons",
+      "content": {
+        "text": "Para confirmar antes de agendar, esto fue lo que recibí:\n\n📝 _{{detalle_servicio}}_\n\n¿Es correcto?",
+        "buttons": [
+          { "id": "correcto", "title": "✅ Sí, correcto" },
+          { "id": "corregir", "title": "✏️ Corregir" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "correcto" }, "next_node_id": "serv_escala" },
+        { "condition": { "type": "button", "value": "corregir" }, "next_node_id": "serv_captura" },
+        { "condition": { "type": "keyword", "values": ["si", "sí", "correcto", "es correcto", "ok"] }, "next_node_id": "serv_escala" },
+        { "condition": { "type": "keyword", "values": ["no", "corregir", "cambiar", "esta mal", "está mal"] }, "next_node_id": "serv_captura" },
         { "condition": { "type": "default" }, "next_node_id": "serv_escala" }
       ]
     },
@@ -155,7 +191,39 @@
         { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio"] }, "next_node_id": "menu_emergencia" },
         { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios"] }, "next_node_id": "menu_servicios" },
         { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar"] }, "next_node_id": "info_servicios" },
-        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi_2" }
+      ]
+    },
+    {
+      "id": "no_entendi_2",
+      "type": "send_buttons",
+      "content": {
+        "text": "Sigo sin entenderte 😕. Elige una opción o te conecto directo con alguien:",
+        "buttons": [
+          { "id": "emergencia", "title": "🚨 Emergencia" },
+          { "id": "agendar", "title": "📅 Agendar servicio" },
+          { "id": "info", "title": "ℹ️ Información" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "emergencia" }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "button", "value": "agendar" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "info" }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "keyword", "values": ["emergencia", "emergencias", "urgencia", "urgente", "auxilio"] }, "next_node_id": "menu_emergencia" },
+        { "condition": { "type": "keyword", "values": ["agendar", "agenda", "cita", "servicio", "servicios"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["informacion", "información", "info", "precios", "cotizar"] }, "next_node_id": "info_servicios" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi_escala" }
+      ]
+    },
+    {
+      "id": "no_entendi_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "No logré entenderte 🙏. Te conecto con alguien de {{nombre_negocio}} para que te ayude directo.",
+        "owner_alert_template": "⚠️ El bot no logró entender al cliente tras 2 intentos.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: \"{{last_message}}\"\nContáctalo directo desde el chat."
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
       ]
     },
     {

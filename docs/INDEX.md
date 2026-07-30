@@ -23,6 +23,9 @@
 - [Quickstart Meta](meta-adapter/META_QUICKSTART.md)
 - [Guía completa del adapter](meta-adapter/META_WHATSAPP_ADAPTER_GUIDE.md)
 
+## Diseño de chatbots (flows)
+- [Cómo diseñar un chatbot de WhatsApp](whatsapp/DISENO_DE_CHATBOTS.md) — discovery, patrones anti-loop/anti-dato-basura, node types, cumplimiento Meta, QA. Caso de estudio: cerrajerías.
+
 ## Deploy
 - [Pasos de deploy](deployment/DEPLOYMENT_STEPS.md)
 
