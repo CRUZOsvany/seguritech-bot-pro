@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile,
 } from 'lucide-react';
-import { simulate, simulateReset, type InterpreterOutput } from '@/shared/api/tenants';
+import { simulate, simulateReset, type InterpreterOutput, type SimulateState } from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -42,6 +42,11 @@ export function WhatsAppSimulator({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  // Estado efímero de la conversación. Lo encadenamos entre turnos para que el
+  // simulador avance sin escribir en BD (modo persist=false). Vive en un ref
+  // —no en useState— para no quedar obsoleto dentro del closure async de send.
+  const stateRef = useRef<SimulateState>({ currentNodeId: undefined, context: {} });
+
   const send = async (content: string) => {
     if (!content.trim() || busy) return;
     setBusy(true);
@@ -49,7 +54,8 @@ export function WhatsAppSimulator({
     setTurns((t) => [...t, { from: 'user', text: content }]);
     setText('');
     try {
-      const res = await simulate(tenantId, phoneNumber, content);
+      const res = await simulate(tenantId, phoneNumber, content, stateRef.current);
+      stateRef.current = { currentNodeId: res.nextNodeId, context: res.context };
       setTurns((t) => [...t, ...res.outputs.map((o) => ({ from: 'bot' as const, output: o }))]);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'Error al simular');
@@ -60,6 +66,7 @@ export function WhatsAppSimulator({
 
   const reset = async () => {
     await simulateReset(tenantId, phoneNumber).catch(() => {});
+    stateRef.current = { currentNodeId: undefined, context: {} };
     setTurns([]);
     setErr(null);
   };
