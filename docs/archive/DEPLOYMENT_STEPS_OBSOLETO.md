@@ -1,3 +1,8 @@
+> **OBSOLETO — jubilado 2026-08-02.** Manda aplicar una migración inexistente
+> (`001_create_phone_tenant_map.sql`; la 001 real es `001_full_schema.sql`) y usa
+> una tabla `phone_tenant_map` que ya no es el modelo de datos. Seguirlo hoy
+> rompe el deploy. Reemplazo: [`docs/deployment/RUNBOOK_PRODUCCION.md`](../deployment/RUNBOOK_PRODUCCION.md).
+
 # 🚀 PASOS DE DEPLOYMENT - BUG FIXES
 
 Después de descargar el código, ejecutar estos pasos en orden:
