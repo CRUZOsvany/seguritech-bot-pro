@@ -1,7 +1,11 @@
 # SegurITech Bot Pro — Índice de documentación
 
-> Fuente principal: [`../SEGURITECH_PROYECTO_MAESTRO.md`](../SEGURITECH_PROYECTO_MAESTRO.md)
-> Este índice cubre solo documentación técnica complementaria.
+> El Documento Maestro y el Estado Actual son documentos internos del equipo
+> (`.claude/SEGURITECH_PROYECTO_MAESTRO.md`, `.claude/SEGURITECH_ESTADO_ACTUAL.md`).
+> Viven fuera de control de versiones (`.claude/` está en `.gitignore`) porque son
+> de trabajo interno, no documentación pública del repo. Si algo en esta carpeta
+> contradice el código de `main`, gana el código de `main`.
+> Este índice cubre solo documentación técnica versionada.
 
 ## Arquitectura
 - [Arquitectura del sistema](architecture/ARCHITECTURE.md)
@@ -27,7 +31,7 @@
 - [Cómo diseñar un chatbot de WhatsApp](whatsapp/DISENO_DE_CHATBOTS.md) — discovery, patrones anti-loop/anti-dato-basura, node types, cumplimiento Meta, QA. Caso de estudio: cerrajerías.
 
 ## Deploy
-- [Pasos de deploy](deployment/DEPLOYMENT_STEPS.md)
+- [Runbook de producción](deployment/RUNBOOK_PRODUCCION.md) — precondiciones, migraciones en Supabase Cloud, secretos, VPS (PM2/Docker), Cloudflare, Meta/WhatsApp, seed de pilotos, smoke test, rollback.
 
 ## Tests
 - [Quick start](testing/QUICK_START_TESTS.md)
