@@ -21,7 +21,7 @@
     "supabase:start": "supabase start",
     "supabase:stop": "supabase stop",
     "supabase:types": "supabase gen types typescript --local > src/infrastructure/services/supabase.types.ts",
-    "supabase:reset": "supabase db reset && npm run supabase:types"
+    "supabase:reset:local": "echo ADVERTENCIA: supabase db reset SOLO contra Supabase local. JAMAS contra Cloud, es destructivo y sin undo. && supabase db reset && npm run supabase:types"
   },
   "keywords": [
     "whatsapp",
@@ -71,6 +71,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

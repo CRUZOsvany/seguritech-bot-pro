@@ -1,7 +1,7 @@
 {
   "name": "seguritech-bot-pro-monorepo",
   "version": "1.0.0",
-  "description": "SegurITech Bot Pro — Backend Node.js con panel admin HTML standalone servido por Express",
+  "description": "SegurITech Bot Pro — Backend Node.js + panel admin (frontend/, Vite + React) compilado a backend/public/app y servido por Express",
   "private": true,
   "workspaces": [
     "backend",
@@ -28,7 +28,7 @@
   "devDependencies": {},
   "dependencies": {},
   "engines": {
-    "node": ">=18.0.0",
+    "node": ">=20.0.0",
     "npm": ">=9.0.0"
   }
 }
