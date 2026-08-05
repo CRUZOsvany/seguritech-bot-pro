@@ -104,12 +104,39 @@ export type ListSection =
     };
 
 // ============================================================================
+// P3 — config_bound: candado entre el texto del nodo y bot_configurations
+// ============================================================================
+
+/**
+ * Subconjunto de `FlowVariableKey` que un nodo puede declarar como "gobernado
+ * por config" (P3). Solo las estáticas de bot_configurations que hoy tienen
+ * consumidor real — ver P2 (D1/D2): `out_of_hours_message` y
+ * `order_confirmation_message` quedan fuera hasta que exista lógica de
+ * horarios o un molde que los use.
+ * Espejo en frontend/src/apps/panel/designer/flow-types.ts (CONFIG_BOUND_VALUES).
+ */
+export const CONFIG_BOUND_VALUES = [
+  'welcome_message',
+  'menu_message',
+  'not_understood_message',
+] as const satisfies readonly FlowVariableKey[];
+export type ConfigBoundKey = (typeof CONFIG_BOUND_VALUES)[number];
+
+// ============================================================================
 // NODOS (discriminated union por `type`)
 // ============================================================================
 
 export interface FlowNodeBase {
   id: string;
   transitions: Transition[];
+  /**
+   * Si está presente, `content.text` de este nodo debe consistir EXCLUSIVAMENTE
+   * en los placeholders {{key}} de estas claves (más espacios en blanco) — lo
+   * exige FlowSchema.superRefine al publicar. Un nodo puede declarar más de
+   * una clave (p.ej. bienvenida = welcome_message + menu_message en un mismo
+   * mensaje). Solo tiene efecto en send_text/send_buttons/send_list.
+   */
+  config_bound?: ConfigBoundKey[];
 }
 
 export interface SendTextNode extends FlowNodeBase {

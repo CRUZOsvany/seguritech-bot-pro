@@ -14,6 +14,7 @@
 
 import { z } from 'zod';
 import type { BotFlow } from '@/domain/entities/flow';
+import { CONFIG_BOUND_VALUES } from '@/domain/entities/flow';
 
 // ============================================================================
 // SCHEMAS BASE
@@ -88,6 +89,20 @@ const ListSectionSchema = z.discriminatedUnion('type', [
 ]);
 
 // ============================================================================
+// P3 — config_bound: candado entre el texto del nodo y `bot_configurations`
+// ============================================================================
+
+/**
+ * Un nodo puede declarar VARIAS claves a la vez (p.ej. bienvenida.content.text
+ * = "{{welcome_message}}\n\n{{menu_message}}" en un solo mensaje) — por eso es
+ * array y no un enum simple. La regla exacta se aplica en FlowSchema.superRefine
+ * (más abajo): el texto debe consistir EXCLUSIVAMENTE en los placeholders
+ * declarados, sin texto literal adicional. `CONFIG_BOUND_VALUES` vive en
+ * domain/entities/flow.ts (fuente única compartida con el resto del dominio).
+ */
+const ConfigBoundSchema = z.array(z.enum(CONFIG_BOUND_VALUES)).min(1).optional();
+
+// ============================================================================
 // NODOS
 // ============================================================================
 
@@ -101,6 +116,7 @@ const SendTextNodeSchema = z.object({
       .max(4096, 'Meta: text body ≤ 4096 chars (recomendado ≤ 1024)'),
   }),
   transitions: z.array(TransitionSchema),
+  config_bound: ConfigBoundSchema,
 });
 
 const SendButtonsNodeSchema = z.object({
@@ -122,6 +138,7 @@ const SendButtonsNodeSchema = z.object({
       .max(3, 'Meta: máximo 3 botones'),
   }),
   transitions: z.array(TransitionSchema),
+  config_bound: ConfigBoundSchema,
 });
 
 // IMPORTANTE: este schema NO debe usar `.refine()` directo — devolvería
@@ -147,6 +164,7 @@ const SendListNodeSchema = z.object({
       .max(10, 'Meta: máximo 10 sections en un list'),
   }),
   transitions: z.array(TransitionSchema),
+  config_bound: ConfigBoundSchema,
 });
 
 const SendMediaNodeSchema = z.object({
@@ -455,6 +473,50 @@ export const FlowSchema = z
             message: `Nodo "${node.id}": Meta: máximo 10 sections (recibidas ${sectionsCount})`,
           });
         }
+      }
+    }
+
+    // P3 — config_bound: si un nodo declara estar gobernado por config, su
+    // content.text debe consistir EXCLUSIVAMENTE en los placeholders {{key}}
+    // de las claves declaradas (más espacios en blanco alrededor/entre ellos).
+    // Nada de texto literal mezclado, nada de variables no declaradas, ninguna
+    // declarada que falte. Esto es lo que hace del candado una regla del
+    // sistema en vez de una convención que alguien puede romper sin darse cuenta.
+    for (const node of flow.nodes) {
+      if (
+        node.type !== 'send_text' &&
+        node.type !== 'send_buttons' &&
+        node.type !== 'send_list'
+      ) {
+        continue;
+      }
+      const boundKeys = node.config_bound;
+      if (!boundKeys || boundKeys.length === 0) continue;
+
+      const text = node.content.text;
+      const foundKeys = new Set<string>();
+      const stripped = text.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+        foundKeys.add(key);
+        return '';
+      });
+
+      const declared = new Set<string>(boundKeys);
+      const missing = boundKeys.filter((k) => !foundKeys.has(k));
+      const extra = [...foundKeys].filter((k) => !declared.has(k));
+      const hasLiteralText = stripped.trim().length > 0;
+
+      if (missing.length > 0 || extra.length > 0 || hasLiteralText) {
+        const parts: string[] = [];
+        if (missing.length > 0) parts.push(`faltan {{${missing.join('}}, {{')}}}`);
+        if (extra.length > 0) parts.push(`variables no declaradas: {{${extra.join('}}, {{')}}}`);
+        if (hasLiteralText) parts.push('hay texto literal fuera de las variables');
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', node.id, 'content', 'text'],
+          message:
+            `Nodo "${node.id}": config_bound=[${boundKeys.join(', ')}] pero su texto no ` +
+            `coincide exactamente con esas variables (${parts.join('; ')}).`,
+        });
       }
     }
   });

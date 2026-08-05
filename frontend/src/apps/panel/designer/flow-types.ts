@@ -34,9 +34,36 @@ export type ListSection =
   | { type: 'static'; title: string; items: ListItem[] }
   | { type: 'dynamic'; title: string; items_source: ItemsSource };
 
+/**
+ * P3 — claves canónicas gobernadas por `bot_configurations` / VariableResolver.
+ * Espejo de CONFIG_BOUND_VALUES en backend/src/domain/entities/flow.ts (DEC-3,
+ * se sincroniza a mano). `out_of_hours_message` y `order_confirmation_message`
+ * quedan fuera a propósito — ver P2 (D1/D2): son campos fantasma hoy.
+ */
+export const CONFIG_BOUND_VALUES = [
+  'welcome_message',
+  'menu_message',
+  'not_understood_message',
+] as const;
+export type ConfigBoundKey = (typeof CONFIG_BOUND_VALUES)[number];
+
+/** Etiquetas legibles — deben calzar con los labels de la pestaña Mensajes. */
+export const CONFIG_BOUND_LABELS: Record<ConfigBoundKey, string> = {
+  welcome_message: 'Mensaje de bienvenida',
+  menu_message: 'Menú principal',
+  not_understood_message: 'No entendió',
+};
+
 export interface FlowNodeBase {
   id: string;
   transitions: Transition[];
+  /**
+   * Si está presente, `content.text` debe consistir EXCLUSIVAMENTE en los
+   * placeholders {{key}} de estas claves (más espacios en blanco) — lo exige
+   * el backend al publicar (FlowSchema.superRefine) y, en vivo, graphValidator.
+   * Solo tiene efecto en send_text/send_buttons/send_list.
+   */
+  config_bound?: ConfigBoundKey[];
 }
 
 export interface SendTextNode extends FlowNodeBase {

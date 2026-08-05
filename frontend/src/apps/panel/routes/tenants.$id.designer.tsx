@@ -11,7 +11,7 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert, AlertTriangle, Lock } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/shared/ui/card';
@@ -27,7 +27,7 @@ import { useDesignerStore } from '../designer/store/designer-store';
 import { nodeTypes } from '../designer/nodes';
 import { NODE_META } from '../designer/nodes/node-meta';
 import {
-  EMPTY_FLOW, isBotFlowish,
+  EMPTY_FLOW, isBotFlowish, CONFIG_BOUND_LABELS,
   type FlowNode, type FlowNodeType,
   type ListSection, type ListItem, type MediaCarouselCard,
 } from '../designer/flow-types';
@@ -454,7 +454,7 @@ function DesignerCanvas({
                 publishing={publish.isPending}
               />
             ) : (
-              <Inspector />
+              <Inspector tenantId={tenantId} />
             )}
           </div>
 
@@ -520,7 +520,7 @@ function DesignerCanvas({
  * Inspector (Fase 5 / Prompt 5): al seleccionar un nodo, edita sus campos
  * específicos por tipo vía updateNodeContent. Sin agregar/borrar nodos (A2.2).
  */
-function Inspector() {
+function Inspector({ tenantId }: { tenantId: string }) {
   const selectedId = useDesignerStore((s) => s.selectedId);
   const nodes = useDesignerStore((s) => s.nodes);
   const updateNodeContent = useDesignerStore((s) => s.updateNodeContent);
@@ -553,7 +553,11 @@ function Inspector() {
         </span>
         <code className="truncate text-[10px] text-muted-foreground">{node.id}</code>
       </div>
-      <NodeInspectorForm node={node} onUpdate={(patch) => updateNodeContent(node.id, patch)} />
+      <NodeInspectorForm
+        node={node}
+        tenantId={tenantId}
+        onUpdate={(patch) => updateNodeContent(node.id, patch)}
+      />
       <div className="mt-1 border-t pt-2">
         <TransitionsEditor node={node} />
       </div>
@@ -731,17 +735,23 @@ function removeCardButton(cards: MediaCarouselCard[], cardIdx: number, btnIdx: n
 /** Formulario de edición específico por tipo de nodo. */
 function NodeInspectorForm({
   node,
+  tenantId,
   onUpdate,
 }: {
   node: FlowNode;
+  tenantId: string;
   onUpdate: (patch: Record<string, unknown>) => void;
 }) {
   switch (node.type) {
     case 'send_text':
       return (
         <InspField label="Texto">
-          <Textarea rows={4} value={node.content.text}
-            onChange={(e) => onUpdate({ text: e.target.value })} />
+          {node.config_bound && node.config_bound.length > 0 ? (
+            <ConfigBoundLock tenantId={tenantId} text={node.content.text} keys={node.config_bound} />
+          ) : (
+            <Textarea rows={4} value={node.content.text}
+              onChange={(e) => onUpdate({ text: e.target.value })} />
+          )}
         </InspField>
       );
 
@@ -750,11 +760,15 @@ function NodeInspectorForm({
       return (
         <>
           <InspField label="Texto del mensaje">
-            <Textarea
-              rows={3}
-              value={text}
-              onChange={(e) => onUpdate({ text: e.target.value })}
-            />
+            {node.config_bound && node.config_bound.length > 0 ? (
+              <ConfigBoundLock tenantId={tenantId} text={text} keys={node.config_bound} />
+            ) : (
+              <Textarea
+                rows={3}
+                value={text}
+                onChange={(e) => onUpdate({ text: e.target.value })}
+              />
+            )}
           </InspField>
 
           <div className="flex flex-col gap-1.5">
@@ -831,11 +845,15 @@ function NodeInspectorForm({
       return (
         <>
           <InspField label="Texto del mensaje">
-            <Textarea
-              rows={3}
-              value={text}
-              onChange={(e) => onUpdate({ text: e.target.value })}
-            />
+            {node.config_bound && node.config_bound.length > 0 ? (
+              <ConfigBoundLock tenantId={tenantId} text={text} keys={node.config_bound} />
+            ) : (
+              <Textarea
+                rows={3}
+                value={text}
+                onChange={(e) => onUpdate({ text: e.target.value })}
+              />
+            )}
           </InspField>
 
           <InspField label="Etiqueta del botón de lista">
@@ -1318,6 +1336,30 @@ function InspField({ label, children }: { label: string; children: ReactNode }) 
         {label}
       </Label>
       {children}
+    </div>
+  );
+}
+
+/**
+ * P3 — candado de texto gobernado por config. Reemplaza el Textarea editable
+ * cuando el nodo declara `config_bound`: el texto se ve pero no se toca desde
+ * aquí, con link directo a la pestaña Mensajes (fuente real del valor).
+ */
+function ConfigBoundLock({
+  tenantId, text, keys,
+}: { tenantId: string; text: string; keys: string[] }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="whitespace-pre-wrap rounded-md border border-dashed border-amber-300 bg-amber-50/60 px-2 py-1.5 text-sm text-muted-foreground">
+        {text}
+      </div>
+      <p className="flex flex-wrap items-center gap-1 text-[10px] text-amber-700">
+        <Lock className="h-3 w-3 shrink-0" aria-hidden />
+        Gobernado por config ({keys.map((k) => CONFIG_BOUND_LABELS[k as keyof typeof CONFIG_BOUND_LABELS] ?? k).join(' + ')}).
+        <Link to="/tenants/$id/whatsapp" params={{ id: tenantId }} className="underline hover:text-amber-900">
+          Editar en Mensajes
+        </Link>
+      </p>
     </div>
   );
 }
