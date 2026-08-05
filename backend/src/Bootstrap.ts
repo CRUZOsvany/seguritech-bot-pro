@@ -3,6 +3,7 @@ import pino from 'pino';
 import { config, validateConfig } from '@/config/env';
 import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
+import type { AuditPort } from '@/domain/ports';
 import { SupabaseUserRepository } from '@/infrastructure/repositories/SupabaseUserRepository';
 import { SupabaseBotFlowRepository } from '@/infrastructure/repositories/SupabaseBotFlowRepository';
 import { SupabaseTenantRepository } from '@/infrastructure/repositories/SupabaseTenantRepository';
@@ -101,6 +102,24 @@ export class Bootstrap {
         notificationPort = new ConsoleNotificationAdapter();
       }
 
+      // AuditLogService se construye ANTES del ApplicationContainer porque
+      // BotController (P4) necesita registrar la reanudación de handoff por
+      // WhatsApp del dueño (#listo). Se adapta a AuditPort (domain/ports) en
+      // vez de inyectar la clase concreta: BotController vive en app/ y no
+      // debe importar infrastructure/ directo (mismo criterio que domain/).
+      const auditLog = new AuditLogService(supabase, this.logger);
+      const auditPort: AuditPort = {
+        log: (event) =>
+          auditLog.log({
+            adminId: null,
+            adminEmail: event.actorLabel,
+            action: event.action,
+            targetType: event.targetType,
+            targetId: event.targetId,
+            metadata: event.metadata,
+          }),
+      };
+
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
@@ -108,6 +127,7 @@ export class Bootstrap {
         botFlowRepository,
         tenantRepository,
         supabase,
+        auditPort,
         this.logger,
       );
       this.logger.info('✅ Contenedor DI listo');
@@ -122,7 +142,6 @@ export class Bootstrap {
       );
       const adminSessionsRepository = new SupabaseAdminSessionsRepository(supabase, this.logger);
       const loginAttemptsRepository = new SupabaseLoginAttemptsRepository(supabase, this.logger);
-      const auditLog = new AuditLogService(supabase, this.logger);
 
       const requireAdmin = createAuthMiddleware({
         jwt: jwtService,
@@ -235,6 +254,7 @@ export class Bootstrap {
         tenantServiceRepository,
         botFlowRepository,
         messagesRepository,
+        userRepository,
         metaCredentialsRepository,
         whatsappFlowRepository,
         audit: auditLog,

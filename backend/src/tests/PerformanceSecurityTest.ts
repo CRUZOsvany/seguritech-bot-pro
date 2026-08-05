@@ -12,7 +12,7 @@ import { createLogger } from '@/config/logger';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
-import { TenantConfigPort, BotFlowRepository, TenantRepository } from '@/domain/ports';
+import { TenantConfigPort, BotFlowRepository, TenantRepository, AuditPort } from '@/domain/ports';
 
 /**
  * INTERFACE: Resultado de test
@@ -377,6 +377,7 @@ export class PerformanceSecurityTest {
       isModuleEnabled: async () => false,
     };
     const supabaseStub = {} as SupabaseClient;
+    const auditPortStub: AuditPort = { log: () => { /* noop en perf test */ } };
 
     this.container = new ApplicationContainer(
       userRepository,
@@ -385,6 +386,7 @@ export class PerformanceSecurityTest {
       botFlowRepository,
       tenantRepository,
       supabaseStub,
+      auditPortStub,
       this.logger,
     );
   }
