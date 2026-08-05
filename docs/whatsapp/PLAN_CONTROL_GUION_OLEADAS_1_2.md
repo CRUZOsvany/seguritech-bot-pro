@@ -1,10 +1,13 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.1 — Agosto 2026
+> **Versión:** 1.2 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
+> **Estado de ejecución (v1.2):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
+> ver Bitácora). **P1 y P2 mergeados a `main`.** **P3 implementado y pusheado (`feat/config-bound-gate`),
+> PR abierto, pendiente de merge.** P4–P8 sin empezar.
 
 ---
 
@@ -181,7 +184,7 @@ P0 ──┬──→ P1 ──────────────→ P3 ──
 
 ### OLEADA 0
 
-#### P0 · `chore/diagnostico-oleada-1`
+#### P0 · `chore/diagnostico-oleada-1` — ✅ cubierto (sin branch propia, ver Bitácora)
 **Objetivo:** foto exacta del repo y de Cloud. Cero código de producción.
 **Toca:** nada (solo lectura + reporte).
 **Entrega:** reporte con estado de ramas, confirmación de migración 017 en Cloud, valor real de
@@ -193,7 +196,7 @@ nodo, del response de `GET /tenants/:id/messages`, y de la firma de `WhatsAppSim
 
 ### OLEADA 1 — que la UI deje de mentir y el ciclo de edición cierre
 
-#### P1 · `feat/simulador-draft`
+#### P1 · `feat/simulador-draft` — ✅ MERGEADO (PR #43)
 **Objetivo:** poder probar el draft sin publicarlo a producción.
 **Backend:** CERO cambios. `source: 'draft'` ya está soportado.
 **Toca:**
@@ -214,7 +217,7 @@ nodo, del response de `GET /tenants/:id/messages`, y de la firma de `WhatsAppSim
 
 ---
 
-#### P2 · `fix/campos-fantasma`
+#### P2 · `fix/campos-fantasma` — ✅ MERGEADO (PR #44)
 **Objetivo:** que ningún control de la UI mienta.
 **Toca:** `frontend/src/apps/panel/routes/tenants.$id.whatsapp.tsx` (`messagesSchema` y
 `BotMessagesCard`).
@@ -229,38 +232,67 @@ dejan de ser editables desde la UI.
 
 ---
 
-#### P3 · `feat/config-bound-gate` — el corazón del plan
+#### P3 · `feat/config-bound-gate` — el corazón del plan — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** que "quién gobierna cada texto" sea una regla del sistema, no una convención.
-**PR único back+front por T1.**
+**PR único back+front por T1, como estaba previsto.**
+
+> **Ver H2 en la Bitácora:** la especificación original de esta sección (config_bound como enum de
+> valor único, "3 nodos") no sobrevivió el contacto con los datos reales y se corrigió durante la
+> implementación. El texto de abajo YA refleja lo implementado, no el plan original.
 
 **Backend:**
-- `domain/validators/flowSchema.ts`: agregar `config_bound: z.enum([...]).optional()` a los schemas
-  de nodo que tienen texto (`SendTextNodeSchema`, `SendButtonsNodeSchema`, `SendListNodeSchema`).
-  **Sin esto Zod lo borra al publicar (T1).**
-- `FlowSchema.superRefine`: si un nodo declara `config_bound: 'welcome_message'`, su texto principal
-  debe ser exactamente `{{welcome_message}}`. Si no, `ctx.addIssue` → sale como `publishIssues`.
-- Enum permitido inicial: `welcome_message`, `menu_message`, `not_understood_message`.
+- `domain/entities/flow.ts`: `CONFIG_BOUND_VALUES` (fuente única) + `config_bound?: ConfigBoundKey[]`
+  en `FlowNodeBase`. **Es ARRAY, no un enum de valor único** — el nodo real `bienvenida` combina DOS
+  variables en un solo mensaje (`"{{welcome_message}}\n\n{{menu_message}}"`), algo que un valor único
+  no puede expresar.
+- `domain/validators/flowSchema.ts`: `config_bound` agregado a `SendTextNodeSchema`,
+  `SendButtonsNodeSchema`, `SendListNodeSchema` (importando `CONFIG_BOUND_VALUES` de `entities/flow.ts`).
+  **Sin esto Zod lo borra al publicar (T1) — confirmado con test.**
+- `FlowSchema.superRefine`: si un nodo declara `config_bound`, su `content.text` debe consistir
+  **EXCLUSIVAMENTE** en los placeholders `{{key}}` de las claves declaradas (más espacios en blanco) —
+  ni texto literal mezclado, ni variables no declaradas, ni faltantes. `ctx.addIssue` con mensaje que
+  detalla exactamente qué falta/sobra.
+- Enum permitido: `welcome_message`, `menu_message`, `not_understood_message`.
   (`out_of_hours_message` y `order_confirmation_message` quedan fuera por D1/D2.)
+- 7 tests nuevos en `flowSchema.configBound.test.ts` (positivos, negativos, el caso real combinado).
 
 **Frontend:**
-- `designer/flow-types.ts`: `config_bound?: ConfigBoundKey` en `FlowNodeBase` (línea 37).
-- `designer/mapping/to-bot-flow.ts` y `to-react-flow.ts`: preservar el campo en el round-trip.
-- `NodeInspectorForm`: si hay `config_bound`, el campo de texto va read-only con candado + link a
-  la pestaña Mensajes.
-- `validation/graphValidator.ts`: código de issue nuevo `config_bound_mismatch` para verlo antes
-  del round-trip.
-- `routes/tenants.$id.whatsapp.tsx`: el `messagesSchema` rechaza `{{` en los valores (T2).
+- `designer/flow-types.ts`: espejo de `CONFIG_BOUND_VALUES`/`ConfigBoundKey` + `CONFIG_BOUND_LABELS`
+  para la UI.
+- `designer/mapping/to-bot-flow.ts` y `to-react-flow.ts`: **NO hizo falta tocarlos.** El round-trip ya
+  preserva cualquier campo top-level del nodo vía spread (`{...original}` en `designer-store.ts` y en
+  `graphToBotFlow`), así que `config_bound` sobrevive gratis sin cambio de código.
+- `NodeInspectorForm`: si hay `config_bound`, el campo "Texto" va read-only (candado + link a
+  Mensajes) en los 3 tipos de nodo que lo soportan. Requirió threadear `tenantId` a través de
+  `Inspector` (antes no lo recibía).
+- `validation/graphValidator.ts`: código de issue nuevo `config_bound_mismatch`, mismo chequeo que el
+  backend, en vivo antes del round-trip.
+- `routes/tenants.$id.whatsapp.tsx`: el `messagesSchema` rechaza `{{` en los 3 valores (T2) — y de
+  paso se corrigió que `BotMessagesCard` ni siquiera desestructuraba `formState`, así que los errores
+  de validación no se veían en ningún campo del formulario.
 
 **Datos:**
-- Marcar los 3 nodos correspondientes en `backend/scripts/cerrajeria-flow.json`.
-- Re-sembrar con `backend/scripts/persist-flow.ts` o `seed-cerrajerias.ts`.
+- Marcados en `backend/scripts/cerrajeria-flow.json`: **`bienvenida`** →
+  `config_bound: ["welcome_message", "menu_message"]`, **`no_entendi`** →
+  `config_bound: ["not_understood_message"]`. **Son 2 nodos, no 3** — el flow real de CerraCruz solo
+  tiene 2 nodos con variables canónicas (`welcome_message` y `menu_message` viven juntos en el nodo
+  `bienvenida`).
+- Verificado con `validateFlow()` corrido directo contra el JSON real: pasa en verde; y el caso
+  negativo (texto literal mezclado) se rechaza con el mensaje esperado.
+- **Re-seed contra Cloud (`seed-cerrajerias.ts`) queda PENDIENTE** — requiere
+  `SUPABASE_SERVICE_ROLE_KEY` + PII (WhatsApp del dueño) que Claude no corre sin confirmación
+  explícita de Cris, por ser una mutación de producción difícil de revertir.
 
 **Criterios:**
-1. Publicar un flow con `config_bound` y texto literal → **falla** con issue legible en el panel.
+1. Publicar un flow con `config_bound` y texto literal → **falla** con issue legible en el panel. ✅
+   verificado (script ad-hoc + test).
 2. Publicar el mismo flow con la variable correcta → pasa, y `config_bound` **sobrevive** en el JSON
-   publicado (verificar leyendo la fila de `bot_flow_versions`).
-3. Escribir `{{nombre_negocio}}` en el mensaje de bienvenida desde el panel → error de validación.
-4. El inspector muestra candado en los 3 nodos marcados de CerraCruz.
+   publicado. ✅ verificado a nivel `validateFlow()`; falta el verificado end-to-end contra
+   `bot_flow_versions` en Cloud, que requiere el re-seed pendiente arriba.
+3. Escribir `{{nombre_negocio}}` en el mensaje de bienvenida **desde la pestaña Mensajes** (no desde
+   el Designer — ese campo queda read-only) → error de validación visible. ✅
+4. El inspector muestra candado en los 2 nodos marcados de CerraCruz. ✅ (criterio original decía "3
+   nodos"; ver corrección arriba).
 
 ---
 
@@ -389,5 +421,7 @@ Copiar textualmente en cada `.md`:
 |---|---|
 | 2026-08-05 | Plan creado (v1.0). D3–D6 congeladas por Cris; D1–D2 asumidas pendientes de confirmar. Sección 2 verificada contra ZIP `seguritech-bot-proprueba`. |
 | 2026-08-05 | **H1 — Hallazgo de pre-vuelo (v1.1).** Antes de correr P0, se releyó §2 contra `main` en vivo. Todo coincidió exacto (incluidos números de línea de T3/T4/T5), con una excepción: existía la rama `fix/migration-017-ttl-comment` (local + `origin`, commit `d67dec1`, no mergeada a `main`), que atacaba la misma mentira de T3 pero en dirección **opuesta** a D3 — reescribía el comentario de la migración 017 para decir "120 min" (la verdad de hoy) en vez de subir el código a 48h (la decisión ya congelada). Mergearla tal cual habría producido un comentario correcto por horas y luego vuelto a mentir en cuanto P4 aterrizara, o un conflicto de merge en esa misma línea. **Resolución:** rama borrada (local + remota) sin mergear. P4 queda como la única corrección de T3, escribiendo directamente el estado final post-D3 en los 4 lugares. No reabrir el enfoque de esa rama. |
+| 2026-08-05 | **P0 cubierto sin branch propia.** El diagnóstico de código (rutas, líneas, contratos) ya se había hecho a mano en la conversación antes de escribir este plan; solo faltaba salud de build (type-check/lint/test), que se corrió directo sobre `main` — 0 errores, 96 warnings preexistentes. Lo único de P0 que sigue **NO VERIFICADO** es Cloud (columnas de mig. 015/017, tabla `bot_flow_versions`) — requiere que Cris corra el SQL en Supabase; no se creó `docs/DIAGNOSTICO_OLEADA_1.md` formal. **P1 y P2 implementados, mergeados a `main`** (PR #43 y #44) sin desvíos del plan. |
+| 2026-08-05 | **H2 — La especificación de P3 no sobrevivió el contacto con los datos reales.** Al implementar, dos supuestos del plan original resultaron falsos: (1) el plan asumía `config_bound` como enum de **valor único** por nodo ("si un nodo declara `config_bound: 'welcome_message'`, su texto debe ser exactamente `{{welcome_message}}`"), pero el nodo real `bienvenida` de CerraCruz combina **welcome_message + menu_message en un solo mensaje** (`"{{welcome_message}}\n\n{{menu_message}}"`) — un valor único no puede expresar eso. Se corrigió a `config_bound?: ConfigBoundKey[]` (array), con la regla de que el texto debe consistir EXCLUSIVAMENTE en los placeholders de las claves declaradas (verificado con test positivo y negativo, y con `validateFlow()` corrido contra el JSON real). (2) el plan decía "marcar los 3 nodos correspondientes", asumiendo 1 nodo por variable canónica — pero como welcome_message y menu_message viven en el MISMO nodo, en realidad son **2 nodos** (`bienvenida`, `no_entendi`), no 3. Corregido en la sección de P3 y en su criterio 4. Bono no previsto: `to-bot-flow.ts`/`to-react-flow.ts` no necesitaron ningún cambio — el round-trip ya preservaba campos top-level de nodo por spread, así que `config_bound` sobrevive gratis. Y se encontró que `BotMessagesCard` nunca desestructuraba `formState`, así que los errores de Zod (incluyendo el nuevo de T2) no se mostraban en ningún campo — se corrigió de paso. Re-seed contra Cloud (`seed-cerrajerias.ts`) queda pendiente de que Cris lo corra — requiere `SUPABASE_SERVICE_ROLE_KEY` y PII, mutación de producción que Claude no ejecuta sin confirmación explícita. |
 
 ---
