@@ -2,7 +2,10 @@ import { useRef, useState } from 'react';
 import {
   Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile,
 } from 'lucide-react';
-import { simulate, simulateReset, type InterpreterOutput, type SimulateState } from '@/shared/api/tenants';
+import {
+  simulate, simulateReset,
+  type InterpreterOutput, type SimulateState, type SimulateSource,
+} from '@/shared/api/tenants';
 import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
@@ -11,15 +14,23 @@ import { Alert, AlertDescription } from '@/shared/ui/alert';
 /**
  * Simulador de conversación de WhatsApp reutilizable.
  *
- * Simula contra el flow ACTIVO/publicado del tenant vía POST /api/admin/simulate
- * (no contra el draft del canvas). Renderiza fielmente los 13 kinds de
- * InterpreterOutput dentro de un mockup de teléfono.
+ * Por default simula contra el flow ACTIVO/publicado del tenant. Si se pasa
+ * `source='draft'` (+ `flowId`), simula contra el draft en edición del
+ * Designer — sin publicar. Ambos casos van vía POST /api/admin/simulate
+ * (persist=false, conversación efímera). Un chip BORRADOR/PUBLICADO en el
+ * header del mockup deja inequívoco qué se está probando. Renderiza
+ * fielmente los 13 kinds de InterpreterOutput dentro de un mockup de teléfono.
  *
  * Props:
- *   tenantId    — tenant a simular.
- *   phoneNumber — teléfono de prueba (default un número simulado fijo).
- *   hasFlow     — si false, muestra aviso de que no hay flujo que simular.
- *   compact     — si true, reduce altura (para split-screen del designer).
+ *   tenantId     — tenant a simular.
+ *   phoneNumber  — teléfono de prueba (default un número simulado fijo).
+ *   hasFlow      — si false, muestra aviso de que no hay flujo que simular.
+ *   compact      — si true, reduce altura (para split-screen del designer).
+ *   source       — 'active' (default) o 'draft'. 'version' no se expone aquí (P6).
+ *   flowId       — requerido si source='draft'.
+ *   onBeforeSend — hook opcional, se espera antes de cada turno (p.ej. el
+ *                  Designer lo usa para guardar el draft sucio del canvas
+ *                  antes de simularlo, así el turno prueba lo último editado).
  */
 
 const DEFAULT_SIM_PHONE = '5210000000000';
@@ -31,11 +42,17 @@ export function WhatsAppSimulator({
   phoneNumber = DEFAULT_SIM_PHONE,
   hasFlow = true,
   compact = false,
+  source = 'active',
+  flowId,
+  onBeforeSend,
 }: {
   tenantId: string;
   phoneNumber?: string;
   hasFlow?: boolean;
   compact?: boolean;
+  source?: Extract<SimulateSource, 'active' | 'draft'>;
+  flowId?: string;
+  onBeforeSend?: () => Promise<void> | void;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
@@ -54,7 +71,11 @@ export function WhatsAppSimulator({
     setTurns((t) => [...t, { from: 'user', text: content }]);
     setText('');
     try {
-      const res = await simulate(tenantId, phoneNumber, content, stateRef.current);
+      if (onBeforeSend) await onBeforeSend();
+      const res = await simulate(tenantId, phoneNumber, content, stateRef.current, {
+        source,
+        flowId: source === 'draft' ? flowId : undefined,
+      });
       stateRef.current = { currentNodeId: res.nextNodeId, context: res.context };
       setTurns((t) => [...t, ...res.outputs.map((o) => ({ from: 'bot' as const, output: o }))]);
     } catch (e) {
@@ -92,6 +113,14 @@ export function WhatsAppSimulator({
             <span className="text-xs font-medium">Bot (simulación)</span>
             <span className="text-[10px] text-white/80">en línea</span>
           </div>
+          {/* Indicador inequívoco de qué flow se está probando (P1). */}
+          <span
+            className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              source === 'draft' ? 'bg-amber-400 text-amber-950' : 'bg-white/25 text-white'
+            }`}
+          >
+            {source === 'draft' ? 'BORRADOR' : 'PUBLICADO'}
+          </span>
         </div>
 
         {/* Área de mensajes */}

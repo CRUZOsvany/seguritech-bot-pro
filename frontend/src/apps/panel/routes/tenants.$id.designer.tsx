@@ -256,6 +256,9 @@ function DesignerCanvas({
   }, [selectedId, deleteNode]);
 
   const [showValidation, setShowValidation] = useState(false);
+  // P1: qué flow prueba el simulador embebido. Default 'draft' — el Designer
+  // existe para iterar sobre el borrador, no sobre lo ya publicado.
+  const [simSource, setSimSource] = useState<'active' | 'draft'>('draft');
 
   // Validación de grafo en vivo. Se recalcula cuando cambian los nodos/edges
   // del store; `toBotFlow` es referencia estable del store.
@@ -457,13 +460,54 @@ function DesignerCanvas({
 
           {/* Simulador split-screen — siempre visible bajo el canvas */}
           <div className="mt-3 border-t pt-3">
-            <div className="mb-2 flex items-center gap-2">
-              <Send className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
-              <p className="text-xs font-medium text-muted-foreground">
-                Simulador — prueba el flujo PUBLICADO (no el draft actual)
-              </p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Send className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+                <p className="text-xs font-medium text-muted-foreground">
+                  Simulador — {simSource === 'draft' ? 'probando el BORRADOR' : 'probando lo PUBLICADO'}
+                </p>
+              </div>
+              <div className="inline-flex rounded-md border border-border/70 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setSimSource('draft')}
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    simSource === 'draft'
+                      ? 'bg-amber-100 text-amber-800'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  Draft
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSimSource('active')}
+                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                    simSource === 'active'
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'text-muted-foreground hover:bg-muted'
+                  }`}
+                >
+                  Publicado
+                </button>
+              </div>
             </div>
-            <WhatsAppSimulator tenantId={tenantId} compact />
+            <WhatsAppSimulator
+              tenantId={tenantId}
+              compact
+              source={simSource}
+              flowId={flowId}
+              // Si se está probando el draft y el canvas tiene cambios sin
+              // guardar, los guarda antes del turno — para que el simulador
+              // siempre pruebe lo último editado, no una copia vieja del draft.
+              onBeforeSend={
+                simSource === 'draft'
+                  ? async () => {
+                      if (dirty) await save.mutateAsync({ flowId, flow: toBotFlow() });
+                    }
+                  : undefined
+              }
+            />
           </div>
           </>
         )}
