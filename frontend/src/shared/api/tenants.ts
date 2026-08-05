@@ -390,11 +390,19 @@ export interface SimulateState {
   context?: Record<string, unknown>;
 }
 
+/**
+ * Fuente del flow a simular. Espejo de `SimulateSource` en
+ * SimulateMessageUseCase (backend). 'version' queda reservado para P6
+ * (rollback/UI de versiones); no se expone todavía en el simulador del panel.
+ */
+export type SimulateSource = 'active' | 'draft' | 'version';
+
 export async function simulate(
   tenantId: string,
   phoneNumber: string,
   content: string,
   state?: SimulateState,
+  options?: { source?: SimulateSource; flowId?: string; versionId?: string },
 ): Promise<SimulateResult> {
   return apiFetch<SimulateResult>('POST', '/api/admin/simulate', {
     tenantId,
@@ -402,6 +410,9 @@ export async function simulate(
     content,
     persist: false,
     ...(state ? { state } : {}),
+    ...(options?.source ? { source: options.source } : {}),
+    ...(options?.flowId ? { flowId: options.flowId } : {}),
+    ...(options?.versionId ? { versionId: options.versionId } : {}),
   });
 }
 
