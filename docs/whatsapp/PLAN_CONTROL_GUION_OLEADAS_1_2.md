@@ -1,13 +1,13 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.2 — Agosto 2026
+> **Versión:** 1.3 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
-> **Estado de ejecución (v1.2):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
-> ver Bitácora). **P1 y P2 mergeados a `main`.** **P3 implementado y pusheado (`feat/config-bound-gate`),
-> PR abierto, pendiente de merge.** P4–P8 sin empezar.
+> **Estado de ejecución (v1.3):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
+> ver Bitácora). **P1, P2 y P3 mergeados a `main`.** **P4 implementado y pusheado
+> (`feat/handoff-control`), PR abierto, pendiente de merge.** P5–P8 sin empezar.
 
 ---
 
@@ -232,7 +232,7 @@ dejan de ser editables desde la UI.
 
 ---
 
-#### P3 · `feat/config-bound-gate` — el corazón del plan — ✅ IMPLEMENTADO, PR abierto (sin merge)
+#### P3 · `feat/config-bound-gate` — el corazón del plan — ✅ MERGEADO (PR #45)
 **Objetivo:** que "quién gobierna cada texto" sea una regla del sistema, no una convención.
 **PR único back+front por T1, como estaba previsto.**
 
@@ -298,35 +298,51 @@ dejan de ser editables desde la UI.
 
 ### OLEADA 2 — control operativo
 
-#### P4 · `feat/handoff-control`
+#### P4 · `feat/handoff-control` — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** que el handoff se pueda cerrar sin esperar 48 h y sin panel.
-**Toca:**
-- `backend/src/config/env.ts` línea 63: default `120` → `2880` (D3).
-- `backend/src/app/controllers/BotController.ts` línea 5: corregir comentario a 48 h.
-- `backend/supabase/migrations/017_human_handoff_pause.sql`: corregir el comentario final de la
-  columna a la versión definitiva post-D3 (**este PR es la única corrección de T3 — ver H1**, no
-  hay rama previa que resolver ni con la que hacer merge).
-- `BotController.processMessage`: gate del `ownerPhone` **antes** de `findActiveByTenant`. Match
-  exacto contra `['#listo','#reanudar']`, simétrico a `isEscapeWord` (`FlowInterpreter.ts:623`).
-  Cualquier otro mensaje del dueño sigue al flow normal (D4).
-- Ruta nueva en `tenantsRouter.ts` (o sub-router) para despausar: llama a
-  `setHumanHandoff(tenantId, phone, null)`. Registrar en `audit_log` (regla operativa 14).
-- `escape_to_human`: enriquecer `owner_alert` — link `wa.me` clickeable con el teléfono del cliente,
-  lo capturado en el `wait_input` previo, y la hora.
 
-**Punto abierto a resolver DENTRO de este prompt:** si hay más de una conversación pausada a la vez,
-`#listo` a secas es ambiguo. Opciones a evaluar en Fase 0 del prompt: (a) `#listo` despausa la más
-reciente; (b) el `owner_alert` incluye un código corto y el comando es `#listo AB12`. Claude Code
-debe reportar cuál conviene antes de implementar.
+**Ambigüedad resuelta (ver Bitácora):** opción **(c)**, ninguna de las dos que planteaba el punto
+abierto original. Hay dos casos, no uno:
+- **0 o 1 conversación pausada:** `#listo` a secas resuelve sola, sin pedir nada — cubre el caso
+  común de un negocio chico sin fricción.
+- **2+ pausadas simultáneas:** `#listo` a secas lista las pausadas con los **últimos 4 dígitos** de
+  cada teléfono (no un código random — no hay que inventar ni guardar nada nuevo) y pide
+  `#listo <4 dígitos>` para desambiguar. Elegí esto sobre "reanuda la más reciente" (opción a del
+  punto abierto) porque esa opción puede reanudar silenciosamente al cliente equivocado mientras el
+  urgente sigue pausado — riesgo real para un negocio de cerrajería con emergencias.
+
+**Implementado:**
+- `env.ts` línea 63: default `120` → `2880` (D3). ⚠️ **Ver H3 en la Bitácora — esto NO cambia el
+  comportamiento en ningún entorno que ya tenga `HANDOFF_PAUSE_MINUTES` seteado explícito** (como
+  esta máquina de desarrollo).
+- `BotController.ts` línea 5 y comentario de la migración 017: alineados al estado final (T3 cerrado
+  en los 4 lugares que quedaban vivos en código/docs — Cloud es aparte, ver H3).
+- `BotController.processMessage`: gate del `ownerPhone` antes de cargar el flow (`findActiveByTenant`
+  ni se llama cuando el comando se resuelve). Match exacto case-insensitive contra
+  `#listo`/`#reanudar`, con o sin código de 4 dígitos. Cualquier otro mensaje del dueño sigue de
+  largo al `FlowInterpreter` (D4 intacto, con test que lo prueba).
+- `domain/ports`: `UserRepository.listPaused()` (P4 la necesitaba ya, P8 la reusa tal cual — sin
+  cambios) + `AuditPort`, puerto mínimo para que `BotController` audite sin importar
+  `AuditLogService` (infra) directo — mismo criterio de capas que `domain/`. `Bootstrap.ts` adapta
+  `AuditLogService` a `AuditPort`.
+- `escape_to_human`: `owner_alert` se enriquece en `BotController` (no en cada molde) con link
+  `wa.me` al cliente, hora, y el código de 4 dígitos para el `#listo` correspondiente.
+- Ruta nueva `POST /api/admin/tenants/:id/human-handoff/resume` (`requireTenantScope`, audita vía
+  `ctx(req)`) — misma operación que el comando de WhatsApp, para cuando P8 tenga botón "Reanudar" en
+  el panel.
 
 **Criterios:**
-1. Un `bot_user` pausado se reactiva con `#listo` del `ownerPhone` en < 5 s.
-2. El dueño escribiendo "hola" al número del negocio **sí** recibe el bot (no se rompe el
-   auto-testeo).
-3. La despausa queda en `admin_audit_log`.
-4. Test unitario nuevo en `humanHandoff.test.ts` para el gate del owner.
-5. Los 4 lugares del TTL dicen lo mismo (env.ts, comentario de BotController, log de BotController,
-   comentario de la migración 017, docblock del test).
+1. Un `bot_user` pausado se reactiva con `#listo` del `ownerPhone` en < 5 s. ✅
+2. El dueño escribiendo "hola" al número del negocio **sí** recibe el bot. ✅ (test dedicado)
+3. La despausa queda auditada — vía `AuditPort` si es por WhatsApp, vía `admin_audit_log`/`ctx(req)`
+   si es por el endpoint del panel. ✅
+4. Test unitario nuevo en `humanHandoff.test.ts` para el gate del owner. ✅ — 8 tests nuevos (sin
+   comando, 1 pausado, 2+ con/sin código, código sin match, case-insensitive).
+5. Los lugares del TTL dicen lo mismo **en código** — env.ts, comentario de BotController, log de
+   BotController, comentario de la migración 017. El docblock de `humanHandoff.test.ts` que decía
+   "48h" ya no hace falta forzarlo: ahora es cierto por default. **No** incluí un test que assertara
+   el valor `2880` literal — ver H3, se descartó a propósito porque rompe en cualquier entorno con
+   override de `.env` (exactamente lo que tiene esta máquina).
 
 ---
 
@@ -423,5 +439,7 @@ Copiar textualmente en cada `.md`:
 | 2026-08-05 | **H1 — Hallazgo de pre-vuelo (v1.1).** Antes de correr P0, se releyó §2 contra `main` en vivo. Todo coincidió exacto (incluidos números de línea de T3/T4/T5), con una excepción: existía la rama `fix/migration-017-ttl-comment` (local + `origin`, commit `d67dec1`, no mergeada a `main`), que atacaba la misma mentira de T3 pero en dirección **opuesta** a D3 — reescribía el comentario de la migración 017 para decir "120 min" (la verdad de hoy) en vez de subir el código a 48h (la decisión ya congelada). Mergearla tal cual habría producido un comentario correcto por horas y luego vuelto a mentir en cuanto P4 aterrizara, o un conflicto de merge en esa misma línea. **Resolución:** rama borrada (local + remota) sin mergear. P4 queda como la única corrección de T3, escribiendo directamente el estado final post-D3 en los 4 lugares. No reabrir el enfoque de esa rama. |
 | 2026-08-05 | **P0 cubierto sin branch propia.** El diagnóstico de código (rutas, líneas, contratos) ya se había hecho a mano en la conversación antes de escribir este plan; solo faltaba salud de build (type-check/lint/test), que se corrió directo sobre `main` — 0 errores, 96 warnings preexistentes. Lo único de P0 que sigue **NO VERIFICADO** es Cloud (columnas de mig. 015/017, tabla `bot_flow_versions`) — requiere que Cris corra el SQL en Supabase; no se creó `docs/DIAGNOSTICO_OLEADA_1.md` formal. **P1 y P2 implementados, mergeados a `main`** (PR #43 y #44) sin desvíos del plan. |
 | 2026-08-05 | **H2 — La especificación de P3 no sobrevivió el contacto con los datos reales.** Al implementar, dos supuestos del plan original resultaron falsos: (1) el plan asumía `config_bound` como enum de **valor único** por nodo ("si un nodo declara `config_bound: 'welcome_message'`, su texto debe ser exactamente `{{welcome_message}}`"), pero el nodo real `bienvenida` de CerraCruz combina **welcome_message + menu_message en un solo mensaje** (`"{{welcome_message}}\n\n{{menu_message}}"`) — un valor único no puede expresar eso. Se corrigió a `config_bound?: ConfigBoundKey[]` (array), con la regla de que el texto debe consistir EXCLUSIVAMENTE en los placeholders de las claves declaradas (verificado con test positivo y negativo, y con `validateFlow()` corrido contra el JSON real). (2) el plan decía "marcar los 3 nodos correspondientes", asumiendo 1 nodo por variable canónica — pero como welcome_message y menu_message viven en el MISMO nodo, en realidad son **2 nodos** (`bienvenida`, `no_entendi`), no 3. Corregido en la sección de P3 y en su criterio 4. Bono no previsto: `to-bot-flow.ts`/`to-react-flow.ts` no necesitaron ningún cambio — el round-trip ya preservaba campos top-level de nodo por spread, así que `config_bound` sobrevive gratis. Y se encontró que `BotMessagesCard` nunca desestructuraba `formState`, así que los errores de Zod (incluyendo el nuevo de T2) no se mostraban en ningún campo — se corrigió de paso. Re-seed contra Cloud (`seed-cerrajerias.ts`) queda pendiente de que Cris lo corra — requiere `SUPABASE_SERVICE_ROLE_KEY` y PII, mutación de producción que Claude no ejecuta sin confirmación explícita. |
+| 2026-08-05 | **P3 mergeado a `main`** (PR #45), sin más novedad que H2. |
+| 2026-08-05 | **H3 — Dos hallazgos al implementar P4.** (1) **`.env` local ya trae `HANDOFF_PAUSE_MINUTES=120` explícito.** El default del schema Zod en `env.ts` solo aplica cuando la env var está AUSENTE; subir el default a 2880 en el código **no cambia nada** en ningún entorno (esta máquina, y probablemente Cloud/producción si también lo tiene seteado) que ya defina la variable a mano. D3 solo toma efecto de verdad si Cris actualiza el valor real de `HANDOFF_PAUSE_MINUTES` donde esté desplegado — el cambio de código por sí solo es necesario pero no suficiente. Nadie leyó el contenido del `.env` para descubrir esto (prohibido por regla operativa 3): se infirió de que un test que esperaba `2880` recibió `120`. (2) **Se descartó un test propio por el mismo motivo** — había escrito `expect(config.bot.handoffPauseMinutes).toBe(2880)`, que falló exactamente por (1). El patrón ya establecido en `humanHandoff.test.ts` (comentario preexistente: "El timestamp debe ser approximately now + HANDOFF_TTL — leído del config, no hardcodeado") evita a propósito hardcodear ese número; se corrigió el test propio para seguir el mismo patrón, eliminando la aserción del literal. **Además:** la ambigüedad de `#listo` con 2+ pausados que el plan dejaba abierta para P4 se resolvió con últimos-4-dígitos del teléfono como código de desambiguación — ni "reanuda el más reciente" (arriesgado: puede reanudar al cliente equivocado) ni un código nuevo que hubiera requerido columna/estado adicional. Ver sección de P4 arriba para el detalle completo. |
 
 ---
