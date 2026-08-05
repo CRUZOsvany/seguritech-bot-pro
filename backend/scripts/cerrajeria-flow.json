@@ -5,6 +5,7 @@
     {
       "id": "bienvenida",
       "type": "send_buttons",
+      "config_bound": ["welcome_message", "menu_message"],
       "content": {
         "text": "{{welcome_message}}\n\n{{menu_message}}",
         "buttons": [
@@ -176,6 +177,7 @@
     {
       "id": "no_entendi",
       "type": "send_buttons",
+      "config_bound": ["not_understood_message"],
       "content": {
         "text": "{{not_understood_message}}",
         "buttons": [

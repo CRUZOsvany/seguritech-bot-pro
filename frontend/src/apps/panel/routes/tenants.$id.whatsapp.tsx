@@ -54,10 +54,19 @@ type IdentityForm = z.infer<typeof identitySchema>;
  *     referencie vía {{order_confirmation_message}} (ver P3, config_bound).
  * Ver docs/whatsapp/PLAN_CONTROL_GUION_OLEADAS_1_2.md.
  */
+/**
+ * P3 (T2): sin `{{ }}` en los valores de Mensajes. El VariableResolver hace
+ * UNA sola pasada — si `mensaje_bienvenida` contuviera p.ej. {{nombre_negocio}},
+ * el cliente final vería las llaves literales en su WhatsApp (no se re-resuelve).
+ */
+const noTemplateVars = (v: string) => !v.includes('{{');
+const NO_TEMPLATE_VARS_MSG =
+  'No debe contener variables {{ }} — no se vuelven a resolver y el cliente las vería tal cual.';
+
 const messagesSchema = z.object({
-  mensaje_bienvenida: z.string().max(1024).optional().or(z.literal('')),
-  mensaje_menu_principal: z.string().max(1024).optional().or(z.literal('')),
-  mensaje_no_entendio: z.string().max(1024).optional().or(z.literal('')),
+  mensaje_bienvenida: z.string().max(1024).refine(noTemplateVars, NO_TEMPLATE_VARS_MSG).optional().or(z.literal('')),
+  mensaje_menu_principal: z.string().max(1024).refine(noTemplateVars, NO_TEMPLATE_VARS_MSG).optional().or(z.literal('')),
+  mensaje_no_entendio: z.string().max(1024).refine(noTemplateVars, NO_TEMPLATE_VARS_MSG).optional().or(z.literal('')),
 });
 type MessagesForm = z.infer<typeof messagesSchema>;
 
@@ -388,7 +397,7 @@ function BotMessagesCard({
   tenantId, config,
 }: { tenantId: string; config: import('@/shared/api/tenants').BotConfiguration | null }) {
   const update = useUpdateBotConfig(tenantId);
-  const { register, handleSubmit } = useForm<MessagesForm>({
+  const { register, handleSubmit, formState } = useForm<MessagesForm>({
     resolver: zodResolver(messagesSchema),
     defaultValues: {
       mensaje_bienvenida: config?.mensaje_bienvenida ?? '',
@@ -428,6 +437,9 @@ function BotMessagesCard({
             <div key={key} className="flex flex-col gap-1">
               <Label htmlFor={key}>{label}</Label>
               <Textarea id={key} rows={2} {...register(key)} />
+              {formState.errors[key] && (
+                <span className="text-xs text-destructive">{formState.errors[key]?.message}</span>
+              )}
             </div>
           ))}
 

@@ -30,7 +30,8 @@ export interface ValidationIssue {
     | 'unreachable_node'
     | 'node_no_transitions'
     | 'cycle_detected'
-    | 'duplicate_condition';
+    | 'duplicate_condition'
+    | 'config_bound_mismatch';
   message: string;
   /** Nodo(s) implicados, para resaltar en el canvas en versiones futuras. */
   nodeIds: string[];
@@ -234,6 +235,42 @@ export function validateGraph(flow: BotFlow): ValidationResult {
       message: `Hay un ciclo en el flujo que involucra: ${[...cycleNodes].join(', ')}. Verifica que tenga una salida.`,
       nodeIds: [...cycleNodes],
     });
+  }
+
+  // ── 8. config_bound (P3): el texto debe ser EXCLUSIVAMENTE las variables
+  // declaradas — mismo chequeo que el backend en FlowSchema.superRefine, pero
+  // en vivo, antes del round-trip de publicación. Ver flow-types.ts.
+  for (const node of nodes) {
+    if (node.type !== 'send_text' && node.type !== 'send_buttons' && node.type !== 'send_list') {
+      continue;
+    }
+    const boundKeys = node.config_bound;
+    if (!boundKeys || boundKeys.length === 0) continue;
+
+    const text = node.content.text;
+    const foundKeys = new Set<string>();
+    const stripped = text.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => {
+      foundKeys.add(key);
+      return '';
+    });
+
+    const declared = new Set<string>(boundKeys);
+    const missing = boundKeys.filter((k) => !foundKeys.has(k));
+    const extra = [...foundKeys].filter((k) => !declared.has(k));
+    const hasLiteralText = stripped.trim().length > 0;
+
+    if (missing.length > 0 || extra.length > 0 || hasLiteralText) {
+      const parts: string[] = [];
+      if (missing.length > 0) parts.push(`faltan {{${missing.join('}}, {{')}}}`);
+      if (extra.length > 0) parts.push(`variables no declaradas: {{${extra.join('}}, {{')}}}`);
+      if (hasLiteralText) parts.push('hay texto literal fuera de las variables');
+      issues.push({
+        severity: 'error',
+        code: 'config_bound_mismatch',
+        message: `El nodo "${node.id}" declara config_bound=[${boundKeys.join(', ')}] pero su texto no coincide exactamente (${parts.join('; ')}).`,
+        nodeIds: [node.id],
+      });
+    }
   }
 
   // ── Resultado ─────────────────────────────────────────────────────────────
