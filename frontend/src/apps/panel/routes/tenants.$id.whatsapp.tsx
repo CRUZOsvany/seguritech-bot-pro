@@ -6,7 +6,7 @@ import { z } from 'zod';
 import {
   ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
   Bot, LayoutDashboard, MessageSquare, Plug, Route as RouteIcon,
-  ChevronDown, ChevronRight, ExternalLink,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -41,12 +41,23 @@ const identitySchema = z.object({
 });
 type IdentityForm = z.infer<typeof identitySchema>;
 
+/**
+ * P2 (D1+D2): `mensaje_fuera_horario` y `mensaje_confirmacion_pedido` NO están
+ * en este schema a propósito. Son campos "fantasma": existen en `bot_configurations`
+ * y el VariableResolver sabe resolverlos ({{out_of_hours_message}},
+ * {{order_confirmation_message}}), pero ningún flow publicado los referencia
+ * y no hay lógica de horarios en el backend — hoy, guardarlos no tenía ningún
+ * efecto en lo que el bot dice. Se ocultan de la UI (no se borran de BD ni de
+ * `BotConfigPatch`) hasta que:
+ *   - `mensaje_fuera_horario`: exista lógica real de horarios (Oleada 3).
+ *   - `mensaje_confirmacion_pedido`: un molde (papelería/ferretería) lo
+ *     referencie vía {{order_confirmation_message}} (ver P3, config_bound).
+ * Ver docs/whatsapp/PLAN_CONTROL_GUION_OLEADAS_1_2.md.
+ */
 const messagesSchema = z.object({
   mensaje_bienvenida: z.string().max(1024).optional().or(z.literal('')),
   mensaje_menu_principal: z.string().max(1024).optional().or(z.literal('')),
-  mensaje_fuera_horario: z.string().max(1024).optional().or(z.literal('')),
   mensaje_no_entendio: z.string().max(1024).optional().or(z.literal('')),
-  mensaje_confirmacion_pedido: z.string().max(1024).optional().or(z.literal('')),
 });
 type MessagesForm = z.infer<typeof messagesSchema>;
 
@@ -377,15 +388,12 @@ function BotMessagesCard({
   tenantId, config,
 }: { tenantId: string; config: import('@/shared/api/tenants').BotConfiguration | null }) {
   const update = useUpdateBotConfig(tenantId);
-  const [showSecondary, setShowSecondary] = useState(false);
   const { register, handleSubmit } = useForm<MessagesForm>({
     resolver: zodResolver(messagesSchema),
     defaultValues: {
       mensaje_bienvenida: config?.mensaje_bienvenida ?? '',
       mensaje_menu_principal: config?.mensaje_menu_principal ?? '',
-      mensaje_fuera_horario: config?.mensaje_fuera_horario ?? '',
       mensaje_no_entendio: config?.mensaje_no_entendio ?? '',
-      mensaje_confirmacion_pedido: config?.mensaje_confirmacion_pedido ?? '',
     },
   });
 
@@ -399,14 +407,13 @@ function BotMessagesCard({
     update.mutate(patch);
   });
 
-  const primaryFields: Array<[keyof MessagesForm, string]> = [
+  // P2 (D1+D2): solo campos con consumidor real en el flow/VariableResolver.
+  // `mensaje_fuera_horario` y `mensaje_confirmacion_pedido` se ocultaron —
+  // ver el comentario de `messagesSchema` más arriba.
+  const fields: Array<[keyof MessagesForm, string]> = [
     ['mensaje_bienvenida', 'Mensaje de bienvenida'],
     ['mensaje_menu_principal', 'Menú principal'],
-  ];
-  const secondaryFields: Array<[keyof MessagesForm, string]> = [
-    ['mensaje_fuera_horario', 'Fuera de horario'],
     ['mensaje_no_entendio', 'No entendió'],
-    ['mensaje_confirmacion_pedido', 'Confirmación de pedido'],
   ];
 
   return (
@@ -417,29 +424,12 @@ function BotMessagesCard({
       </CardHeader>
       <CardContent>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          {primaryFields.map(([key, label]) => (
+          {fields.map(([key, label]) => (
             <div key={key} className="flex flex-col gap-1">
               <Label htmlFor={key}>{label}</Label>
               <Textarea id={key} rows={2} {...register(key)} />
             </div>
           ))}
-
-          <button
-            type="button"
-            onClick={() => setShowSecondary((v) => !v)}
-            className="flex items-center gap-1 self-start text-sm text-muted-foreground hover:text-foreground"
-          >
-            {showSecondary ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            Mensajes secundarios (fuera de horario, no entendió, confirmación)
-          </button>
-
-          {showSecondary &&
-            secondaryFields.map(([key, label]) => (
-              <div key={key} className="flex flex-col gap-1">
-                <Label htmlFor={key}>{label}</Label>
-                <Textarea id={key} rows={2} {...register(key)} />
-              </div>
-            ))}
 
           <div className="flex items-center gap-2">
             <Button type="submit" size="sm" disabled={update.isPending}>
