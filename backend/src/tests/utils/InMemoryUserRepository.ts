@@ -62,6 +62,13 @@ export class InMemoryUserRepository implements UserRepository {
     }
   }
 
+  async listPaused(tenantId: string): Promise<User[]> {
+    const now = new Date();
+    return [...this.users.values()]
+      .filter((u) => u.tenantId === tenantId && !!u.humanPausedUntil && u.humanPausedUntil > now)
+      .sort((a, b) => a.humanPausedUntil!.getTime() - b.humanPausedUntil!.getTime());
+  }
+
   // Para tests: limpiar todos los datos
   clear(): void {
     this.users.clear();

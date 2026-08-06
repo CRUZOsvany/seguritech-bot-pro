@@ -8,7 +8,7 @@ import type { TenantRepository } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MetaCredentialsRepository } from '@/domain/ports';
-import type { MessagesRepository } from '@/domain/ports';
+import type { MessagesRepository, UserRepository } from '@/domain/ports';
 import type { WhatsAppFlowRepository } from '@/domain/ports/WhatsAppFlowRepository';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -43,6 +43,7 @@ export function createAdminRouter(params: {
   tenantServiceRepository: TenantServiceRepository;
   botFlowRepository: BotFlowRepository;
   messagesRepository: MessagesRepository;
+  userRepository: UserRepository;
   /** Opcional: solo presente cuando META_TOKEN_ENCRYPTION_KEY está configurada. */
   metaCredentialsRepository?: MetaCredentialsRepository;
   whatsappFlowRepository: WhatsAppFlowRepository;
@@ -60,6 +61,7 @@ export function createAdminRouter(params: {
     tenantServiceRepository,
     botFlowRepository,
     messagesRepository,
+    userRepository,
     metaCredentialsRepository,
     whatsappFlowRepository,
     audit,
@@ -97,6 +99,7 @@ export function createAdminRouter(params: {
       tenantServiceRepository,
       botFlowRepository,
       messagesRepository,
+      userRepository,
       audit,
       supabase,
       logger,

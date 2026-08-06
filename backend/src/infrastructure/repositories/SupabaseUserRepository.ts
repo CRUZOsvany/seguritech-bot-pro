@@ -145,6 +145,22 @@ export class SupabaseUserRepository implements UserRepository {
     );
   }
 
+  async listPaused(tenantId: string): Promise<User[]> {
+    const { data, error } = await this.supabase
+      .from('bot_users')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .not('human_paused_until', 'is', null)
+      .gt('human_paused_until', new Date().toISOString())
+      .order('human_paused_until', { ascending: true });
+
+    if (error) {
+      this.logger.error({ error, tenantId }, 'listPaused failed');
+      throw new Error(`listPaused failed: ${error.message}`);
+    }
+    return (data ?? []).map((row) => this.mapRow(row));
+  }
+
   private mapRow(row: Record<string, any>): User {
     return {
       id: row.id,

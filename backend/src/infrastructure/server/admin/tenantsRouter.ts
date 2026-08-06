@@ -8,7 +8,7 @@ import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase
 import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
-import type { MessagesRepository } from '@/domain/ports';
+import type { MessagesRepository, UserRepository } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
@@ -29,6 +29,7 @@ export function createTenantsRouter(params: {
   tenantServiceRepository: TenantServiceRepository;
   botFlowRepository: BotFlowRepository;
   messagesRepository: MessagesRepository;
+  userRepository: UserRepository;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -42,6 +43,7 @@ export function createTenantsRouter(params: {
     tenantServiceRepository,
     botFlowRepository,
     messagesRepository,
+    userRepository,
     audit,
     supabase,
     logger,
@@ -343,6 +345,46 @@ export function createTenantsRouter(params: {
       res.status(500).json({ error: errMsg(err) || 'Error interno' });
     }
   });
+
+  // ============================================================
+  // POST /api/admin/tenants/:id/human-handoff/resume
+  // Despausa manualmente a un bot_user desde el panel (P4). Simétrico al
+  // gate de #listo/#reanudar del dueño por WhatsApp en BotController — misma
+  // operación (setHumanHandoff a null), dos entradas. P8 (bandeja de
+  // escalaciones) reusa este mismo endpoint para su botón "Reanudar".
+  // ============================================================
+  const ResumeHandoffSchema = z.object({
+    phoneNumber: z.string().min(5).max(30),
+  });
+
+  router.post(
+    '/tenants/:id/human-handoff/resume',
+    requireTenantScope,
+    async (req: Request, res: Response) => {
+      const c = ctx(req);
+      const tenantId = String(req.params.id);
+      const parsed = ResumeHandoffSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'phoneNumber requerido (string)' });
+        return;
+      }
+      const { phoneNumber } = parsed.data;
+      try {
+        await userRepository.setHumanHandoff(tenantId, phoneNumber, null);
+        audit.log({
+          ...c,
+          action: 'handoff.resume',
+          targetType: 'bot_user',
+          targetId: phoneNumber,
+          metadata: { tenantId },
+        });
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        logger.error({ err, tenantId, phoneNumber }, 'POST human-handoff/resume failed');
+        res.status(500).json({ error: errMsg(err) || 'Error reanudando handoff' });
+      }
+    },
+  );
 
   // ============================================================
   // GET /api/admin/audit-log?limit=N&action=...&targetId=...

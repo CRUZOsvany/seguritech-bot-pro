@@ -7,6 +7,7 @@ import {
   TenantConfigPort,
   BotFlowRepository,
   TenantRepository,
+  AuditPort,
 } from '@/domain/ports';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
@@ -37,6 +38,7 @@ export class ApplicationContainer {
     botFlowRepository: BotFlowRepository,
     tenantRepository: TenantRepository,
     supabase: SupabaseClient,
+    auditPort: AuditPort,
     logger: pino.Logger,
   ) {
     const variableResolver = new VariableResolver(supabase, logger);
@@ -53,6 +55,7 @@ export class ApplicationContainer {
       tenantConfigPort,
       botFlowRepository,
       flowInterpreter,
+      auditPort,
       logger,
     );
 

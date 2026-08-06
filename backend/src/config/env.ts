@@ -59,8 +59,11 @@ const envSchema = z.object({
   ADMIN_LOGIN_LOCKOUT_MINUTES: z.coerce.number().int().positive().default(15),
   // Bcrypt cost (12 es el sweet spot 2026)
   ADMIN_BCRYPT_COST: z.coerce.number().int().min(10).max(14).default(12),
-  // TTL de la pausa de bot tras escape_to_human (minutos). Default global 120 min.
-  HANDOFF_PAUSE_MINUTES: z.coerce.number().int().positive().default(120),
+  // TTL de la pausa de bot tras escape_to_human (minutos). Default global 48h
+  // (D3): con reanudación manual ya disponible (#listo del dueño por WhatsApp,
+  // P4), el TTL deja de ser el mecanismo primario y pasa a ser red de
+  // seguridad para conversaciones abandonadas.
+  HANDOFF_PAUSE_MINUTES: z.coerce.number().int().positive().default(2880),
 });
 
 type EnvType = z.infer<typeof envSchema>;
@@ -122,7 +125,7 @@ export const config = {
 
   bot: {
     name: envVars.BOT_NAME,
-    // TTL de la pausa tras escape_to_human. Default GLOBAL del deploy (120 min).
+    // TTL de la pausa tras escape_to_human. Default GLOBAL del deploy (48h, D3).
     // Override POR TENANT es follow-up (candidato: columna en urgent_service_config).
     handoffPauseMinutes: envVars.HANDOFF_PAUSE_MINUTES,
   },

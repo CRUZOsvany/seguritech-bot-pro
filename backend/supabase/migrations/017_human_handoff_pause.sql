@@ -14,4 +14,7 @@ alter table public.bot_users
 comment on column public.bot_users.human_paused_until is
   'NULL = bot activo. Timestamp futuro = usuario en handoff humano: '
   'el bot no responde hasta que expire o se limpie a NULL. '
-  'Se establece automáticamente por el nodo escape_to_human (TTL 48h default).';
+  'Se establece automáticamente por el nodo escape_to_human '
+  '(TTL configurable via HANDOFF_PAUSE_MINUTES, default 2880 min = 48h, D3). '
+  'Se limpia manualmente con #listo/#reanudar del dueño por WhatsApp (P4) '
+  'o desde el panel.';

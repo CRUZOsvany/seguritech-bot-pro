@@ -12,6 +12,31 @@ export interface UserRepository {
   resetUserState(tenantId: string, phoneNumber: string): Promise<void>;
   /** Establece o limpia el handoff humano. pausedUntil=null reactiva el bot. */
   setHumanHandoff(tenantId: string, phoneNumber: string, pausedUntil: Date | null): Promise<void>;
+  /**
+   * Usuarios actualmente en pausa por handoff humano (human_paused_until en
+   * el futuro), del más próximo a expirar al más lejano. P4 la usa para
+   * resolver a quién reanuda `#listo` del dueño; P8 (bandeja de escalaciones)
+   * la reutiliza tal cual.
+   */
+  listPaused(tenantId: string): Promise<User[]>;
+}
+
+/**
+ * Puerto mínimo de auditoría para acciones que se disparan SIN sesión admin
+ * (p.ej. el dueño reanudando un handoff por WhatsApp, P4). Evita que
+ * BotController (app/) dependa directo de AuditLogService (infrastructure/):
+ * Bootstrap.ts es quien adapta AuditLogService a este puerto al armar el
+ * ApplicationContainer.
+ */
+export interface AuditPort {
+  log(event: {
+    /** Quién disparó la acción, para dejar rastro aunque no sea un admin. */
+    actorLabel: string;
+    action: string;
+    targetType?: string;
+    targetId?: string;
+    metadata?: Record<string, unknown>;
+  }): void;
 }
 
 /**
