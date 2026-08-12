@@ -1,13 +1,14 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.4 — Agosto 2026
+> **Versión:** 1.5 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
-> **Estado de ejecución (v1.4):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
-> ver Bitácora). **P1, P2, P3 y P4 mergeados a `main`.** **P5 implementado y pusheado
-> (`feat/vista-conversaciones`), PR abierto, pendiente de merge.** P6–P8 sin empezar.
+> **Estado de ejecución (v1.5):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
+> ver Bitácora). **P1–P5 mergeados a `main`.** **P6 implementado y pusheado
+> (`feat/versiones-rollback-ui`), PR abierto, pendiente de merge — incluye el cierre de D5,
+> pendiente desde el inicio del plan (H5).** P7–P8 sin empezar.
 
 ---
 
@@ -346,7 +347,7 @@ abierto original. Hay dos casos, no uno:
 
 ---
 
-#### P5 · `feat/vista-conversaciones` — ✅ IMPLEMENTADO, PR abierto (sin merge)
+#### P5 · `feat/vista-conversaciones` — ✅ MERGEADO (PR #47)
 **Objetivo:** ver qué dijo el bot de verdad.
 
 > **Ver H4 en la Bitácora:** "backend cero cambios" no sobrevivió el criterio 2 — hubo que agregar
@@ -392,16 +393,45 @@ cross-tenant ni es la vista de supervisión), pero le da uso real al endpoint si
 
 ---
 
-#### P6 · `feat/versiones-rollback-ui`
+#### P6 · `feat/versiones-rollback-ui` — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** deshacer. Sube de prioridad porque P7 le da edición de texto a más gente.
-**Backend:** cero cambios.
-**Toca:** `frontend/src/shared/api/flows.ts` (+`listVersions`, +`rollbackToVersion`), hooks, y un
-dropdown en el Designer.
+
+> **Ver H5 en la Bitácora:** este prompt terminó cerrando D5, una decisión congelada desde el
+> inicio del plan que ningún prompt anterior había implementado. Y "backend cero cambios" volvió a
+> no sobrevivir un criterio, como en P5/H4 — mismo patrón, endpoint mínimo agregado.
+
+**Backend:** dos cambios, no cero:
+1. **D5 cerrada.** `publish` pasaba de `requireTenantScope` a `requireRole('super_admin')` desde que
+   se congeló la decisión (antes de P3), pero nunca se tocó el código — T4 documentaba la asimetría
+   con `rollback` y quedó ahí. Se corrigió aquí porque P6 ya tocaba exactamente ese archivo
+   (`flowsRouter.ts`) para lo mismo (permisos de versión).
+2. **Endpoint nuevo** `GET /tenants/:id/flows/:flowId/versions/:versionId` (`requireTenantScope`,
+   wrapper sobre `getVersionFlow()` ya existente) — sin él, el criterio 2 no era alcanzable: `rollback()`
+   publica de inmediato como versión nueva, no hay forma de leer el `flow_json` de una versión
+   histórica sin publicarla primero.
+
+**Toca:**
+- `frontend/src/shared/api/flows.ts` — `FlowVersion`, `listVersions()`, `getVersionFlow()`,
+  `rollbackToVersion()`.
+- `hooks/use-flows.ts` — `useVersions`, `useFetchVersionFlow`, `useRollback`.
+- `designer/store/designer-store.ts` — `loadFromBotFlow()` acepta un `markDirty` opcional (default
+  `false`, no rompe el uso existente al abrir el Designer); al restaurar una versión se pasa `true`.
+- `designer/VersionsPanel.tsx` (nuevo) — panel de historial, mutuamente excluyente con
+  `ValidationPanel` en la tercera columna del Designer.
+- `designer.tsx` — botón "Versiones"; **el botón "Publicar" ahora solo se renderiza para
+  `super_admin`** (consecuencia directa de cerrar D5 — antes se ofrecía a cualquiera y hubiera
+  empezado a devolver 403), igual que "Publicar de todas formas" dentro de `ValidationPanel`.
+
 **Criterios:**
-1. Lista de versiones con número, fecha, autor y nota.
-2. "Restaurar como draft" carga la versión al canvas sin publicar.
-3. El botón de rollback solo aparece para `super_admin` (el backend ya lo exige; la UI no debe
-   ofrecer algo que va a dar 403).
+1. Lista de versiones con número, fecha, autor y nota. ✅ con una precisión: "autor" es el UUID de
+   `admin_id` truncado, no un email/nombre — el backend nunca hizo join a `admin_users` (ni
+   `listVersions()` ni el resto del puerto lo hacen). Mantenerlo así respeta "backend cero cambios"
+   fuera de las dos excepciones ya documentadas; resolver a email sería un tercer cambio de backend
+   no crítico para el criterio (que solo pide "un autor", no un nombre legible).
+2. "Restaurar como draft" carga la versión al canvas sin publicar. ✅ — usa el endpoint nuevo +
+   `loadFromBotFlow(flow, flowId, true)`.
+3. El botón de rollback solo aparece para `super_admin`. ✅ — y se extendió el mismo criterio al
+   botón "Publicar" del propio Designer, que antes no tenía ningún gate de rol en el frontend.
 
 ---
 
@@ -475,5 +505,7 @@ Copiar textualmente en cada `.md`:
 | 2026-08-05 | **H3 — Dos hallazgos al implementar P4.** (1) **`.env` local ya trae `HANDOFF_PAUSE_MINUTES=120` explícito.** El default del schema Zod en `env.ts` solo aplica cuando la env var está AUSENTE; subir el default a 2880 en el código **no cambia nada** en ningún entorno (esta máquina, y probablemente Cloud/producción si también lo tiene seteado) que ya defina la variable a mano. D3 solo toma efecto de verdad si Cris actualiza el valor real de `HANDOFF_PAUSE_MINUTES` donde esté desplegado — el cambio de código por sí solo es necesario pero no suficiente. Nadie leyó el contenido del `.env` para descubrir esto (prohibido por regla operativa 3): se infirió de que un test que esperaba `2880` recibió `120`. (2) **Se descartó un test propio por el mismo motivo** — había escrito `expect(config.bot.handoffPauseMinutes).toBe(2880)`, que falló exactamente por (1). El patrón ya establecido en `humanHandoff.test.ts` (comentario preexistente: "El timestamp debe ser approximately now + HANDOFF_TTL — leído del config, no hardcodeado") evita a propósito hardcodear ese número; se corrigió el test propio para seguir el mismo patrón, eliminando la aserción del literal. **Además:** la ambigüedad de `#listo` con 2+ pausados que el plan dejaba abierta para P4 se resolvió con últimos-4-dígitos del teléfono como código de desambiguación — ni "reanuda el más reciente" (arriesgado: puede reanudar al cliente equivocado) ni un código nuevo que hubiera requerido columna/estado adicional. Ver sección de P4 arriba para el detalle completo. |
 | 2026-08-05 | **P4 mergeado a `main`** (PR #46), sin más novedad que H3. |
 | 2026-08-05 | **H4 — "Backend cero cambios" de P5 no sobrevivió el criterio 2.** El plan asumía que la vista de conversaciones era 100% frontend porque el endpoint de mensajes ya existía — cierto para el criterio 1 (lista + detalle), pero el criterio 2 ("marca visual en mensajes recibidos mientras el usuario estaba pausado") necesita saber qué teléfonos están pausados AHORA, y ese dato nunca se expuso vía HTTP — el plan lo reservaba para el endpoint de listado de P8, que todavía no existía. En vez de fabricar una marca falsa o saltarme el criterio, se agregó un endpoint mínimo de solo lectura (`GET /tenants/:id/human-handoff/paused`) que envuelve `listPaused()` — cero lógica nueva, ese método ya se había construido en P4. P8 puede reusarlo tal cual para su bandeja completa; este endpoint no la reemplaza, solo expone el dato mínimo que P5 necesitaba. Con ese dato, el "marcado de pausa" usa un heurístico honesto (no una reconstrucción histórica exacta, que los datos no permiten): un inbound se marca si el teléfono está pausado ahora y ningún outbound le siguió en el hilo — "el bot nunca contestó esto". El criterio 3 (paginación) también se reinterpretó: el endpoint no soporta cursor/offset, así que se implementó como selector de cuánta historia traer (50/100/200) en vez de páginas reales — dar "página 2" de forma honesta requeriría otro cambio de backend. Bono no pedido: botón "Reanudar" en el hilo, reusando el POST de P4 sin esperar a P8. |
+| 2026-08-05 | **P5 mergeado a `main`** (PR #47), sin más novedad que H4. |
+| 2026-08-05 | **H5 — Dos hallazgos al implementar P6.** (1) **D5 nunca se había implementado.** Es una decisión CONGELADA desde la v1.0 del plan (§1) y T4 (§2.3) documentaba la asimetría exacta (`publish` con `requireTenantScope`, `rollback` con `requireRole('super_admin')`) — pero al revisar la sección de "Los 9 prompts" completa, ningún P0–P5 le asignaba a nadie el cambio de código real. Quedó como una decisión escrita que nadie ejecutó, hasta que P6 tocó el mismo archivo (`flowsRouter.ts`) por otra razón (permisos de versión/rollback) y el gap saltó a la vista. Se cerró ahí: `publish` ahora exige `requireRole('super_admin')`, simétrico con `rollback`. Consecuencia en cascada no anticipada por el plan: el botón "Publicar" del Designer (y "Publicar de todas formas" dentro de `ValidationPanel`) nunca había tenido ningún gate de rol en el frontend — se agregó, para no dejarle a un `admin_operator` un botón que ahora devuelve 403. (2) **Mismo patrón que H4: "backend cero cambios" volvió a no sobrevivir un criterio.** El criterio 2 ("restaurar como draft carga la versión al canvas sin publicar") es imposible con los endpoints existentes: `rollback()` publica de inmediato como versión nueva; no hay ninguna ruta que devuelva el `flow_json` de una versión histórica sin publicarla. Se agregó `GET /tenants/:id/flows/:flowId/versions/:versionId`, wrapper mínimo sobre `getVersionFlow()` (puerto ya existente, cero lógica nueva) — mismo criterio de "agregar solo lo mínimo indispensable, documentarlo, no fabricar ni saltarse el criterio" que en H4. Nota menor no bloqueante: "autor" en el panel de versiones es el UUID de `admin_id` truncado, no un email — el backend nunca resuelve ese join, y resolverlo sería un tercer cambio de backend no pedido por el criterio (que solo exige "un autor", no un nombre legible). |
 
 ---
