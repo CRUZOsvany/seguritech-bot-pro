@@ -387,6 +387,34 @@ export function createTenantsRouter(params: {
   );
 
   // ============================================================
+  // GET /api/admin/tenants/:id/human-handoff/paused
+  // Teléfonos actualmente en pausa por handoff humano (P5, deviación de
+  // "backend cero cambios": la vista de conversaciones necesita marcar qué
+  // hilos están pausados AHORA, y ese dato no existía expuesto vía HTTP —
+  // solo listPaused() a nivel de puerto, construido en P4). Endpoint mínimo
+  // de solo-lectura, sin UI de gestión: eso sigue siendo P8.
+  // ============================================================
+  router.get(
+    '/tenants/:id/human-handoff/paused',
+    requireTenantScope,
+    async (req: Request, res: Response) => {
+      const tenantId = String(req.params.id);
+      try {
+        const paused = await userRepository.listPaused(tenantId);
+        res.json({
+          phones: paused.map((u) => ({
+            phoneNumber: u.phoneNumber,
+            humanPausedUntil: u.humanPausedUntil,
+          })),
+        });
+      } catch (err: unknown) {
+        logger.error({ err, tenantId }, 'GET human-handoff/paused failed');
+        res.status(500).json({ error: errMsg(err) || 'Error listando pausados' });
+      }
+    },
+  );
+
+  // ============================================================
   // GET /api/admin/audit-log?limit=N&action=...&targetId=...
   // super_admin only. Lectura del audit append-only.
   // ============================================================

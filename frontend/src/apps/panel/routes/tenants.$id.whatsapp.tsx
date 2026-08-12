@@ -6,7 +6,7 @@ import { z } from 'zod';
 import {
   ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
   Bot, LayoutDashboard, MessageSquare, Plug, Route as RouteIcon,
-  ExternalLink,
+  ExternalLink, MessageCircle,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -198,6 +198,11 @@ function WhatsAppPanelPage() {
                 <Button asChild size="sm" variant="outline">
                   <Link to="/tenants/$id/designer" params={{ id }}>
                     <Workflow className="mr-1 h-3 w-3" /> Abrir Bot Designer
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/tenants/$id/messages" params={{ id }}>
+                    <MessageCircle className="mr-1 h-3 w-3" /> Ver conversaciones
                   </Link>
                 </Button>
               </div>
