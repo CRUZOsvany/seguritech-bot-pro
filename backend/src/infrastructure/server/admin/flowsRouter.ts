@@ -32,6 +32,10 @@ export function createFlowsRouter(params: {
   });
 
   // GET /api/admin/tenants/:id/flows/:flowId/draft — draft actual (o null)
+  // P7: la respuesta incluye `draftUpdatedAt` además de `draft` — campo extra,
+  // no rompe al Designer (useDraft solo lee `res.draft`). El Guion lo usa
+  // para saber qué timestamp tenía cargado antes de guardar (concurrencia
+  // optimista abajo, en el PUT).
   router.get(
     '/tenants/:id/flows/:flowId/draft',
     requireTenantScope,
@@ -39,8 +43,11 @@ export function createFlowsRouter(params: {
       const tenantId = String(req.params.id);
       const flowId = String(req.params.flowId);
       try {
-        const draft = await botFlowRepository.getDraft(flowId, tenantId);
-        res.json({ draft });
+        const [draft, meta] = await Promise.all([
+          botFlowRepository.getDraft(flowId, tenantId),
+          botFlowRepository.getDraftMeta(flowId, tenantId),
+        ]);
+        res.json({ draft, draftUpdatedAt: meta?.draftUpdatedAt ?? null });
       } catch (err) {
         logger.error({ err, flowId }, 'GET draft failed');
         res.status(500).json({ error: 'Error obteniendo draft' });
@@ -63,8 +70,26 @@ export function createFlowsRouter(params: {
         res.status(400).json({ error: 'Body debe incluir el draft del flow (objeto)' });
         return;
       }
+      // P7: concurrencia optimista OPCIONAL — solo viaja cuando el caller
+      // (el Guion) sabe qué draft_updated_at tenía cargado. El Designer no lo
+      // manda: sigue sobrescribiendo sin condición, como siempre.
+      const expectedDraftUpdatedAt =
+        'expectedDraftUpdatedAt' in body
+          ? (body.expectedDraftUpdatedAt as string | null)
+          : undefined;
       try {
-        await botFlowRepository.saveDraft({ flowId, tenantId, flow });
+        const result = await botFlowRepository.saveDraft({
+          flowId,
+          tenantId,
+          flow,
+          expectedDraftUpdatedAt,
+        });
+        if (result.conflict) {
+          res.status(409).json({
+            error: 'Este flujo cambió desde que lo cargaste. Recarga antes de guardar.',
+          });
+          return;
+        }
         audit.log({
           ...c,
           action: 'flow.draft.save',
@@ -72,7 +97,7 @@ export function createFlowsRouter(params: {
           targetId: flowId,
           metadata: { tenantId },
         });
-        res.json({ ok: true });
+        res.json({ ok: true, draftUpdatedAt: result.draftUpdatedAt });
       } catch (err) {
         logger.error({ err, flowId }, 'PUT draft failed');
         res.status(500).json({ error: 'Error guardando draft' });

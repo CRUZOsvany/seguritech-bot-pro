@@ -358,7 +358,8 @@ export class PerformanceSecurityTest {
       // Bloque A1 — no se ejercen en este script de perf/seguridad.
       listFlowsByTenant: async () => [],
       getDraft: async () => null,
-      saveDraft: async () => { /* noop */ },
+      getDraftMeta: async () => null,
+      saveDraft: async () => ({ conflict: false, draftUpdatedAt: new Date().toISOString() }),
       publishDraft: async () => { throw new Error('not implemented in perf test'); },
       listVersions: async () => [],
       getVersionFlow: async () => null,
