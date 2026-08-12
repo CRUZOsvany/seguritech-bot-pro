@@ -81,9 +81,13 @@ export function createFlowsRouter(params: {
   );
 
   // POST /api/admin/tenants/:id/flows/:flowId/publish — valida + versiona + activa
+  // super_admin ONLY (D5, congelada, implementada aquí — T4 documentaba la
+  // asimetría con rollback pero ningún prompt la había cerrado todavía; ver
+  // Bitácora H5). admin_operator puede guardar draft y ver el historial,
+  // pero empujar a producción y deshacerlo quedan bajo el mismo candado.
   router.post(
     '/tenants/:id/flows/:flowId/publish',
-    requireTenantScope,
+    requireRole('super_admin'),
     async (req: Request, res: Response) => {
       const c = ctx(req);
       const tenantId = String(req.params.id);
@@ -129,6 +133,32 @@ export function createFlowsRouter(params: {
       } catch (err) {
         logger.error({ err, flowId }, 'GET versions failed');
         res.status(500).json({ error: 'Error listando versiones' });
+      }
+    },
+  );
+
+  // GET /api/admin/tenants/:id/flows/:flowId/versions/:versionId — flow_json
+  // de una versión histórica. Wrapper mínimo sobre getVersionFlow() (ya
+  // existente): P6 lo necesita para "restaurar como draft" — cargar una
+  // versión al canvas SIN publicarla, algo que rollback no permite (rollback
+  // publica de inmediato). requireTenantScope, no super_admin: leer una
+  // versión histórica para decidir si se restaura no es una mutación.
+  router.get(
+    '/tenants/:id/flows/:flowId/versions/:versionId',
+    requireTenantScope,
+    async (req: Request, res: Response) => {
+      const tenantId = String(req.params.id);
+      const versionId = String(req.params.versionId);
+      try {
+        const flow = await botFlowRepository.getVersionFlow(versionId, tenantId);
+        if (!flow) {
+          res.status(404).json({ error: 'Versión no encontrada' });
+          return;
+        }
+        res.json({ flow });
+      } catch (err) {
+        logger.error({ err, versionId }, 'GET version flow failed');
+        res.status(500).json({ error: 'Error obteniendo versión' });
       }
     },
   );

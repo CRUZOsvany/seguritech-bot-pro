@@ -11,7 +11,10 @@ import {
   type NodeMouseHandler,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
-import { ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert, AlertTriangle, Lock } from 'lucide-react';
+import {
+  ArrowLeft, Loader2, Save, Send, Workflow, FileQuestion, ShieldCheck, ShieldAlert,
+  AlertTriangle, Lock, History,
+} from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
 } from '@/shared/ui/card';
@@ -22,7 +25,10 @@ import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
 import { ApiError } from '@/shared/api/client';
 import type { PublishErrorBody } from '@/shared/api/flows';
-import { useFlows, useDraft, useSaveDraft, usePublish } from '../hooks/use-flows';
+import {
+  useFlows, useDraft, useSaveDraft, usePublish,
+  useVersions, useFetchVersionFlow, useRollback,
+} from '../hooks/use-flows';
 import { useDesignerStore } from '../designer/store/designer-store';
 import { nodeTypes } from '../designer/nodes';
 import { NODE_META } from '../designer/nodes/node-meta';
@@ -37,7 +43,9 @@ import { TransitionsEditor } from '../designer/TransitionsEditor';
 import { NodeContextMenu, type ContextMenuState } from '../designer/NodeContextMenu';
 import { validateGraph } from '../designer/validation/graphValidator';
 import { ValidationPanel } from '../designer/validation/ValidationPanel';
+import { VersionsPanel } from '../designer/VersionsPanel';
 import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
+import { useSession } from '@/shared/auth/useSession';
 
 /**
  * Color del MiniMap por tipo de nodo. Fuente única: los tokens --color-node-*
@@ -192,6 +200,39 @@ function DesignerCanvas({
 
   const save = useSaveDraft(tenantId);
   const publish = usePublish(tenantId);
+  const loadFromBotFlow = useDesignerStore((s) => s.loadFromBotFlow);
+
+  const sessionQ = useSession();
+  const isSuperAdmin = sessionQ.data?.role === 'super_admin';
+
+  const versionsQ = useVersions(tenantId, flowId);
+  const fetchVersion = useFetchVersionFlow(tenantId);
+  const rollback = useRollback(tenantId);
+  const [restoringId, setRestoringId] = useState<string | null>(null);
+
+  const handleRestoreVersion = useCallback(
+    (versionId: string) => {
+      setRestoringId(versionId);
+      fetchVersion.mutate(
+        { flowId, versionId },
+        {
+          onSuccess: (raw) => {
+            if (isBotFlowish(raw)) loadFromBotFlow(raw, flowId, true);
+            setRestoringId(null);
+          },
+          onError: () => setRestoringId(null),
+        },
+      );
+    },
+    [fetchVersion, flowId, loadFromBotFlow],
+  );
+
+  const handleRollback = useCallback(
+    (versionNumber: number) => {
+      rollback.mutate({ flowId, versionNumber });
+    },
+    [rollback, flowId],
+  );
 
   const onNodeClick: NodeMouseHandler<DesignerRFNode> = (_e, node) => setSelected(node.id);
 
@@ -256,6 +297,12 @@ function DesignerCanvas({
   }, [selectedId, deleteNode]);
 
   const [showValidation, setShowValidation] = useState(false);
+  // P6: panel de versiones — mutuamente excluyente con la validación.
+  const [showVersions, setShowVersions] = useState(false);
+  const toggleVersions = useCallback(() => {
+    setShowVersions((v) => !v);
+    setShowValidation(false);
+  }, []);
   // P1: qué flow prueba el simulador embebido. Default 'draft' — el Designer
   // existe para iterar sobre el borrador, no sobre lo ya publicado.
   const [simSource, setSimSource] = useState<'active' | 'draft'>('draft');
@@ -268,11 +315,13 @@ function DesignerCanvas({
     if (!validation.canPublish) {
       // Hay errores → mostrar panel, NO publicar.
       setShowValidation(true);
+      setShowVersions(false);
       return;
     }
     if (validation.warningCount > 0) {
       // Solo warnings → mostrar panel para confirmar.
       setShowValidation(true);
+      setShowVersions(false);
       return;
     }
     // Limpio → publicar directo.
@@ -298,7 +347,7 @@ function DesignerCanvas({
           {validation.errorCount > 0 ? (
             <button
               type="button"
-              onClick={() => setShowValidation((v) => !v)}
+              onClick={() => { setShowValidation((v) => !v); setShowVersions(false); }}
               className="inline-flex items-center gap-1 rounded-md border border-red-300 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 hover:bg-red-100"
             >
               <ShieldAlert className="h-3 w-3" />
@@ -307,7 +356,7 @@ function DesignerCanvas({
           ) : validation.warningCount > 0 ? (
             <button
               type="button"
-              onClick={() => setShowValidation((v) => !v)}
+              onClick={() => { setShowValidation((v) => !v); setShowVersions(false); }}
               className="inline-flex items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 hover:bg-amber-100"
             >
               <ShieldAlert className="h-3 w-3" />
@@ -331,6 +380,14 @@ function DesignerCanvas({
           <Button
             size="sm"
             variant="outline"
+            onClick={toggleVersions}
+          >
+            <History className="mr-1 h-3 w-3" />
+            Versiones
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
             disabled={save.isPending}
             onClick={() => save.mutate({ flowId, flow: toBotFlow() })}
           >
@@ -341,18 +398,20 @@ function DesignerCanvas({
             )}
             Guardar draft
           </Button>
-          <Button
-            size="sm"
-            disabled={publish.isPending}
-            onClick={handlePublishClick}
-          >
-            {publish.isPending ? (
-              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
-            ) : (
-              <Send className="mr-1 h-3 w-3" />
-            )}
-            Publicar
-          </Button>
+          {isSuperAdmin && (
+            <Button
+              size="sm"
+              disabled={publish.isPending}
+              onClick={handlePublishClick}
+            >
+              {publish.isPending ? (
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              ) : (
+                <Send className="mr-1 h-3 w-3" />
+              )}
+              Publicar
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -441,17 +500,28 @@ function DesignerCanvas({
               )}
             </div>
 
-            {/* Inspector o panel de validación */}
+            {/* Inspector, validación o versiones — un panel a la vez */}
             {showValidation ? (
               <ValidationPanel
                 result={validation}
                 onClose={() => setShowValidation(false)}
                 onPublishAnyway={
-                  validation.canPublish && validation.warningCount > 0
+                  isSuperAdmin && validation.canPublish && validation.warningCount > 0
                     ? handlePublishAnyway
                     : undefined
                 }
                 publishing={publish.isPending}
+              />
+            ) : showVersions ? (
+              <VersionsPanel
+                versions={versionsQ.data ?? []}
+                isLoading={versionsQ.isLoading}
+                isSuperAdmin={isSuperAdmin}
+                onClose={() => setShowVersions(false)}
+                onRestore={handleRestoreVersion}
+                restoringId={restoringId}
+                onRollback={handleRollback}
+                rollingBackNumber={rollback.isPending ? (rollback.variables?.versionNumber ?? null) : null}
               />
             ) : (
               <Inspector tenantId={tenantId} />

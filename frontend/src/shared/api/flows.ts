@@ -69,3 +69,62 @@ export interface PublishErrorBody {
   error: string;
   issues?: Array<{ path?: string; message: string } | string>;
 }
+
+// ============================================================
+// Versiones / rollback (P6)
+// ============================================================
+
+/** Espejo de listVersions() del BotFlowRepository. */
+export interface FlowVersion {
+  id: string;
+  versionNumber: number;
+  createdAt: string;
+  /** UUID de admin_users, sin resolver a email/nombre — el backend no hace el join. */
+  createdBy: string | null;
+  note: string | null;
+}
+
+export async function listVersions(
+  tenantId: string,
+  flowId: string,
+): Promise<FlowVersion[]> {
+  const res = await apiFetch<{ versions: FlowVersion[] }>(
+    'GET',
+    `/api/admin/tenants/${tenantId}/flows/${flowId}/versions`,
+  );
+  return res.versions;
+}
+
+/**
+ * Trae el flow_json completo de una versión histórica — para "restaurar
+ * como draft" (cargar al canvas SIN publicar). Distinto de rollback():
+ * esto es de solo lectura, no toca bot_flows ni crea una versión nueva.
+ */
+export async function getVersionFlow(
+  tenantId: string,
+  flowId: string,
+  versionId: string,
+): Promise<unknown> {
+  const res = await apiFetch<{ flow: unknown }>(
+    'GET',
+    `/api/admin/tenants/${tenantId}/flows/${flowId}/versions/${versionId}`,
+  );
+  return res.flow;
+}
+
+/**
+ * Rollback INMEDIATO: publica la versión elegida como una nueva versión
+ * activa. super_admin only (backend lo exige con 403; la UI no debe ofrecer
+ * este botón a nadie más — D5).
+ */
+export async function rollbackToVersion(
+  tenantId: string,
+  flowId: string,
+  versionNumber: number,
+): Promise<{ versionNumber: number }> {
+  return apiFetch<{ versionNumber: number }>(
+    'POST',
+    `/api/admin/tenants/${tenantId}/flows/${flowId}/rollback`,
+    { versionNumber },
+  );
+}
