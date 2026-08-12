@@ -1,4 +1,4 @@
-import { apiFetch } from './client';
+import { apiFetch, ApiError } from './client';
 
 /**
  * API de flows del Bot Designer (Bloque A1, ya existente en el backend:
@@ -49,6 +49,53 @@ export async function saveDraft(
     `/api/admin/tenants/${tenantId}/flows/${flowId}/draft`,
     { flow },
   );
+}
+
+/**
+ * Draft + `draftUpdatedAt` (P7) — mismo endpoint que `getDraft()`, campo
+ * extra en la respuesta (el backend lo agrega desde P7 sin romper `getDraft`,
+ * que solo lee `res.draft`). El Guion lo usa para la concurrencia optimista:
+ * guarda el timestamp que tenía cargado y lo manda de vuelta al escribir.
+ */
+export async function getDraftWithMeta(
+  tenantId: string,
+  flowId: string,
+): Promise<{ draft: unknown | null; draftUpdatedAt: string | null }> {
+  return apiFetch<{ draft: unknown | null; draftUpdatedAt: string | null }>(
+    'GET',
+    `/api/admin/tenants/${tenantId}/flows/${flowId}/draft`,
+  );
+}
+
+export type SaveDraftResult =
+  | { conflict: true }
+  | { conflict: false; draftUpdatedAt: string };
+
+/**
+ * Guarda el draft con concurrencia optimista (P7): si `expectedDraftUpdatedAt`
+ * ya no coincide con lo que hay en BD (alguien más guardó primero), el
+ * backend responde 409 y esta función lo traduce a `{ conflict: true }` en
+ * vez de propagar el ApiError — el caller decide qué hacer (recargar).
+ */
+export async function saveDraftChecked(
+  tenantId: string,
+  flowId: string,
+  flow: unknown,
+  expectedDraftUpdatedAt: string | null,
+): Promise<SaveDraftResult> {
+  try {
+    const res = await apiFetch<{ ok: true; draftUpdatedAt: string }>(
+      'PUT',
+      `/api/admin/tenants/${tenantId}/flows/${flowId}/draft`,
+      { flow, expectedDraftUpdatedAt },
+    );
+    return { conflict: false, draftUpdatedAt: res.draftUpdatedAt };
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 409) {
+      return { conflict: true };
+    }
+    throw err;
+  }
 }
 
 export async function publishFlow(

@@ -217,20 +217,61 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
     return data.draft_json ?? null;
   }
 
-  async saveDraft(params: { flowId: string; tenantId: string; flow: unknown }): Promise<void> {
-    const { error } = await this.supabase
+  async getDraftMeta(
+    flowId: string,
+    tenantId: string,
+  ): Promise<{ draftUpdatedAt: string | null } | null> {
+    const { data, error } = await this.supabase
       .from('bot_flows')
-      .update({
-        draft_json: params.flow,
-        draft_updated_at: new Date().toISOString(),
-      })
+      .select('draft_updated_at')
+      .eq('id', flowId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error({ error, flowId, tenantId }, 'getDraftMeta failed');
+      throw new Error(`getDraftMeta failed: ${error.message}`);
+    }
+    if (!data) return null;
+    return { draftUpdatedAt: (data.draft_updated_at as string | null) ?? null };
+  }
+
+  async saveDraft(params: {
+    flowId: string;
+    tenantId: string;
+    flow: unknown;
+    expectedDraftUpdatedAt?: string | null;
+  }): Promise<{ conflict: true } | { conflict: false; draftUpdatedAt: string }> {
+    const newTimestamp = new Date().toISOString();
+
+    let query = this.supabase
+      .from('bot_flows')
+      .update({ draft_json: params.flow, draft_updated_at: newTimestamp })
       .eq('id', params.flowId)
       .eq('tenant_id', params.tenantId);
+
+    // Concurrencia optimista (P7): condición extra sobre el WHERE. Si no
+    // matchea ninguna fila, el UPDATE no escribe nada (Postgres/PostgREST no
+    // tocan filas que no cumplen el WHERE) y lo detectamos abajo por
+    // `data.length === 0`.
+    if (params.expectedDraftUpdatedAt !== undefined) {
+      query =
+        params.expectedDraftUpdatedAt === null
+          ? query.is('draft_updated_at', null)
+          : query.eq('draft_updated_at', params.expectedDraftUpdatedAt);
+    }
+
+    const { data, error } = await query.select('id');
 
     if (error) {
       this.logger.error({ error, flowId: params.flowId }, 'saveDraft failed');
       throw new Error(`saveDraft failed: ${error.message}`);
     }
+
+    if (params.expectedDraftUpdatedAt !== undefined && (data?.length ?? 0) === 0) {
+      return { conflict: true };
+    }
+    return { conflict: false, draftUpdatedAt: newTimestamp };
   }
 
   async publishDraft(params: {

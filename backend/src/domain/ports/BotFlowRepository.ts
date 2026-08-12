@@ -74,10 +74,35 @@ export interface BotFlowRepository {
   getDraft(flowId: string, tenantId: string): Promise<unknown | null>;
 
   /**
+   * Solo el timestamp de `draft_updated_at`, sin el contenido (P7). Separado
+   * de `getDraft()` a propósito: `getDraft()` lo usa también
+   * `SimulateMessageUseCase` (source='draft'), que espera el flow crudo, no
+   * un wrapper — no se le puede cambiar el shape sin romper ese caller.
+   * `null` si el flow no existe; `{ draftUpdatedAt: null }` si existe pero
+   * nunca tuvo un draft guardado.
+   */
+  getDraftMeta(
+    flowId: string,
+    tenantId: string,
+  ): Promise<{ draftUpdatedAt: string | null } | null>;
+
+  /**
    * Guarda (pisa) el draft del flow. NO valida: el borrador puede ser parcial
    * mientras el operador edita en el Designer.
+   *
+   * Concurrencia optimista (P7): si `expectedDraftUpdatedAt` viene definido
+   * (incluyendo `null`, que significa "esperaba que todavía no hubiera
+   * draft"), el UPDATE solo aplica si el `draft_updated_at` actual coincide
+   * exactamente — si no, no escribe nada y devuelve `conflict: true`. Si el
+   * parámetro se omite (el Designer no lo manda), el comportamiento es el de
+   * siempre: sobrescribe sin condición.
    */
-  saveDraft(params: { flowId: string; tenantId: string; flow: unknown }): Promise<void>;
+  saveDraft(params: {
+    flowId: string;
+    tenantId: string;
+    flow: unknown;
+    expectedDraftUpdatedAt?: string | null;
+  }): Promise<{ conflict: true } | { conflict: false; draftUpdatedAt: string }>;
 
   /**
    * Publica el draft: valida con FlowSchema (lanza FlowValidationError si falla),
