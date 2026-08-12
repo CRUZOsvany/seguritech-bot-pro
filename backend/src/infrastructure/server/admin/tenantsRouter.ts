@@ -415,6 +415,52 @@ export function createTenantsRouter(params: {
   );
 
   // ============================================================
+  // GET /api/admin/handoff/paused
+  // Bandeja de escalaciones (P8) — supervisión interna de SegurITech, NO es
+  // una herramienta del dueño (ADR-001). Cross-tenant a propósito: junta
+  // todos los bot_users pausados AHORA de todos los tenants que el admin
+  // puede ver. super_admin ve todo; admin_operator solo su propio tenant
+  // (mismo criterio de scope que GET /tenants, línea ~60).
+  //
+  // Reusa 100% piezas ya construidas: tenantRepository.findAll() (para el
+  // nombre del negocio + el scope por rol) y userRepository.listPaused()
+  // (P4). N+1 sobre listPaused() es aceptable: un MSP maneja un puñado de
+  // tenants, no miles — no amerita una query de join nueva en el puerto.
+  // ============================================================
+  router.get('/handoff/paused', async (req: Request, res: Response) => {
+    try {
+      const allTenants = await tenantRepository.findAll();
+      const scopedTenants =
+        req.admin?.role === 'admin_operator'
+          ? allTenants.filter((t) => t.id === req.admin?.tenantId)
+          : allTenants;
+
+      const perTenant = await Promise.all(
+        scopedTenants.map(async (t) => {
+          const paused = await userRepository.listPaused(t.id);
+          return paused.map((u) => ({
+            tenantId: t.id,
+            tenantName: t.nombre_negocio,
+            phoneNumber: u.phoneNumber,
+            humanPausedUntil: u.humanPausedUntil,
+          }));
+        }),
+      );
+
+      const flat = perTenant.flat().sort((a, b) => {
+        const ta = a.humanPausedUntil ? new Date(a.humanPausedUntil).getTime() : 0;
+        const tb = b.humanPausedUntil ? new Date(b.humanPausedUntil).getTime() : 0;
+        return ta - tb;
+      });
+
+      res.json({ paused: flat });
+    } catch (err: unknown) {
+      logger.error({ err }, 'GET /api/admin/handoff/paused failed');
+      res.status(500).json({ error: errMsg(err) || 'Error listando escalaciones' });
+    }
+  });
+
+  // ============================================================
   // GET /api/admin/audit-log?limit=N&action=...&targetId=...
   // super_admin only. Lectura del audit append-only.
   // ============================================================

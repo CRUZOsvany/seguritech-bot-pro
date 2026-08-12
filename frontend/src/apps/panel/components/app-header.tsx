@@ -52,6 +52,13 @@ export function AppHeader() {
             >
               + Nuevo
             </Link>
+            <Link
+              to="/escalaciones"
+              className="rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors duration-150 hover:bg-accent hover:text-foreground"
+              activeProps={{ className: 'bg-accent text-foreground' }}
+            >
+              Escalaciones
+            </Link>
           </nav>
         </div>
 
