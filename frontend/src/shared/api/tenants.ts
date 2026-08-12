@@ -476,3 +476,28 @@ export async function getPausedPhones(tenantId: string): Promise<PausedPhone[]> 
 export async function resumeHandoff(tenantId: string, phoneNumber: string): Promise<void> {
   await apiFetch('POST', `/api/admin/tenants/${tenantId}/human-handoff/resume`, { phoneNumber });
 }
+
+/**
+ * Fila de la bandeja de escalaciones (P8) — cross-tenant. `tenantName` viene
+ * de tenants.nombre_negocio, resuelto server-side en GET /handoff/paused
+ * (no hay que pedirlo aparte por tenant).
+ */
+export interface PausedEscalation {
+  tenantId: string;
+  tenantName: string;
+  phoneNumber: string;
+  humanPausedUntil: string | null;
+}
+
+/**
+ * GET /api/admin/handoff/paused — supervisión interna de SegurITech
+ * (ADR-001: NO es una herramienta del dueño). super_admin ve todos los
+ * tenants; admin_operator solo el suyo (scope aplicado server-side).
+ */
+export async function listPausedEscalations(): Promise<PausedEscalation[]> {
+  const res = await apiFetch<{ paused: PausedEscalation[] }>(
+    'GET',
+    '/api/admin/handoff/paused',
+  );
+  return res.paused;
+}
