@@ -1,14 +1,14 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.5 — Agosto 2026
+> **Versión:** 1.6 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
-> **Estado de ejecución (v1.5):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
-> ver Bitácora). **P1–P5 mergeados a `main`.** **P6 implementado y pusheado
-> (`feat/versiones-rollback-ui`), PR abierto, pendiente de merge — incluye el cierre de D5,
-> pendiente desde el inicio del plan (H5).** P7–P8 sin empezar.
+> **Estado de ejecución (v1.6):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
+> ver Bitácora). **P1–P6 mergeados a `main`.** **P7 implementado y pusheado
+> (`feat/guion-textos`), PR abierto, pendiente de merge — implementó la concurrencia optimista
+> real que el plan asumía existente (H6).** Solo queda P8.
 
 ---
 
@@ -393,7 +393,7 @@ cross-tenant ni es la vista de supervisión), pero le da uso real al endpoint si
 
 ---
 
-#### P6 · `feat/versiones-rollback-ui` — ✅ IMPLEMENTADO, PR abierto (sin merge)
+#### P6 · `feat/versiones-rollback-ui` — ✅ MERGEADO (PR #48)
 **Objetivo:** deshacer. Sube de prioridad porque P7 le da edición de texto a más gente.
 
 > **Ver H5 en la Bitácora:** este prompt terminó cerrando D5, una decisión congelada desde el
@@ -435,19 +435,51 @@ cross-tenant ni es la vista de supervisión), pero le da uso real al endpoint si
 
 ---
 
-#### P7 · `feat/guion-textos` — depende de P3
+#### P7 · `feat/guion-textos` — depende de P3 — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** editar todo lo que dice el bot desde una tabla, no desde un canvas.
-**Toca:** ruta nueva bajo el tenant. Lee el draft vía `getDraft()`, escribe vía `saveDraft()`.
-**Reglas duras:**
-- Escribe **solo sobre el draft** (D6). Nunca llama a `publish`.
-- Concurrencia optimista con `bot_flows.draft_updated_at` (ya existe, migración 015): si cambió
-  desde que se cargó, error "este flujo cambió, recarga" en vez de last-write-wins.
-- Columna de procedencia (config vs flow) derivada de `config_bound` — sin heurística.
-- Buscador sobre todos los textos.
+
+> **Ver H6 en la Bitácora:** "concurrencia optimista con `draft_updated_at` (ya existe)" era cierto
+> solo a medias — la columna existía y se escribía, pero nada la leía para comparar. Sin eso el
+> criterio 2 era imposible de cumplir de verdad. Es el mismo patrón que H4/H5, pero el gap más
+> grande de los tres: aquí faltaba lógica real de concurrencia, no un simple wrapper de lectura.
+
+**Backend — la pieza que realmente faltaba:**
+- `BotFlowRepository.getDraftMeta(flowId, tenantId)` (puerto nuevo, separado de `getDraft()` a
+  propósito: `SimulateMessageUseCase` usa `getDraft()` esperando el flow crudo, cambiarle el shape
+  la rompe).
+- `saveDraft()` ahora acepta `expectedDraftUpdatedAt?: string | null`. Con el parámetro, el UPDATE
+  lleva una condición extra (`.eq('draft_updated_at', ...)` o `.is(..., null)` si se esperaba "sin
+  draft todavía") y se detecta conflicto contando filas afectadas — 0 filas = alguien más guardó
+  primero, se devuelve `conflict: true` sin escribir nada. Sin el parámetro (el Designer no lo
+  manda), comportamiento idéntico al de siempre.
+- `GET .../draft` ahora devuelve también `draftUpdatedAt` (campo extra en el JSON — no rompe al
+  Designer, que solo lee `res.draft`). `PUT .../draft` acepta `expectedDraftUpdatedAt` opcional y
+  responde **409** en conflicto.
+- 8 tests nuevos verificando las 5 ramas (sin condición, match, no-match, baseline null vía `.is()`,
+  error propagado).
+
+**Toca (frontend):** `guion/extract-text-fields.ts` (aplana el flow a filas, `setAtPath` para
+reescribir sin mutar), `hooks/use-guion.ts`, `routes/tenants.$id.guion.tsx` (ruta dedicada, no
+sub-pestaña — mismo criterio que P5).
+
+**Reglas duras — cumplidas:**
+- Escribe **solo sobre el draft** (D6). Nunca llama a `publish`. ✅
+- Concurrencia optimista real (no solo la columna) — ✅, ver arriba.
+- Columna de procedencia derivada de `config_bound`, sin heurística — ✅, pero el alcance de qué
+  campos se consideran "texto del guion" sí fue una decisión propia: solo texto libre
+  (body/prompt/caption/footer/etc. en los 11 tipos de nodo que lo tienen), no etiquetas cortas de UI
+  (`button.title`, `button_label`, títulos de sección) — `config_bound` de todos modos solo aplica a
+  `send_text`/`send_buttons`/`send_list`.content.text, igual que en el backend y el Designer.
+- Buscador sobre todos los textos. ✅
+
 **Criterios:**
-1. Editar 5 textos, guardar una vez, simular contra draft (P1) y verlos.
-2. Dos pestañas abiertas: la segunda en guardar recibe el error de conflicto, no pisa.
-3. Los textos con `config_bound` aparecen read-only con link a Mensajes.
+1. Editar 5 textos, guardar una vez, simular contra draft (P1) y verlos. ✅ — simulador embebido en
+   la misma página, con auto-guardado antes de cada turno si hay cambios sin guardar (mismo patrón
+   que el Designer).
+2. Dos pestañas abiertas: la segunda en guardar recibe el error de conflicto, no pisa. ✅ — banner
+   con botón "Recargar" en vez de un error silencioso.
+3. Los textos con `config_bound` aparecen read-only con link a Mensajes. ✅ — mismo tratamiento
+   visual que el candado del Designer (P3).
 
 ---
 
@@ -507,5 +539,7 @@ Copiar textualmente en cada `.md`:
 | 2026-08-05 | **H4 — "Backend cero cambios" de P5 no sobrevivió el criterio 2.** El plan asumía que la vista de conversaciones era 100% frontend porque el endpoint de mensajes ya existía — cierto para el criterio 1 (lista + detalle), pero el criterio 2 ("marca visual en mensajes recibidos mientras el usuario estaba pausado") necesita saber qué teléfonos están pausados AHORA, y ese dato nunca se expuso vía HTTP — el plan lo reservaba para el endpoint de listado de P8, que todavía no existía. En vez de fabricar una marca falsa o saltarme el criterio, se agregó un endpoint mínimo de solo lectura (`GET /tenants/:id/human-handoff/paused`) que envuelve `listPaused()` — cero lógica nueva, ese método ya se había construido en P4. P8 puede reusarlo tal cual para su bandeja completa; este endpoint no la reemplaza, solo expone el dato mínimo que P5 necesitaba. Con ese dato, el "marcado de pausa" usa un heurístico honesto (no una reconstrucción histórica exacta, que los datos no permiten): un inbound se marca si el teléfono está pausado ahora y ningún outbound le siguió en el hilo — "el bot nunca contestó esto". El criterio 3 (paginación) también se reinterpretó: el endpoint no soporta cursor/offset, así que se implementó como selector de cuánta historia traer (50/100/200) en vez de páginas reales — dar "página 2" de forma honesta requeriría otro cambio de backend. Bono no pedido: botón "Reanudar" en el hilo, reusando el POST de P4 sin esperar a P8. |
 | 2026-08-05 | **P5 mergeado a `main`** (PR #47), sin más novedad que H4. |
 | 2026-08-05 | **H5 — Dos hallazgos al implementar P6.** (1) **D5 nunca se había implementado.** Es una decisión CONGELADA desde la v1.0 del plan (§1) y T4 (§2.3) documentaba la asimetría exacta (`publish` con `requireTenantScope`, `rollback` con `requireRole('super_admin')`) — pero al revisar la sección de "Los 9 prompts" completa, ningún P0–P5 le asignaba a nadie el cambio de código real. Quedó como una decisión escrita que nadie ejecutó, hasta que P6 tocó el mismo archivo (`flowsRouter.ts`) por otra razón (permisos de versión/rollback) y el gap saltó a la vista. Se cerró ahí: `publish` ahora exige `requireRole('super_admin')`, simétrico con `rollback`. Consecuencia en cascada no anticipada por el plan: el botón "Publicar" del Designer (y "Publicar de todas formas" dentro de `ValidationPanel`) nunca había tenido ningún gate de rol en el frontend — se agregó, para no dejarle a un `admin_operator` un botón que ahora devuelve 403. (2) **Mismo patrón que H4: "backend cero cambios" volvió a no sobrevivir un criterio.** El criterio 2 ("restaurar como draft carga la versión al canvas sin publicar") es imposible con los endpoints existentes: `rollback()` publica de inmediato como versión nueva; no hay ninguna ruta que devuelva el `flow_json` de una versión histórica sin publicarla. Se agregó `GET /tenants/:id/flows/:flowId/versions/:versionId`, wrapper mínimo sobre `getVersionFlow()` (puerto ya existente, cero lógica nueva) — mismo criterio de "agregar solo lo mínimo indispensable, documentarlo, no fabricar ni saltarse el criterio" que en H4. Nota menor no bloqueante: "autor" en el panel de versiones es el UUID de `admin_id` truncado, no un email — el backend nunca resuelve ese join, y resolverlo sería un tercer cambio de backend no pedido por el criterio (que solo exige "un autor", no un nombre legible). |
+| 2026-08-05 | **P6 mergeado a `main`** (PR #48), sin más novedad que H5. |
+| 2026-08-05 | **H6 — El gap más grande de los tres ("backend cero/mínimos cambios" roto), al implementar P7.** El plan afirmaba "concurrencia optimista con `bot_flows.draft_updated_at` (ya existe, migración 015)" como si la pieza estuviera lista y P7 solo tuviera que consumirla. Verificado contra `SupabaseBotFlowRepository`: la columna existe y `saveDraft()` SÍ la escribe en cada guardado — pero **nada la leía nunca**. `getDraft()` solo seleccionaba `draft_json`, nunca `draft_updated_at`; y `saveDraft()` no tenía ningún parámetro para condicionar el UPDATE contra un valor esperado. Es decir: dos pestañas guardando el mismo draft SIEMPRE hacían last-write-wins silencioso — exactamente el bug que el criterio 2 de P7 pedía evitar. A diferencia de H4/H5 (wrappers de lectura triviales sobre un método ya existente), aquí faltaba lógica de escritura condicional real: se agregó `getDraftMeta()` (puerto nuevo, deliberadamente separado de `getDraft()` porque `SimulateMessageUseCase` depende de que `getDraft()` siga devolviendo el flow crudo sin wrapper) y se extendió `saveDraft()` con un `expectedDraftUpdatedAt` opcional que arma un UPDATE condicional (`.eq()`/`.is()` sobre `draft_updated_at`) y detecta conflicto contando filas afectadas — sin el parámetro, comportamiento idéntico al de siempre (el Designer no lo manda). 8 tests nuevos cubren las 5 ramas. Corolario de diseño no anticipado por el plan: al construir `useGuion()`, el patrón inicial (`useEffect` + `setState`) disparó el lint `react-hooks/set-state-in-effect` de React (antipatrón real, no ruido) — se corrigió con el patrón oficial de React de "ajustar estado durante el render"; un primer intento de guardar el baseline en un `ref` también falló lint (`Cannot access refs during render`), resuelto consolidando todo en un solo objeto de estado. |
 
 ---
