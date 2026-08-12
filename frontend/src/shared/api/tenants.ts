@@ -422,3 +422,57 @@ export async function simulateReset(
 ): Promise<void> {
   await apiFetch('POST', '/api/admin/simulate/reset', { tenantId, phoneNumber });
 }
+
+// ============================================================
+// Mensajes (P5) — tail de conversaciones reales, agrupadas por hilo
+// ============================================================
+
+/**
+ * Espejo EXACTO de MessageRow del backend
+ * (backend/src/domain/ports/MessagesRepository.ts).
+ */
+export interface MessageRow {
+  id: string;
+  tenantId: string;
+  fromPhone: string;
+  content: string;
+  response: string | null;
+  direction: 'inbound' | 'outbound';
+  metaMessageId: string | null;
+  timestamp: string; // ISO
+}
+
+/**
+ * GET /api/admin/tenants/:id/messages?limit=N — tail plano ordenado desc por
+ * timestamp (backend NO agrupa por hilo; ver MessagesRepository.tailByTenant).
+ * `limit` se clampa en el backend a [1, 200]; no hace falta clampar aquí.
+ */
+export async function getMessages(
+  tenantId: string,
+  limit = 200,
+): Promise<MessageRow[]> {
+  const res = await apiFetch<{ messages: MessageRow[] }>(
+    'GET',
+    `/api/admin/tenants/${tenantId}/messages?limit=${limit}`,
+  );
+  return res.messages;
+}
+
+/** Teléfono actualmente en pausa por handoff humano — GET .../human-handoff/paused. */
+export interface PausedPhone {
+  phoneNumber: string;
+  humanPausedUntil: string | null;
+}
+
+export async function getPausedPhones(tenantId: string): Promise<PausedPhone[]> {
+  const res = await apiFetch<{ phones: PausedPhone[] }>(
+    'GET',
+    `/api/admin/tenants/${tenantId}/human-handoff/paused`,
+  );
+  return res.phones;
+}
+
+/** POST .../human-handoff/resume — reanuda manualmente desde el panel. */
+export async function resumeHandoff(tenantId: string, phoneNumber: string): Promise<void> {
+  await apiFetch('POST', `/api/admin/tenants/${tenantId}/human-handoff/resume`, { phoneNumber });
+}
