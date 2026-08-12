@@ -1,14 +1,14 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.6 — Agosto 2026
+> **Versión:** 1.7 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
-> **Estado de ejecución (v1.6):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
-> ver Bitácora). **P1–P6 mergeados a `main`.** **P7 implementado y pusheado
-> (`feat/guion-textos`), PR abierto, pendiente de merge — implementó la concurrencia optimista
-> real que el plan asumía existente (H6).** Solo queda P8.
+> **Estado de ejecución (v1.7): PLAN COMPLETO.** P1–P7 mergeados a `main`. **P8 implementado y
+> pusheado (`feat/bandeja-escalaciones`), PR abierto, pendiente de merge — el más liviano de los
+> 8, sin gaps nuevos.** Con P8 se cierran las Oleadas 1 y 2 completas. Lo que sigue es Oleada 3
+> (§4), fuera del alcance de este documento.
 
 ---
 
@@ -435,7 +435,7 @@ cross-tenant ni es la vista de supervisión), pero le da uso real al endpoint si
 
 ---
 
-#### P7 · `feat/guion-textos` — depende de P3 — ✅ IMPLEMENTADO, PR abierto (sin merge)
+#### P7 · `feat/guion-textos` — depende de P3 — ✅ MERGEADO (PR #49)
 **Objetivo:** editar todo lo que dice el bot desde una tabla, no desde un canvas.
 
 > **Ver H6 en la Bitácora:** "concurrencia optimista con `draft_updated_at` (ya existe)" era cierto
@@ -483,13 +483,28 @@ sub-pestaña — mismo criterio que P5).
 
 ---
 
-#### P8 · `feat/bandeja-escalaciones` — depende de P4
+#### P8 · `feat/bandeja-escalaciones` — depende de P4 — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** supervisión interna de SegurITech. **No es una herramienta del dueño** (ADR-001).
-**Toca:** `listPaused()` nuevo en `UserRepository` + implementación Supabase + endpoint + UI.
+
+El más liviano de los 8 — sin gaps nuevos, sin H propio. `listPaused()` ya existía desde P4 (nunca
+hizo falta "nuevo en `UserRepository`" como decía el plan original, escrito antes de que P4 lo
+adelantara). Backend: `GET /api/admin/handoff/paused` (cross-tenant, top-level, no anidado bajo
+`/tenants/:id`) compone `tenantRepository.findAll()` (mismo scope por rol que `GET /tenants`) +
+`userRepository.listPaused()` por tenant — N+1 aceptable para el tamaño de un MSP, cero query de
+join nueva en el puerto. El botón Reanudar reusa el `POST .../human-handoff/resume` de P4 tal cual,
+sin tocarlo.
+
+**Toca:** `shared/api/tenants.ts` (+`PausedEscalation`, +`listPausedEscalations`), hook nuevo, ruta
+top-level nueva `escalaciones.tsx` (no bajo un tenant — es cross-tenant por naturaleza), link en el
+nav principal (`app-header.tsx`).
+
 **Criterios:**
-1. Lista de `bot_users` con `human_paused_until` futuro, con tenant, teléfono y desde cuándo.
-2. Botón reanudar (reusa el endpoint de P4).
-3. Respeta `requireTenantScope` — un `admin_operator` solo ve lo suyo.
+1. Lista de `bot_users` con `human_paused_until` futuro, con tenant, teléfono y desde cuándo. ✅ —
+   tabla con negocio (link al tenant), teléfono, badge de tiempo relativo.
+2. Botón reanudar (reusa el endpoint de P4). ✅ — literal, cero endpoint nuevo de escritura.
+3. Respeta `requireTenantScope` — un `admin_operator` solo ve lo suyo. ✅ — mismo patrón de scope
+   por rol que `GET /tenants` (filtrado en el handler, no vía middleware `requireTenantScope`
+   porque la ruta no tiene un `:id` de tenant en el path — es cross-tenant por diseño).
 
 ---
 
@@ -541,5 +556,6 @@ Copiar textualmente en cada `.md`:
 | 2026-08-05 | **H5 — Dos hallazgos al implementar P6.** (1) **D5 nunca se había implementado.** Es una decisión CONGELADA desde la v1.0 del plan (§1) y T4 (§2.3) documentaba la asimetría exacta (`publish` con `requireTenantScope`, `rollback` con `requireRole('super_admin')`) — pero al revisar la sección de "Los 9 prompts" completa, ningún P0–P5 le asignaba a nadie el cambio de código real. Quedó como una decisión escrita que nadie ejecutó, hasta que P6 tocó el mismo archivo (`flowsRouter.ts`) por otra razón (permisos de versión/rollback) y el gap saltó a la vista. Se cerró ahí: `publish` ahora exige `requireRole('super_admin')`, simétrico con `rollback`. Consecuencia en cascada no anticipada por el plan: el botón "Publicar" del Designer (y "Publicar de todas formas" dentro de `ValidationPanel`) nunca había tenido ningún gate de rol en el frontend — se agregó, para no dejarle a un `admin_operator` un botón que ahora devuelve 403. (2) **Mismo patrón que H4: "backend cero cambios" volvió a no sobrevivir un criterio.** El criterio 2 ("restaurar como draft carga la versión al canvas sin publicar") es imposible con los endpoints existentes: `rollback()` publica de inmediato como versión nueva; no hay ninguna ruta que devuelva el `flow_json` de una versión histórica sin publicarla. Se agregó `GET /tenants/:id/flows/:flowId/versions/:versionId`, wrapper mínimo sobre `getVersionFlow()` (puerto ya existente, cero lógica nueva) — mismo criterio de "agregar solo lo mínimo indispensable, documentarlo, no fabricar ni saltarse el criterio" que en H4. Nota menor no bloqueante: "autor" en el panel de versiones es el UUID de `admin_id` truncado, no un email — el backend nunca resuelve ese join, y resolverlo sería un tercer cambio de backend no pedido por el criterio (que solo exige "un autor", no un nombre legible). |
 | 2026-08-05 | **P6 mergeado a `main`** (PR #48), sin más novedad que H5. |
 | 2026-08-05 | **H6 — El gap más grande de los tres ("backend cero/mínimos cambios" roto), al implementar P7.** El plan afirmaba "concurrencia optimista con `bot_flows.draft_updated_at` (ya existe, migración 015)" como si la pieza estuviera lista y P7 solo tuviera que consumirla. Verificado contra `SupabaseBotFlowRepository`: la columna existe y `saveDraft()` SÍ la escribe en cada guardado — pero **nada la leía nunca**. `getDraft()` solo seleccionaba `draft_json`, nunca `draft_updated_at`; y `saveDraft()` no tenía ningún parámetro para condicionar el UPDATE contra un valor esperado. Es decir: dos pestañas guardando el mismo draft SIEMPRE hacían last-write-wins silencioso — exactamente el bug que el criterio 2 de P7 pedía evitar. A diferencia de H4/H5 (wrappers de lectura triviales sobre un método ya existente), aquí faltaba lógica de escritura condicional real: se agregó `getDraftMeta()` (puerto nuevo, deliberadamente separado de `getDraft()` porque `SimulateMessageUseCase` depende de que `getDraft()` siga devolviendo el flow crudo sin wrapper) y se extendió `saveDraft()` con un `expectedDraftUpdatedAt` opcional que arma un UPDATE condicional (`.eq()`/`.is()` sobre `draft_updated_at`) y detecta conflicto contando filas afectadas — sin el parámetro, comportamiento idéntico al de siempre (el Designer no lo manda). 8 tests nuevos cubren las 5 ramas. Corolario de diseño no anticipado por el plan: al construir `useGuion()`, el patrón inicial (`useEffect` + `setState`) disparó el lint `react-hooks/set-state-in-effect` de React (antipatrón real, no ruido) — se corrigió con el patrón oficial de React de "ajustar estado durante el render"; un primer intento de guardar el baseline en un `ref` también falló lint (`Cannot access refs during render`), resuelto consolidando todo en un solo objeto de estado. |
+| 2026-08-05 | **P7 mergeado a `main`** (PR #49), sin más novedad que H6. **P8 implementado sin gaps nuevos** — el único de los 8 prompts que no generó una entrada H propia. `listPaused()`, que el plan pedía "nuevo en `UserRepository`", ya existía desde P4 (el plan se escribió antes de que P4 lo adelantara). El endpoint cross-tenant (`GET /api/admin/handoff/paused`) se compuso 100% con piezas ya construidas: `tenantRepository.findAll()` + `userRepository.listPaused()` por tenant, mismo patrón de scope por rol que `GET /tenants` ya usaba. El botón Reanudar reusa el `POST .../human-handoff/resume` de P4 sin ningún cambio. **Con P8 pusheado, el plan de las Oleadas 1 y 2 queda completo: P1–P7 mergeados a `main`, P8 con PR abierto pendiente del último merge.** De los 8 hallazgos (H1–H6, más los dos cierres de PR sin H propia en P0 y P8), el patrón que se repitió con más fuerza fue que casi ningún prompt sobrevivió intacto el contacto con el código real — pero en todos los casos la resolución fue la misma: agregar la pieza mínima indispensable, reusando lo ya construido en prompts anteriores, y dejar rastro escrito de la desviación en vez de forzar el plan original o inventar un atajo silencioso. |
 
 ---
