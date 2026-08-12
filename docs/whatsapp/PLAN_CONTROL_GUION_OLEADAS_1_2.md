@@ -1,13 +1,13 @@
 # PLAN MAESTRO — Oleadas 1 y 2 (Control del Guion del Bot)
 
-> **Versión:** 1.3 — Agosto 2026
+> **Versión:** 1.4 — Agosto 2026
 > **Autor:** Cris + Claude (chat de arquitectura)
 > **Consumidor:** Claude Code (IntelliJ, Claude Max/Opus, WSL2)
 > **Regla:** 1 prompt = 1 rama = 1 PR = merge a `main` antes de apilar el siguiente.
 > **Estado del repo al momento de escribir (v1.0):** rama activa `chore/sync-repo-y-runbook`, HEAD `b14da3e`.
-> **Estado de ejecución (v1.3):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
-> ver Bitácora). **P1, P2 y P3 mergeados a `main`.** **P4 implementado y pusheado
-> (`feat/handoff-control`), PR abierto, pendiente de merge.** P5–P8 sin empezar.
+> **Estado de ejecución (v1.4):** P0 cubierto ad-hoc en la misma conversación (sin branch propia —
+> ver Bitácora). **P1, P2, P3 y P4 mergeados a `main`.** **P5 implementado y pusheado
+> (`feat/vista-conversaciones`), PR abierto, pendiente de merge.** P6–P8 sin empezar.
 
 ---
 
@@ -298,7 +298,7 @@ dejan de ser editables desde la UI.
 
 ### OLEADA 2 — control operativo
 
-#### P4 · `feat/handoff-control` — ✅ IMPLEMENTADO, PR abierto (sin merge)
+#### P4 · `feat/handoff-control` — ✅ MERGEADO (PR #46)
 **Objetivo:** que el handoff se pueda cerrar sin esperar 48 h y sin panel.
 
 **Ambigüedad resuelta (ver Bitácora):** opción **(c)**, ninguna de las dos que planteaba el punto
@@ -346,17 +346,49 @@ abierto original. Hay dos casos, no uno:
 
 ---
 
-#### P5 · `feat/vista-conversaciones`
+#### P5 · `feat/vista-conversaciones` — ✅ IMPLEMENTADO, PR abierto (sin merge)
 **Objetivo:** ver qué dijo el bot de verdad.
-**Backend:** cero cambios (endpoint existe).
-**Toca:** `frontend/src/shared/api/tenants.ts` (fn + tipo `MessageRow`), hook nuevo, ruta nueva bajo
-el tenant o sub-pestaña de WhatsApp.
-**Nota anti-alucinación:** `tailByTenant` devuelve un **tail plano** ordenado desc. Agrupar por
-`fromPhone` para construir hilos es trabajo de frontend. No inventar un endpoint de hilos.
+
+> **Ver H4 en la Bitácora:** "backend cero cambios" no sobrevivió el criterio 2 — hubo que agregar
+> un endpoint mínimo de solo lectura. El texto de abajo ya refleja lo implementado.
+
+**Backend:** un endpoint nuevo, no cero. `GET /tenants/:id/human-handoff/paused` (solo lectura,
+`requireTenantScope`) expone `listPaused()` (ya construido en P4) para que el frontend sepa qué
+teléfonos están pausados AHORA — sin este dato, el criterio 2 (marca visual de pausa) no tenía forma
+honesta de implementarse, porque no existía ningún endpoint que expusiera ese estado.
+
+**Toca:**
+- `frontend/src/shared/api/tenants.ts` — `MessageRow`, `getMessages()`, `PausedPhone`,
+  `getPausedPhones()`, `resumeHandoff()`.
+- `hooks/use-messages.ts` (nuevo) y `hooks/use-paused-phones.ts` (nuevo).
+- `routes/tenants.$id.messages.tsx` (nuevo) — ruta dedicada (no sub-pestaña de WhatsApp, para dejarle
+  espacio propio a la vista de dos columnas), enlazada desde el botón "Ver conversaciones" en la
+  pestaña Resumen de `tenants.$id.whatsapp.tsx`.
+- `router.tsx` — registro de la ruta nueva.
+
+**Nota anti-alucinación (confirmada en la implementación):** `tailByTenant` sí devuelve un **tail
+plano** ordenado desc. Agrupar por `fromPhone` para construir hilos es trabajo de frontend
+(`use-messages.ts`), tal como decía el plan. **No** se inventó ningún endpoint de hilos — eso sigue
+siendo cierto.
+
 **Criterios:**
-1. Lista de hilos por teléfono + detalle cronológico.
-2. Marca visual en mensajes recibidos mientras el usuario estaba pausado.
-3. Paginación por `limit` (clamp backend [1,200]).
+1. Lista de hilos por teléfono + detalle cronológico. ✅ — hilos ordenados por mensaje más reciente,
+   detalle interno ordenado cronológico ascendente, estilo burbujas de chat.
+2. Marca visual en mensajes recibidos mientras el usuario estaba pausado. ✅ pero con un heurístico
+   honesto, no histórico exacto: `human_paused_until` es un valor puntual (no hay bitácora de
+   "cuándo empezó cada pausa"), así que un mensaje inbound se marca si el teléfono está pausado
+   **ahora** y no hay ningún mensaje outbound después de él en el hilo — "el bot nunca contestó
+   esto". Reconstruir el pasado exacto no es posible sin cambiar el schema de `messages` para
+   registrar el estado de pausa en cada fila (fuera de alcance de P5).
+3. Paginación por `limit` (clamp backend [1,200]). ⚠️ Interpretado como selector de cuánta historia
+   traer (50/100/200), NO como paginación real con cursor/página. El endpoint no soporta
+   offset/`before`/cursor — solo un `limit` sobre el tail completo del tenant. Dar "página 2" de
+   forma honesta requeriría un cambio de backend fuera del alcance declarado ("backend cero
+   cambios" — con la única excepción ya documentada arriba).
+
+**Bono no pedido:** botón "Reanudar" en el detalle de un hilo pausado, que reusa el endpoint
+`POST .../human-handoff/resume` de P4. No es la bandeja completa de P8 (no lista pausados
+cross-tenant ni es la vista de supervisión), pero le da uso real al endpoint sin esperar esa oleada.
 
 ---
 
@@ -441,5 +473,7 @@ Copiar textualmente en cada `.md`:
 | 2026-08-05 | **H2 — La especificación de P3 no sobrevivió el contacto con los datos reales.** Al implementar, dos supuestos del plan original resultaron falsos: (1) el plan asumía `config_bound` como enum de **valor único** por nodo ("si un nodo declara `config_bound: 'welcome_message'`, su texto debe ser exactamente `{{welcome_message}}`"), pero el nodo real `bienvenida` de CerraCruz combina **welcome_message + menu_message en un solo mensaje** (`"{{welcome_message}}\n\n{{menu_message}}"`) — un valor único no puede expresar eso. Se corrigió a `config_bound?: ConfigBoundKey[]` (array), con la regla de que el texto debe consistir EXCLUSIVAMENTE en los placeholders de las claves declaradas (verificado con test positivo y negativo, y con `validateFlow()` corrido contra el JSON real). (2) el plan decía "marcar los 3 nodos correspondientes", asumiendo 1 nodo por variable canónica — pero como welcome_message y menu_message viven en el MISMO nodo, en realidad son **2 nodos** (`bienvenida`, `no_entendi`), no 3. Corregido en la sección de P3 y en su criterio 4. Bono no previsto: `to-bot-flow.ts`/`to-react-flow.ts` no necesitaron ningún cambio — el round-trip ya preservaba campos top-level de nodo por spread, así que `config_bound` sobrevive gratis. Y se encontró que `BotMessagesCard` nunca desestructuraba `formState`, así que los errores de Zod (incluyendo el nuevo de T2) no se mostraban en ningún campo — se corrigió de paso. Re-seed contra Cloud (`seed-cerrajerias.ts`) queda pendiente de que Cris lo corra — requiere `SUPABASE_SERVICE_ROLE_KEY` y PII, mutación de producción que Claude no ejecuta sin confirmación explícita. |
 | 2026-08-05 | **P3 mergeado a `main`** (PR #45), sin más novedad que H2. |
 | 2026-08-05 | **H3 — Dos hallazgos al implementar P4.** (1) **`.env` local ya trae `HANDOFF_PAUSE_MINUTES=120` explícito.** El default del schema Zod en `env.ts` solo aplica cuando la env var está AUSENTE; subir el default a 2880 en el código **no cambia nada** en ningún entorno (esta máquina, y probablemente Cloud/producción si también lo tiene seteado) que ya defina la variable a mano. D3 solo toma efecto de verdad si Cris actualiza el valor real de `HANDOFF_PAUSE_MINUTES` donde esté desplegado — el cambio de código por sí solo es necesario pero no suficiente. Nadie leyó el contenido del `.env` para descubrir esto (prohibido por regla operativa 3): se infirió de que un test que esperaba `2880` recibió `120`. (2) **Se descartó un test propio por el mismo motivo** — había escrito `expect(config.bot.handoffPauseMinutes).toBe(2880)`, que falló exactamente por (1). El patrón ya establecido en `humanHandoff.test.ts` (comentario preexistente: "El timestamp debe ser approximately now + HANDOFF_TTL — leído del config, no hardcodeado") evita a propósito hardcodear ese número; se corrigió el test propio para seguir el mismo patrón, eliminando la aserción del literal. **Además:** la ambigüedad de `#listo` con 2+ pausados que el plan dejaba abierta para P4 se resolvió con últimos-4-dígitos del teléfono como código de desambiguación — ni "reanuda el más reciente" (arriesgado: puede reanudar al cliente equivocado) ni un código nuevo que hubiera requerido columna/estado adicional. Ver sección de P4 arriba para el detalle completo. |
+| 2026-08-05 | **P4 mergeado a `main`** (PR #46), sin más novedad que H3. |
+| 2026-08-05 | **H4 — "Backend cero cambios" de P5 no sobrevivió el criterio 2.** El plan asumía que la vista de conversaciones era 100% frontend porque el endpoint de mensajes ya existía — cierto para el criterio 1 (lista + detalle), pero el criterio 2 ("marca visual en mensajes recibidos mientras el usuario estaba pausado") necesita saber qué teléfonos están pausados AHORA, y ese dato nunca se expuso vía HTTP — el plan lo reservaba para el endpoint de listado de P8, que todavía no existía. En vez de fabricar una marca falsa o saltarme el criterio, se agregó un endpoint mínimo de solo lectura (`GET /tenants/:id/human-handoff/paused`) que envuelve `listPaused()` — cero lógica nueva, ese método ya se había construido en P4. P8 puede reusarlo tal cual para su bandeja completa; este endpoint no la reemplaza, solo expone el dato mínimo que P5 necesitaba. Con ese dato, el "marcado de pausa" usa un heurístico honesto (no una reconstrucción histórica exacta, que los datos no permiten): un inbound se marca si el teléfono está pausado ahora y ningún outbound le siguió en el hilo — "el bot nunca contestó esto". El criterio 3 (paginación) también se reinterpretó: el endpoint no soporta cursor/offset, así que se implementó como selector de cuánta historia traer (50/100/200) en vez de páginas reales — dar "página 2" de forma honesta requeriría otro cambio de backend. Bono no pedido: botón "Reanudar" en el hilo, reusando el POST de P4 sin esperar a P8. |
 
 ---
