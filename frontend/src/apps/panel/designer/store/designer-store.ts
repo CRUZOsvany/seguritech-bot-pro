@@ -76,7 +76,15 @@ interface DesignerState {
   selectedId: string | null;
   dirty: boolean;
 
-  loadFromBotFlow: (flow: BotFlow, flowId: string) => void;
+  /**
+   * `markDirty` (P6): por default false — cargar el draft persistido al abrir
+   * el Designer no es un cambio sin guardar. Al restaurar una versión
+   * histórica al canvas (sin publicar) sí lo es: el contenido ya difiere de
+   * lo que hay guardado como draft en el backend, así que se pasa `true`
+   * para que el badge "Cambios sin guardar" y el guard de beforeunload
+   * reflejen la realidad.
+   */
+  loadFromBotFlow: (flow: BotFlow, flowId: string, markDirty?: boolean) => void;
   toBotFlow: () => BotFlow;
   onNodesChange: (changes: NodeChange<DesignerRFNode>[]) => void;
   onEdgesChange: (changes: EdgeChange<DesignerRFEdge>[]) => void;
@@ -134,7 +142,7 @@ const EMPTY: Pick<DesignerState, 'nodes' | 'edges' | 'startNodeId' | 'flowId' | 
 export const useDesignerStore = create<DesignerState>((set, get) => ({
   ...EMPTY,
 
-  loadFromBotFlow: (flow, flowId) => {
+  loadFromBotFlow: (flow, flowId, markDirty = false) => {
     const { nodes, edges } = botFlowToGraph(flow);
     set({
       nodes,
@@ -142,7 +150,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       startNodeId: flow.start_node_id,
       flowId,
       selectedId: null,
-      dirty: false,
+      dirty: markDirty,
     });
   },
 
