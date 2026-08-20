@@ -98,14 +98,21 @@ Si eres **un nuevo miembro del equipo**, lee de principio a fin. Toma 30 minutos
 - Panel HTML funcional (login, lista tenants, detalle, mensajes, simulador)
 
 **Deuda técnica conocida:**
-1. `tenants.status='paused'` NO bloquea el webhook todavía (un tenant "pausado" sigue procesando mensajes)
-2. `send_list` se serializa como texto plano, no como interactive list nativo de Meta
-3. N+1 query en `GET /api/admin/tenants`
+
+> **PARCHE 2026-08-20:** esta lista está congelada desde Sprint 4 y nunca se
+> revisó contra el código real. Se verificó item por item hoy — los 6 items
+> abiertos (1, 2, 3, 5, 7, 8) YA ESTÁN RESUELTOS en `main`, marcados abajo.
+> Ver `.claude/SEGURITECH_ESTADO_ACTUAL.md` §3 punto 11 para el detalle de
+> la verificación.
+
+1. ~~`tenants.status='paused'` NO bloquea el webhook todavía~~ **RESUELTO** (verificado 2026-08-20): hay test dedicado, `src/tests/integration/webhookStatusGating.test.ts`, cubriendo paused/archived/draft.
+2. ~~`send_list` se serializa como texto plano, no como interactive list nativo de Meta~~ **RESUELTO** (verificado 2026-08-20): `MetaWhatsAppAdapter.sendList` ya arma `interactive.type: 'list'`, el formato nativo de Meta.
+3. ~~N+1 query en `GET /api/admin/tenants`~~ **RESUELTO** (verificado 2026-08-20): `SupabaseTenantRepository.findAll()` ya hace `Promise.all` de 3 queries + join en memoria, con comentario explícito "Anti-N+1" en el código.
 4. ~~`HandleMessageUseCase` (FSM hardcodeada de papelería) sigue como fallback peligroso.~~ **RESUELTO (ADR-012, 2026-06-05):** use-case eliminado. Pendiente: limpiar la referencia residual en `domain/entities/index.ts`.
-5. `ReadlineAdapter` se arranca incondicionalmente en `Bootstrap.run()`, también en producción
+5. ~~`ReadlineAdapter` se arranca incondicionalmente en `Bootstrap.run()`, también en producción~~ **RESUELTO** (verificado 2026-08-20): ya gateado tras `if (config.isDevelopment)` en `Bootstrap.ts`.
 6. ~~`.github/workflows/ci.yml` referencia `cd frontend && npm ci` — la carpeta no existe, el CI está roto~~ **RESUELTO:** el workspace `frontend/` ya existe (Vite+React 19) y el type-check (`tsc -p tsconfig.app.json`) es gate real de CI. Ver §4.2/§5.1.
-7. `.env.example` en la raíz tiene variables muertas (NEXT_PUBLIC_*, NEXTAUTH_SECRET)
-8. `backend/bin/www` es fósil del generador Express, requiere un módulo inexistente
+7. ~~`.env.example` en la raíz tiene variables muertas (NEXT_PUBLIC_*, NEXTAUTH_SECRET)~~ **RESUELTO** (verificado 2026-08-20): ese archivo ya no existe en la raíz.
+8. ~~`backend/bin/www` es fósil del generador Express, requiere un módulo inexistente~~ **RESUELTO** (verificado 2026-08-20): ese archivo ya no existe.
 9. `InMemoryUserRepository` solo lo usan tests, debería moverse a `tests/utils/`
 10. `docs/` tiene > 30 archivos .md de distintas épocas, redundantes
 11. `backend/supabase/seed.sql` suelto sin claridad si está vivo o legacy
