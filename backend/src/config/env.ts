@@ -64,6 +64,12 @@ const envSchema = z.object({
   // P4), el TTL deja de ser el mecanismo primario y pasa a ser red de
   // seguridad para conversaciones abandonadas.
   HANDOFF_PAUSE_MINUTES: z.coerce.number().int().positive().default(2880),
+
+  // IA — Secretaria Digital (plan .claude/SEGURITECH_AI_SECRETARIA_PLAN.md).
+  // Usada por IntentRouterPort (Fase 1.2) y, más adelante, el AgentOrchestrator.
+  // Opcional: sin ella, IntentRouterPort.classify() siempre cae a 'flow'
+  // (mismo comportamiento que si el flag agentEnabled estuviera apagado).
+  ANTHROPIC_API_KEY: z.string().min(1).optional(),
 });
 
 type EnvType = z.infer<typeof envSchema>;
@@ -128,6 +134,10 @@ export const config = {
     // TTL de la pausa tras escape_to_human. Default GLOBAL del deploy (48h, D3).
     // Override POR TENANT es follow-up (candidato: columna en urgent_service_config).
     handoffPauseMinutes: envVars.HANDOFF_PAUSE_MINUTES,
+  },
+
+  ai: {
+    anthropicApiKey: envVars.ANTHROPIC_API_KEY || '',
   },
 
   supabase: {
