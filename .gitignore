@@ -54,8 +54,10 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Claude Code (configuración local + prompts internos)
-.claude/
+# Claude Code — settings.local.json es específico de cada máquina (permisos, MCP local),
+# nunca se commitea. Los docs .claude/*.md (MAESTRO, ESTADO_ACTUAL, planes) SÍ se versionan:
+# son la fuente de verdad operativa para el equipo, no solo contexto de sesión.
+.claude/settings.local.json
 
 # OS
 .DS_Store
