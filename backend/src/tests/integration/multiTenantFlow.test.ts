@@ -1,381 +1,305 @@
-// @ts-nocheck
-// TODO (2026-05-30): sigue pendiente de re-escritura sobre SimulateMessageUseCase.
-// La infra de testing legacy ya no existe; este test continúa skipped hasta migrar
-// el escenario multi-tenant al nuevo use case (no re-habilitar a ciegas).
-// TODO: re-evaluar en Sprint 4 cuando exista FlowInterpreter.
-// Sprint 1: este test queda skipped porque:
-//   1) Dependía del repositorio de testing legacy basado en SQL en memoria, ya eliminado.
-//   2) InMemoryUserRepository no expone initialize/cleanup/getAllData.
-//   3) ApplicationContainer ahora requiere un TenantConfigPort (4to argumento).
-//   4) BotController necesita una bot_configuration cargada para responder.
-// El plan es reescribirlo cuando el FlowInterpreter de Sprint B esté integrado,
-// usando un fake TenantConfigPort y el InMemoryUserRepository real.
 /**
  * ========================================
- * Multi-Tenant Integration Test Suite
+ * Multi-Tenant Isolation Test Suite
  * ========================================
  *
- * Propósito: Validar que el aislamiento multi-tenant funciona correctamente
+ * Propósito: validar que el aislamiento multi-tenant funciona correctamente
+ * en la ruta real end-to-end (webhook → BotController → FlowInterpreter →
+ * UserRepository), tal como lo verían dos negocios distintos compartiendo
+ * el mismo backend.
  *
- * Escenario Crítico:
- * - Mismo número de teléfono (+527471234567)
- * - Dos tenants diferentes (papeleria_01, ferreteria_01)
- * - Verificar que sus estados se mantienen 100% separados
+ * Reescrita 2026-08-20 (auditoría de seguridad) sobre la infraestructura
+ * actual: la suite original quedó `describe.skip` desde Sprint 1 porque
+ * dependía de un repo de testing legacy y de `HandleMessageUseCase`
+ * (eliminado por ADR-012). Ahora usa:
+ *   - InMemoryUserRepository real (backend/src/tests/utils).
+ *   - Un BotFlowRepository y TenantConfigPort fake, uno por tenant, para
+ *     probar que ni el flow ni la configuración se filtran entre tenants.
+ *   - ApplicationContainer + ExpressServer reales (FlowInterpreter incluido).
  *
- * Resultado Esperado:
- * El usuario tiene estado INITIAL en ambos tenants,
- * pero de forma totalmente independiente
- * (sin mezcla ni corrupción de datos)
+ * Escenario: mismo número de teléfono usado contra dos tenants distintos
+ * (papelería / ferretería). Deben quedar 100% aislados: usuarios distintos,
+ * progresión de estado independiente, contenido de respuesta específico de
+ * cada tenant (nombre del negocio interpolado desde su propio TenantConfig).
  */
 
 import request from 'supertest';
 import { Express } from 'express';
 import pino from 'pino';
 import { ExpressServer } from '@/infrastructure/server/ExpressServer';
-import { BotController } from '@/app/controllers/BotController';
 import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
-import {
-  printTestHeader,
-  printTestResult,
-  printScenario,
-  printDatabaseState,
-  printIsolationCheck,
-  printTestSummary,
-  printError,
-  printInfo,
-  printTable,
-} from '../utils/testVisuals';
+import { BotTone } from '@/domain/entities';
+import type { TenantConfig } from '@/domain/entities';
+import type { TenantConfigPort, NotificationPort, AuditPort } from '@/domain/ports';
+import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
+import type { BotFlow } from '@/domain/entities/flow';
+import type { SupabaseClient } from '@supabase/supabase-js';
+import type { TenantRepository } from '@/domain/ports/TenantRepository';
 
-// ============================================
-// CONFIGURACIÓN DE TESTS
-// ============================================
+const logger = pino({ level: 'silent' });
 
-describe.skip('🏢 Multi-Tenant Isolation Test Suite', () => {
-  let app: Express;
-  let server: ExpressServer;
-  let container: ApplicationContainer;
-  let repository: InMemoryUserRepository;
-  let logger: pino.Logger;
-  let testStartTime: number;
-
-  // Mock de NotificationPort para no enviar mensajes reales
-  const mockNotificationPort = {
-    async sendMessage(from: string, message: string) {
-      console.log(`   [NOTIF] Enviando a ${from}: "${message}"`);
-    },
-    async sendButtons(from: string, message: string, buttons: string[]) {
-      console.log(`   [NOTIF] Enviando a ${from} con botones: ${buttons.join(', ')}`);
-    },
-  };
-
-  // ============================================
-  // SETUP Y TEARDOWN
-  // ============================================
-
-  beforeAll(async () => {
-    testStartTime = Date.now();
-    
-    printTestHeader(
-      'INICIALIZANDO SUITE DE TESTS',
-      'Preparando base de datos en memoria y servidor'
-    );
-
-    // Crear logger silencioso para tests (sin ruido en la salida)
-    logger = pino({
-      level: 'silent',
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: false,
-        },
+/** Un flow mínimo: saluda, y con "1" pasa a "viendo productos". */
+function makeFlow(): BotFlow {
+  return {
+    version: '1.0',
+    start_node_id: 'welcome',
+    nodes: [
+      {
+        id: 'welcome',
+        type: 'wait_input',
+        content: { prompt: 'Bienvenido a {{nombre_negocio}}. Escribe 1 para ver productos.' },
+        transitions: [
+          { condition: { type: 'keyword', values: ['1'] }, next_node_id: 'products' },
+          { condition: { type: 'default' }, next_node_id: 'welcome' },
+        ],
       },
-    });
+      {
+        id: 'products',
+        type: 'wait_input',
+        content: { prompt: 'Viendo productos de {{nombre_negocio}}.' },
+        transitions: [{ condition: { type: 'default' }, next_node_id: 'products' }],
+      },
+    ],
+  };
+}
 
-    // Inicializar repositorio en memoria
-    repository = new InMemoryUserRepository();
-    printInfo('✓ Base de datos en memoria inicializada');
+function makeTenantConfig(nombreNegocio: string): TenantConfig {
+  return {
+    tenantId: 'unused',
+    botName: 'Bot',
+    nombreNegocio,
+    tone: BotTone.AMIGABLE,
+    welcomeMessage: 'Hola',
+    menuMessage: 'Menú',
+    outOfHoursMessage: 'Fuera de horario',
+    notUnderstoodMessage: 'No entendí',
+    orderConfirmationMessage: 'Pedido confirmado',
+    catalog: [],
+  };
+}
 
-    // Crear contenedor e inyectar dependencias
-    container = new ApplicationContainer(
-      repository,
-      mockNotificationPort,
-      logger
-    );
-    printInfo('✓ Inyección de dependencias configurada');
+/** BotFlowRepository fake: un flow (idéntico en estructura) por tenant, en un Map. */
+class FakeBotFlowRepository implements Partial<BotFlowRepository> {
+  private readonly flows = new Map<string, BotFlow>();
 
-    // Crear servidor Express
-    server = new ExpressServer(logger);
-    const botController = container.getBotController();
-    
-    server.setupRoutes((tenantId: string, phoneNumber: string, message: string) =>
-      botController.processMessage(tenantId, phoneNumber, message)
-    );
-    
-    app = server.getExpressApp();
-    
-    // Arrancar servidor en puerto aleatorio
-    await server.start(0); // Puerto 0 = automático
-    printInfo('✓ Servidor Express iniciado');
-  });
+  register(tenantId: string): void {
+    this.flows.set(tenantId, makeFlow());
+  }
 
-  afterAll(async () => {
-    await server.stop();
-    repository.clear();
+  async findActiveByTenant(tenantId: string): Promise<BotFlow | null> {
+    return this.flows.get(tenantId) ?? null;
+  }
+}
 
-    const duration = Date.now() - testStartTime;
-    console.log('\n');
-    printTestSummary(3, 3, 0, duration);
-  });
+/** TenantConfigPort fake: nombre de negocio propio por tenant. */
+class FakeTenantConfigPort implements TenantConfigPort {
+  private readonly configs = new Map<string, TenantConfig>();
 
-  // ============================================
-  // TEST 1: Usuario diferente por tenant
-  // ============================================
+  register(tenantId: string, nombreNegocio: string): void {
+    this.configs.set(tenantId, { ...makeTenantConfig(nombreNegocio), tenantId });
+  }
 
-  test('✅ TEST 1: Mismo teléfono, tenants diferentes = Usuarios independientes', async () => {
-    printTestHeader(
-      'TEST 1: Aislamiento de Usuarios por Tenant',
-      'Verificar que el mismo número crea usuarios independientes en cada tenant'
-    );
+  async getConfig(tenantId: string): Promise<TenantConfig | null> {
+    return this.configs.get(tenantId) ?? null;
+  }
+
+  invalidate(): void {
+    // no-op: sin caché en el fake.
+  }
+}
+
+/** Captura todo lo que el bot "envía" para poder aserta contenido por tenant. */
+class CapturingNotificationPort implements NotificationPort {
+  readonly sent: Array<{ tenantId: string; phoneNumber: string; message: string }> = [];
+
+  async sendMessage(tenantId: string, phoneNumber: string, message: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message });
+  }
+  async sendButtons(tenantId: string, phoneNumber: string, message: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message });
+  }
+  async sendImage(tenantId: string, phoneNumber: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: '[image]' });
+  }
+  async sendList(tenantId: string, phoneNumber: string, message: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message });
+  }
+  async sendLocation(tenantId: string, phoneNumber: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: '[location]' });
+  }
+  async sendDocument(tenantId: string, phoneNumber: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: '[document]' });
+  }
+  async sendCtaUrl(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: body });
+  }
+  async sendLocationRequest(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: body });
+  }
+  async sendMediaCarousel(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: body });
+  }
+  async sendReaction(tenantId: string, phoneNumber: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: '[reaction]' });
+  }
+  async sendCallPermissionRequest(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: body });
+  }
+  async sendWhatsappFlow(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    this.sent.push({ tenantId, phoneNumber, message: body });
+  }
+}
+
+const auditPort: AuditPort = { log: jest.fn() };
+
+interface Harness {
+  app: Express;
+  userRepository: InMemoryUserRepository;
+  notificationPort: CapturingNotificationPort;
+  flowRepository: FakeBotFlowRepository;
+  tenantConfigPort: FakeTenantConfigPort;
+}
+
+function buildHarness(): Harness {
+  const userRepository = new InMemoryUserRepository();
+  const notificationPort = new CapturingNotificationPort();
+  const flowRepository = new FakeBotFlowRepository();
+  const tenantConfigPort = new FakeTenantConfigPort();
+  const tenantRepository = {} as unknown as TenantRepository;
+  const supabase = {} as unknown as SupabaseClient;
+
+  const container = new ApplicationContainer(
+    userRepository,
+    notificationPort,
+    tenantConfigPort,
+    flowRepository as unknown as BotFlowRepository,
+    tenantRepository,
+    supabase,
+    auditPort,
+    logger,
+  );
+
+  const server = new ExpressServer(logger);
+  const botController = container.getBotController();
+  server.setupRoutes((tenantId: string, phoneNumber: string, message: string) =>
+    botController.processMessage(tenantId, phoneNumber, message),
+  );
+
+  return { app: server.getExpressApp(), userRepository, notificationPort, flowRepository, tenantConfigPort };
+}
+
+async function sendMessage(app: Express, tenantId: string, phoneNumber: string, message: string) {
+  return request(app)
+    .post(`/webhook/${tenantId}`)
+    .send({ phoneNumber, message })
+    .expect(200);
+}
+
+describe('🏢 Multi-Tenant Isolation Test Suite (webhook → BotController → FlowInterpreter)', () => {
+  const PAPELERIA = 'papeleria_01';
+  const FERRETERIA = 'ferreteria_01';
+
+  it('TEST 1: mismo teléfono, tenants diferentes → usuarios y contenido independientes', async () => {
+    const { app, userRepository, notificationPort, flowRepository, tenantConfigPort } = buildHarness();
+    flowRepository.register(PAPELERIA);
+    flowRepository.register(FERRETERIA);
+    tenantConfigPort.register(PAPELERIA, 'Papelería El Lápiz');
+    tenantConfigPort.register(FERRETERIA, 'Ferretería El Tornillo');
 
     const phoneNumber = '+527471234567';
-    const message = 'hola';
 
-    // Escenario 1: Papelería
-    printScenario(1, 'Mensaje en papeleria_01', 'papeleria_01', phoneNumber, message);
-    
-    const response1 = await request(app)
-      .post('/webhook/papeleria_01')
-      .send({
-        phoneNumber,
-        message,
-      })
-      .expect(200);
+    await sendMessage(app, PAPELERIA, phoneNumber, 'hola');
+    await sendMessage(app, FERRETERIA, phoneNumber, 'hola');
 
-    expect(response1.body.success).toBe(true);
-    expect(response1.body.tenantId).toBe('papeleria_01');
-    printTestResult('Webhook recibido correctamente', true, 'Status 200');
+    const userInPapeleria = await userRepository.findByPhoneNumber(PAPELERIA, phoneNumber);
+    const userInFerreteria = await userRepository.findByPhoneNumber(FERRETERIA, phoneNumber);
 
-    // Escenario 2: Ferretería
-    printScenario(2, 'Mismo mensaje en ferreteria_01', 'ferreteria_01', phoneNumber, message);
-    
-    const response2 = await request(app)
-      .post('/webhook/ferreteria_01')
-      .send({
-        phoneNumber,
-        message,
-      })
-      .expect(200);
-
-    expect(response2.body.success).toBe(true);
-    expect(response2.body.tenantId).toBe('ferreteria_01');
-    printTestResult('Webhook recibido correctamente', true, 'Status 200');
-
-    // ============================================
-    // VERIFICACIÓN CRITICA: Aislamiento
-    // ============================================
-
-    printInfo(
-      '📊 Verificando aislamiento en base de datos...'
-    );
-
-    const userInPapeleria = await repository.findByPhoneNumber(
-      'papeleria_01',
-      phoneNumber
-    );
-    const userInFerreteria = await repository.findByPhoneNumber(
-      'ferreteria_01',
-      phoneNumber
-    );
-
-    // Ambos usuarios deben existir
     expect(userInPapeleria).not.toBeNull();
     expect(userInFerreteria).not.toBeNull();
-    printTestResult('Ambos usuarios existen en BD', true);
-
-    // Deben tener IDs diferentes (son users diferentes)
+    // Usuarios independientes, aunque comparten teléfono.
     expect(userInPapeleria!.id).not.toBe(userInFerreteria!.id);
-    printTestResult('Tienen IDs independientes', true, `Papeleria: ${userInPapeleria!.id.slice(0, 15)}..., Ferreteria: ${userInFerreteria!.id.slice(0, 15)}...`);
+    expect(userInPapeleria!.tenantId).toBe(PAPELERIA);
+    expect(userInFerreteria!.tenantId).toBe(FERRETERIA);
 
-    // Ambos deben estar en estado MENU (después del saludo)
-    expect(userInPapeleria!.currentState).toBe('menu');
-    expect(userInFerreteria!.currentState).toBe('menu');
-    printTestResult('Ambos usuarios están en estado MENU', true);
-
-    // Verificación visual de aislamiento
-    printIsolationCheck(
-      phoneNumber,
-      'papeleria_01',
-      userInPapeleria!.currentState,
-      'ferreteria_01',
-      userInFerreteria!.currentState,
-      userInPapeleria!.currentState === userInFerreteria!.currentState &&
-      userInPapeleria!.id !== userInFerreteria!.id
-    );
-
-    // Mostrar datos de BD
-    console.log('\n');
-    const allData = await repository.getAllData();
-    printTable('📊 Datos completos en BD', allData.map(u => ({
-      tenant_id: u.tenant_id,
-      id: u.id.substring(0, 15) + '...',
-      phone_number: u.phone_number,
-      current_state: u.current_state,
-    })));
+    // El contenido enviado a cada uno viene de SU propio TenantConfig — si se
+    // filtrara el flow o la config de un tenant al otro, este assert fallaría.
+    const lastToPapeleria = notificationPort.sent.filter((s) => s.tenantId === PAPELERIA).at(-1);
+    const lastToFerreteria = notificationPort.sent.filter((s) => s.tenantId === FERRETERIA).at(-1);
+    expect(lastToPapeleria?.message).toContain('Papelería El Lápiz');
+    expect(lastToFerreteria?.message).toContain('Ferretería El Tornillo');
+    expect(lastToPapeleria?.message).not.toContain('Ferretería');
+    expect(lastToFerreteria?.message).not.toContain('Papelería');
   });
 
-  // ============================================
-  // TEST 2: Progresión de estados independiente
-  // ============================================
-
-  test('✅ TEST 2: Misma conversación, estados divergentes por tenant', async () => {
-    printTestHeader(
-      'TEST 2: Progresión de Estados Independiente',
-      'Verificar que cada usuario progresa a su propio ritmo en cada tenant'
-    );
+  it('TEST 2: misma conversación, progresión de estado divergente por tenant', async () => {
+    const { app, userRepository, flowRepository, tenantConfigPort } = buildHarness();
+    flowRepository.register(PAPELERIA);
+    flowRepository.register(FERRETERIA);
+    tenantConfigPort.register(PAPELERIA, 'Papelería El Lápiz');
+    tenantConfigPort.register(FERRETERIA, 'Ferretería El Tornillo');
 
     const phoneNumber = '+527471234568';
-    const papeleria = 'papeleria_02';
-    const ferreteria = 'ferreteria_02';
 
-    // Ambos comienzan con "hola"
-    printScenario(1, 'Saludo inicial', papeleria, phoneNumber, 'hola');
-    
-    await request(app)
-      .post(`/webhook/${papeleria}`)
-      .send({ phoneNumber, message: 'hola' })
-      .expect(200);
+    await sendMessage(app, PAPELERIA, phoneNumber, 'hola');
+    await sendMessage(app, FERRETERIA, phoneNumber, 'hola');
 
-    printTestResult('Mensage de saludo en papelería', true);
+    // Solo la papelería avanza (elige "1"); la ferretería se queda en el saludo.
+    await sendMessage(app, PAPELERIA, phoneNumber, '1');
 
-    printScenario(2, 'Saludo inicial', ferreteria, phoneNumber, 'hola');
-    
-    await request(app)
-      .post(`/webhook/${ferreteria}`)
-      .send({ phoneNumber, message: 'hola' })
-      .expect(200);
+    const userInPapeleria = await userRepository.findByPhoneNumber(PAPELERIA, phoneNumber);
+    const userInFerreteria = await userRepository.findByPhoneNumber(FERRETERIA, phoneNumber);
 
-    printTestResult('Mensage de saludo en ferretería', true);
-
-    // Papelería avanza: elige "1" (productos)
-    printScenario(3, 'Primera opción en menú', papeleria, phoneNumber, '1');
-    
-    await request(app)
-      .post(`/webhook/${papeleria}`)
-      .send({ phoneNumber, message: '1' })
-      .expect(200);
-
-    printTestResult('Selección de opción 1 en papelería', true);
-
-    // Ferretería NO avanza, sigue en menú
-    // (simula un cliente menos activo)
-
-    // Verificación
-    const userInPapeleria = await repository.findByPhoneNumber(papeleria, phoneNumber);
-    const userInFerreteria = await repository.findByPhoneNumber(ferreteria, phoneNumber);
-
-    expect(userInPapeleria!.currentState).toBe('viewing_products');
-    expect(userInFerreteria!.currentState).toBe('menu');
-    
-    printTestResult('Estados divergentes validados', true,
-      'Papelería: viewing_products, Ferretería: menu'
-    );
-
-    printIsolationCheck(
-      phoneNumber,
-      papeleria,
-      userInPapeleria!.currentState,
-      ferreteria,
-      userInFerreteria!.currentState,
-      userInPapeleria!.currentState !== userInFerreteria!.currentState
-    );
+    expect(userInPapeleria!.currentNodeId).toBe('products');
+    expect(userInFerreteria!.currentNodeId).toBe('welcome');
   });
 
-  // ============================================
-  // TEST 3: Integridad de datos multi-tenant
-  // ============================================
+  it('TEST 3: no hay fuga ni mezcla de datos entre múltiples tenants y usuarios', async () => {
+    const { app, userRepository, flowRepository, tenantConfigPort } = buildHarness();
+    const TENANT_A = 'tienda_a_001';
+    const TENANT_B = 'tienda_b_001';
+    flowRepository.register(TENANT_A);
+    flowRepository.register(TENANT_B);
+    tenantConfigPort.register(TENANT_A, 'Tienda A');
+    tenantConfigPort.register(TENANT_B, 'Tienda B');
 
-  test('✅ TEST 3: No hay fuga ni mezcla de datos entre tenants', async () => {
-    printTestHeader(
-      'TEST 3: Integridad y Seguridad Multi-Tenant',
-      'Validar que NO hay fuga, mezcla o corrupción de datos entre tenants'
-    );
-
-    const tenantA = 'tienda_a_001';
-    const tenantB = 'tienda_b_001';
     const phone1 = '+527471234569';
     const phone2 = '+527471234570';
 
-    // Escenario: Dos tenants, dos usuarios por tenant
-    const scenarios = [
-      { tenant: tenantA, phone: phone1, msg: 'hola' },
-      { tenant: tenantA, phone: phone2, msg: 'hola' },
-      { tenant: tenantB, phone: phone1, msg: 'hola' },
-      { tenant: tenantB, phone: phone2, msg: 'hola' },
-    ];
-
-    console.log('\n');
-    for (let i = 0; i < scenarios.length; i++) {
-      const { tenant, phone, msg } = scenarios[i];
-      printScenario(i + 1, 'Usuario múltiple', tenant, phone, msg);
-      
-      await request(app)
-        .post(`/webhook/${tenant}`)
-        .send({ phoneNumber: phone, message: msg })
-        .expect(200);
-
-      printTestResult('Mensaje procesado', true);
+    for (const [tenant, phone] of [
+      [TENANT_A, phone1],
+      [TENANT_A, phone2],
+      [TENANT_B, phone1],
+      [TENANT_B, phone2],
+    ] as const) {
+      await sendMessage(app, tenant, phone, 'hola');
     }
 
-    // Validación de integridad
-    const allUsers = await repository.getAllData();
+    const usersA = [
+      await userRepository.findByPhoneNumber(TENANT_A, phone1),
+      await userRepository.findByPhoneNumber(TENANT_A, phone2),
+    ];
+    const usersB = [
+      await userRepository.findByPhoneNumber(TENANT_B, phone1),
+      await userRepository.findByPhoneNumber(TENANT_B, phone2),
+    ];
 
-    console.log('\n');
-    printInfo('Validando integridad de datos...');
+    expect(usersA.every((u) => u !== null)).toBe(true);
+    expect(usersB.every((u) => u !== null)).toBe(true);
 
-    // Verificamos que hay AT LEAST 4 registros (por los tests anteriores puede haber más)
-    expect(allUsers.length).toBeGreaterThanOrEqual(4);
-    printTestResult('Base de datos contiene registros', true, `${allUsers.length} registros totales`);
+    // 4 usuarios, todos con ids distintos — ninguna colisión cross-tenant.
+    const ids = new Set([...usersA, ...usersB].map((u) => u!.id));
+    expect(ids.size).toBe(4);
 
-    // Contar solo los usuarios de los 2 tenants de este test
-    const test3Users = allUsers.filter(u => 
-      (u.tenant_id === tenantA || u.tenant_id === tenantB)
-    );
-    
-    expect(test3Users).toHaveLength(4);
-    printTestResult('Cantidad de registros en TEST 3', true, '4 registros esperados');
+    // Cada usuario reporta el tenant al que realmente pertenece.
+    expect(usersA.every((u) => u!.tenantId === TENANT_A)).toBe(true);
+    expect(usersB.every((u) => u!.tenantId === TENANT_B)).toBe(true);
 
-    // Cada combinación (tenant, phone) debe ser única
-    const uniqueKeys = new Set(
-      test3Users.map(u => `${u.tenant_id}#${u.phone_number}`)
-    );
-    expect(uniqueKeys.size).toBe(4);
-    printTestResult('No hay duplicados', true, '4 combinaciones únicas');
-
-    // Verificar que cada tenant vea solo sus datos
-    const usersInTenantA = test3Users.filter(u => u.tenant_id === tenantA);
-    const usersInTenantB = test3Users.filter(u => u.tenant_id === tenantB);
-
-    expect(usersInTenantA).toHaveLength(2);
-    expect(usersInTenantB).toHaveLength(2);
-    printTestResult('Aislamiento de datos por tenant', true,
-      'TenantA: 2 usuarios, TenantB: 2 usuarios'
-    );
-
-    // Tabla final (solo los de este test)
-    console.log('\n');
-    printTable('📊 Estado final de BD (TEST 3)', 
-      test3Users.map(u => ({
-        tenant: u.tenant_id,
-        phone: u.phone_number,
-        state: u.current_state,
-        created: new Date(u.created_at).toLocaleTimeString(),
-      }))
-    );
-
-    printTestResult('Integridad multi-tenant confirmada', true,
-      'Nada de fugas o mezcla de datos'
-    );
+    // Buscar un teléfono de A contra el tenant B (u otro tenant no registrado
+    // en absoluto) nunca debe devolver el usuario de A.
+    const crossLookup = await userRepository.findByPhoneNumber(TENANT_B, phone1);
+    expect(crossLookup!.id).not.toBe(usersA[0]!.id);
+    const unknownTenantLookup = await userRepository.findByPhoneNumber('tenant_inexistente', phone1);
+    expect(unknownTenantLookup).toBeNull();
   });
 });
-

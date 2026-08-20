@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { MetaCredentialsRepository } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireCookieSession, requireRole } from '@/infrastructure/auth/AuthMiddleware';
-import { ctx, errMsg } from './helpers';
+import { ctx } from './helpers';
 
 /**
  * Sub-router de credenciales Meta por tenant. Exige sesión cookie + super_admin:
@@ -64,7 +64,7 @@ export function createMetaRouter(params: {
         res.json({ ok: true, rotatedAt: new Date().toISOString() });
       } catch (err: unknown) {
         logger.error({ err, tenantId }, 'POST /tenants/:id/meta-credentials failed');
-        res.status(500).json({ error: errMsg(err) || 'Error interno' });
+        res.status(500).json({ error: 'Error interno guardando credenciales' });
       }
     },
   );
@@ -94,7 +94,7 @@ export function createMetaRouter(params: {
         res.json({ ok: true });
       } catch (err: unknown) {
         logger.error({ err, tenantId }, 'DELETE /tenants/:id/meta-credentials failed');
-        res.status(500).json({ error: errMsg(err) || 'Error interno' });
+        res.status(500).json({ error: 'Error interno eliminando credenciales' });
       }
     },
   );

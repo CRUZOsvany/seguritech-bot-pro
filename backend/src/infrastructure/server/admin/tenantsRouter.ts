@@ -188,7 +188,7 @@ export function createTenantsRouter(params: {
       res.json({ ok: true });
     } catch (err: unknown) {
       logger.error({ err, id }, 'PATCH /api/admin/tenants/:id failed');
-      res.status(500).json({ error: errMsg(err) || 'Error interno' });
+      res.status(500).json({ error: 'Error interno actualizando tenant' });
     }
   });
 
@@ -209,7 +209,7 @@ export function createTenantsRouter(params: {
       res.json({ ok: true });
     } catch (err: unknown) {
       logger.error({ err, id }, 'DELETE /api/admin/tenants/:id failed');
-      res.status(500).json({ error: errMsg(err) || 'Error interno' });
+      res.status(500).json({ error: 'Error interno eliminando tenant' });
     }
   });
 
@@ -275,7 +275,7 @@ export function createTenantsRouter(params: {
       res.json({ success: true, tenantId });
     } catch (err: unknown) {
       logger.error({ err, tenantId }, 'DELETE /api/admin/tenants/:id/molde failed');
-      res.status(500).json({ error: errMsg(err) || 'Error removiendo molde' });
+      res.status(500).json({ error: 'Error removiendo molde' });
     }
   });
 
@@ -327,7 +327,7 @@ export function createTenantsRouter(params: {
       res.json({ success: true, tenantId, status });
     } catch (err: unknown) {
       logger.error({ err, tenantId, status }, 'PATCH /api/admin/tenants/:id/status failed');
-      res.status(500).json({ error: errMsg(err) || 'Error actualizando status' });
+      res.status(500).json({ error: 'Error actualizando status' });
     }
   });
 
@@ -342,7 +342,7 @@ export function createTenantsRouter(params: {
       res.json({ messages });
     } catch (err: unknown) {
       logger.error({ err, tenantId, limit }, 'GET /tenants/:id/messages failed');
-      res.status(500).json({ error: errMsg(err) || 'Error interno' });
+      res.status(500).json({ error: 'Error interno listando mensajes' });
     }
   });
 
@@ -381,7 +381,7 @@ export function createTenantsRouter(params: {
         res.json({ ok: true });
       } catch (err: unknown) {
         logger.error({ err, tenantId, phoneNumber }, 'POST human-handoff/resume failed');
-        res.status(500).json({ error: errMsg(err) || 'Error reanudando handoff' });
+        res.status(500).json({ error: 'Error reanudando handoff' });
       }
     },
   );
@@ -409,7 +409,7 @@ export function createTenantsRouter(params: {
         });
       } catch (err: unknown) {
         logger.error({ err, tenantId }, 'GET human-handoff/paused failed');
-        res.status(500).json({ error: errMsg(err) || 'Error listando pausados' });
+        res.status(500).json({ error: 'Error listando pausados' });
       }
     },
   );
@@ -456,7 +456,7 @@ export function createTenantsRouter(params: {
       res.json({ paused: flat });
     } catch (err: unknown) {
       logger.error({ err }, 'GET /api/admin/handoff/paused failed');
-      res.status(500).json({ error: errMsg(err) || 'Error listando escalaciones' });
+      res.status(500).json({ error: 'Error listando escalaciones' });
     }
   });
 
@@ -499,6 +499,13 @@ export function createTenantsRouter(params: {
 
     if (typeof tenantId !== 'string' || tenantId.trim() === '') {
       res.status(400).json({ error: 'tenantId requerido (string)' });
+      return;
+    }
+    // Aislamiento multi-tenant: un admin_operator solo puede simular sobre SU
+    // propio tenant. tenantId viene del body (no de :id), así que
+    // requireTenantScope no aplica tal cual — chequeo equivalente inline.
+    if (req.admin?.role !== 'super_admin' && req.admin?.tenantId !== tenantId) {
+      res.status(403).json({ error: 'No autorizado para este tenant' });
       return;
     }
     if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
@@ -553,9 +560,8 @@ export function createTenantsRouter(params: {
         flowEnded: result.flowEnded,
       });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error en simulate';
       logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate failed');
-      res.status(500).json({ error: message });
+      res.status(500).json({ error: 'Error en simulate' });
     }
   });
 
@@ -569,14 +575,18 @@ export function createTenantsRouter(params: {
       res.status(400).json({ error: 'tenantId y phoneNumber requeridos' });
       return;
     }
+    // Mismo aislamiento multi-tenant que en POST /simulate (ver comentario ahí).
+    if (req.admin?.role !== 'super_admin' && req.admin?.tenantId !== tenantId) {
+      res.status(403).json({ error: 'No autorizado para este tenant' });
+      return;
+    }
 
     try {
       await simulateMessageUseCase.reset(tenantId, phoneNumber);
       res.json({ success: true });
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'Error reseteando';
       logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate/reset failed');
-      res.status(500).json({ error: message });
+      res.status(500).json({ error: 'Error reseteando' });
     }
   });
 
