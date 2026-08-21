@@ -1,4 +1,4 @@
-import { User, TenantConfig } from '../entities';
+import { User, TenantConfig, Message } from '../entities';
 
 /**
  * Puerto para persistencia de usuario.
@@ -37,6 +37,26 @@ export interface AuditPort {
     targetId?: string;
     metadata?: Record<string, unknown>;
   }): void;
+}
+
+/**
+ * Clasifica si un mensaje debe resolverse por flow determinista, por el
+ * orquestador IA, o por escalamiento directo a humano (plan Secretaria
+ * Digital, Fase 1.2 — ver .claude/SEGURITECH_AI_SECRETARIA_PLAN.md §3.2).
+ *
+ * Debe responder rápido (objetivo <300ms) y barato — usar un modelo pequeño
+ * (Haiku), nunca el mismo modelo que usa el orquestador para razonar.
+ *
+ * Guardrail (plan §4): timeout corto obligatorio (2-3s). Si el modelo falla
+ * o expira, la implementación debe devolver 'flow' — nunca dejar al bot sin
+ * responder. `classify` en sí NUNCA lanza por un fallo del modelo.
+ */
+export interface IntentRouterPort {
+  classify(input: {
+    message: Message;
+    user: User;
+    tenantConfig: TenantConfig;
+  }): Promise<'flow' | 'agent' | 'human'>;
 }
 
 /**
