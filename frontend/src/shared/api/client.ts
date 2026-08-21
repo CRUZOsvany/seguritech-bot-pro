@@ -47,6 +47,34 @@ export async function apiFetch<T = unknown>(
     throw new ApiError(0, `Red caída: ${(err as Error).message}`);
   }
 
+  return handleResponse<T>(res, url);
+}
+
+/**
+ * Como `apiFetch`, pero para `multipart/form-data` (subida de archivos) —
+ * SIN el header `Content-Type: application/json` que fuerza `apiFetch`. El
+ * navegador arma el boundary del multipart solo; ponerle un Content-Type a
+ * mano aquí rompería el parseo del lado del servidor.
+ */
+export async function apiUpload<T = unknown>(
+  url: string,
+  formData: FormData,
+): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      credentials: 'same-origin',
+      body: formData,
+    });
+  } catch (err) {
+    throw new ApiError(0, `Red caída: ${(err as Error).message}`);
+  }
+
+  return handleResponse<T>(res, url);
+}
+
+async function handleResponse<T>(res: Response, url: string): Promise<T> {
   // 401 fuera de /api/auth → redirige a login con ?next= para volver después.
   if (res.status === 401 && !url.startsWith(AUTH_PREFIX)) {
     const next = encodeURIComponent(window.location.pathname + window.location.search);
