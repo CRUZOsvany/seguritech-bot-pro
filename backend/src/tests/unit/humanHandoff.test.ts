@@ -109,6 +109,8 @@ describe('BotController — gate de handoff humano', () => {
       resetUserState: jest.fn(),
       setHumanHandoff: jest.fn().mockResolvedValue(undefined),
       listPaused: jest.fn().mockResolvedValue([]),
+      touchLastInbound: jest.fn().mockResolvedValue(undefined),
+      setOptOut: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<UserRepository>;
 
     interpreter = {
@@ -166,6 +168,8 @@ describe('BotController — activación del handoff al disparar escape_to_human'
       resetUserState: jest.fn(),
       setHumanHandoff: jest.fn().mockResolvedValue(undefined),
       listPaused: jest.fn().mockResolvedValue([]),
+      touchLastInbound: jest.fn().mockResolvedValue(undefined),
+      setOptOut: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<UserRepository>;
 
     interpreter = {
@@ -231,6 +235,8 @@ describe('BotController — gate de comandos del dueño (#listo/#reanudar, P4/D4
       resetUserState: jest.fn(),
       setHumanHandoff: jest.fn().mockResolvedValue(undefined),
       listPaused: jest.fn().mockResolvedValue([]),
+      touchLastInbound: jest.fn().mockResolvedValue(undefined),
+      setOptOut: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<UserRepository>;
 
     interpreter = {

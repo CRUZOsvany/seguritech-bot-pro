@@ -24,6 +24,25 @@ import {
 const OWNER_RESUME_COMMANDS = ['#listo', '#reanudar'] as const;
 
 /**
+ * Palabras de opt-out real (Bloque 2.2, cumplimiento Meta). Distinto de
+ * ESCAPE_WORDS del FlowInterpreter ("cancelar" ahí solo resetea el flow):
+ * estas marcan `bot_users.opted_out_at` y cortan CUALQUIER envío al número
+ * hasta que el cliente vuelva a escribir voluntariamente. Match exacto
+ * (trim + lowercase), mismo criterio que ESCAPE_WORDS.
+ */
+const OPT_OUT_WORDS = [
+  'stop',
+  'baja',
+  'no molestar',
+  'cancelar suscripcion',
+  'cancelar suscripción',
+] as const;
+
+const OPT_OUT_CONFIRMATION =
+  'Listo, no volverás a recibir mensajes de este número. ' +
+  'Si cambias de opinión, solo escríbenos de nuevo cuando quieras.';
+
+/**
  * Controlador del bot.
  *
  * Ruta única: FlowInterpreter cuando el tenant tiene bot_flow activo.
@@ -84,6 +103,48 @@ export class BotController {
         metaMessageId,
       };
 
+      // 2.5. Usuario + cumplimiento Meta (Bloque 2.1/2.2). Se resuelve para
+      // TODO mensaje entrante, tenga o no flow activo el tenant — el
+      // opt-out y el tracking de ventana de servicio no dependen del flow.
+      // El dueño queda fuera de esta lógica (ya se filtró arriba: si llegó
+      // hasta acá es porque su mensaje no fue un comando, y no aplica
+      // opt-out a su propio número de pruebas).
+      const user = await this.getOrCreateUser(tenantId, from);
+      await this.userRepository.touchLastInbound(tenantId, from, message.timestamp);
+
+      const isOwner = !!config.ownerPhone && this.isOwnerPhone(from, config.ownerPhone);
+      if (!isOwner) {
+        if (this.isOptOutWord(content)) {
+          await this.userRepository.setOptOut(tenantId, from, message.timestamp);
+          await this.notificationPort.sendMessage(tenantId, from, OPT_OUT_CONFIRMATION);
+          this.auditPort.log({
+            actorLabel: `whatsapp:${from}`,
+            action: 'bot_user.opt_out',
+            targetType: 'bot_user',
+            targetId: user.id,
+            metadata: { tenantId },
+          });
+          this.logger.info({ tenantId, from }, 'Opt-out real activado (Bloque 2.2)');
+          return OPT_OUT_CONFIRMATION;
+        }
+
+        if (user.optedOutAt) {
+          // Cualquier mensaje nuevo de un usuario opted-out es opt-in
+          // implícito (patrón estándar) — se reactiva y el mensaje sigue
+          // de largo al flow normal.
+          await this.userRepository.setOptOut(tenantId, from, null);
+          user.optedOutAt = null;
+          this.auditPort.log({
+            actorLabel: `whatsapp:${from}`,
+            action: 'bot_user.opt_in_implicit',
+            targetType: 'bot_user',
+            targetId: user.id,
+            metadata: { tenantId },
+          });
+          this.logger.info({ tenantId, from }, 'Opt-in implícito — usuario reactivado');
+        }
+      }
+
       // 3. Intentar cargar bot_flow activo
       let flow = null;
       try {
@@ -97,8 +158,6 @@ export class BotController {
 
       // 4. Ruta principal: FlowInterpreter
       if (flow) {
-        const user = await this.getOrCreateUser(tenantId, from);
-
         // Gate de handoff humano: si el usuario está en pausa, el bot calla.
         if (user.humanPausedUntil && user.humanPausedUntil > new Date()) {
           this.logger.info(
@@ -376,6 +435,12 @@ export class BotController {
     const a = this.normalizeDigits(from);
     const b = this.normalizeDigits(ownerPhone);
     return a.length > 0 && a === b;
+  }
+
+  /** Match exacto (trim + lowercase) contra OPT_OUT_WORDS (Bloque 2.2). */
+  private isOptOutWord(content: string): boolean {
+    const trimmed = content.trim().toLowerCase();
+    return (OPT_OUT_WORDS as readonly string[]).includes(trimmed);
   }
 
   /**

@@ -19,6 +19,18 @@ export interface UserRepository {
    * la reutiliza tal cual.
    */
   listPaused(tenantId: string): Promise<User[]>;
+  /**
+   * Registra el timestamp del último mensaje entrante del cliente (Bloque
+   * 2.1, ventana de servicio 24h de Meta). Se llama en CADA mensaje que
+   * llega, sea o no de opt-out — es la única fuente de verdad para decidir
+   * si un envío futuro está dentro de la ventana de texto libre.
+   */
+  touchLastInbound(tenantId: string, phoneNumber: string, at: Date): Promise<void>;
+  /**
+   * Establece o limpia el opt-out real (Bloque 2.2). optedOutAt=null
+   * reactiva al usuario (opt-in implícito al volver a escribir).
+   */
+  setOptOut(tenantId: string, phoneNumber: string, optedOutAt: Date | null): Promise<void>;
 }
 
 /**

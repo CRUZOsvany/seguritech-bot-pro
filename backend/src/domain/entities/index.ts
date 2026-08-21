@@ -35,6 +35,10 @@ export interface User {
   context?: Record<string, unknown>;
   /** NULL/undefined = bot activo. Fecha futura = usuario en handoff humano (bot silenciado). */
   humanPausedUntil?: Date | null;
+  /** Timestamp del último mensaje entrante del cliente (ventana de servicio 24h, Bloque 2.1). */
+  lastInboundAt?: Date | null;
+  /** NULL/undefined = puede recibir mensajes. Timestamp = opt-out activo (Bloque 2.2). */
+  optedOutAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -161,6 +161,41 @@ export class SupabaseUserRepository implements UserRepository {
     return (data ?? []).map((row) => this.mapRow(row));
   }
 
+  async touchLastInbound(tenantId: string, phoneNumber: string, at: Date): Promise<void> {
+    const { error } = await this.supabase
+      .from('bot_users')
+      .update({ last_inbound_at: at.toISOString() })
+      .eq('tenant_id', tenantId)
+      .eq('phone_number', phoneNumber);
+
+    if (error) {
+      this.logger.error({ error, tenantId, phoneNumber }, 'touchLastInbound failed');
+      throw new Error(`touchLastInbound failed: ${error.message}`);
+    }
+  }
+
+  async setOptOut(
+    tenantId: string,
+    phoneNumber: string,
+    optedOutAt: Date | null,
+  ): Promise<void> {
+    const { error } = await this.supabase
+      .from('bot_users')
+      .update({ opted_out_at: optedOutAt?.toISOString() ?? null })
+      .eq('tenant_id', tenantId)
+      .eq('phone_number', phoneNumber);
+
+    if (error) {
+      this.logger.error({ error, tenantId, phoneNumber }, 'setOptOut failed');
+      throw new Error(`setOptOut failed: ${error.message}`);
+    }
+
+    this.logger.debug(
+      { tenantId, phoneNumber, optedOutAt },
+      '[SupabaseUserRepository] opt-out actualizado',
+    );
+  }
+
   private mapRow(row: Record<string, any>): User {
     return {
       id: row.id,
@@ -170,6 +205,8 @@ export class SupabaseUserRepository implements UserRepository {
       currentNodeId: row.current_node_id ?? undefined,
       context: (row.context as Record<string, unknown> | null) ?? undefined,
       humanPausedUntil: row.human_paused_until ? new Date(row.human_paused_until) : null,
+      lastInboundAt: row.last_inbound_at ? new Date(row.last_inbound_at) : null,
+      optedOutAt: row.opted_out_at ? new Date(row.opted_out_at) : null,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };
