@@ -38,13 +38,13 @@ Hardening crítico (Camino D) ──┘
 Objetivo único: una papelería (o SECURITECH como tenant cero) recibiendo y respondiendo en su WhatsApp **oficial**, en producción, de forma estable.
 
 ### Camino A — Verificación Meta (EL CUELLO DE BOTELLA — ARRANCA HOY)
-- [ ] Crear/confirmar Meta Business Account del negocio
-- [ ] Iniciar verificación de negocio (documentos fiscales del negocio que será tenant cero)
-- [ ] Crear App en Meta for Developers, producto WhatsApp
-- [ ] Generar System User con **token permanente** (no token temporal de 24h)
-- [ ] Dar de alta el número de WhatsApp Business y verificarlo
-- [ ] Enviar el **primer template** a aprobación (uno de saludo/aviso simple)
-- [ ] Anotar `phone_number_id`, `waba_id`, `app_secret` para `tenant_meta_credentials`
+- [x] Crear/confirmar Meta Business Account del negocio
+- [x] Iniciar verificación de negocio (documentos fiscales del negocio que será tenant cero) — **confirmado por el owner directamente 2026-08-20: "ya está en curso".** No verificado desde código (no es verificable desde el repo); si necesitas la fecha exacta o el estado en el dashboard de Meta, es dato externo, no de este documento.
+- [ ] Crear App en Meta for Developers, producto WhatsApp — sub-paso NO confirmado individualmente, no asumir hecho solo porque la verificación general arrancó
+- [ ] Generar System User con **token permanente** (no token temporal de 24h) — sin confirmar
+- [ ] Dar de alta el número de WhatsApp Business y verificarlo — sin confirmar
+- [ ] Enviar el **primer template** a aprobación (uno de saludo/aviso simple) — sin confirmar
+- [ ] Anotar `phone_number_id`, `waba_id`, `app_secret` para `tenant_meta_credentials` — sin confirmar
 - [ ] **Mientras Meta revisa, no te bloquees: avanza B, C, D en paralelo**
 
 ### Camino B — Infraestructura de producción
@@ -83,6 +83,7 @@ Objetivo único: una papelería (o SECURITECH como tenant cero) recibiendo y res
 - [~] CI verde: type-check exit 0, lint 0 errores (89 warnings preexistentes), suite verde. Falta confirmar el workflow .github contra front+carpetas muertas
 - [x] Limpiar `.env.example` raíz — moot, **no existe** `.env.example` en la raíz (verificado 2026-06-03)
 - [x] Borrar fósiles: `backend/bin/www` — moot, **ya no existe** (verificado 2026-06-03)
+- [~] **Auditoría de seguridad 2026-08-20** (IDOR cross-tenant en `/simulate`, webhook sin firma HMAC aceptado en producción, `BACKEND_API_KEY` débil) — 3 fixes reales, verificados en código y con 163/163 tests en verde, pero viven en la rama `security/audit-hardening-2026-08-20` **sin mergear a `main`**. No marcar `[x]` hasta que el PR esté mergeado — ver `.claude/SEGURITECH_ESTADO_ACTUAL.md` §0-ter.
 
 ### Camino E — Onboarding del primer cliente real
 - [ ] Elegir tenant cero (recomendado: **SECURITECH cámaras como tu propio tenant** — pruebas en carne propia sin arriesgar a un tercero; ya tienes `securitech-flow.json`)

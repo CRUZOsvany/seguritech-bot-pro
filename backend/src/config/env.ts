@@ -3,6 +3,9 @@ import { z } from 'zod';
 
 dotenv.config();
 
+/** Default de loopback — solo válido en dev; nunca debe llegar a producción tal cual. */
+const DEFAULT_ALLOWED_ORIGINS = 'http://127.0.0.1:3001';
+
 /**
  * Schema de validación para variables de entorno con Zod.
  * Toda la persistencia vive en Supabase — no hay base de datos local.
@@ -34,10 +37,13 @@ const envSchema = z.object({
   // CORS — el panel HTML se sirve desde el mismo origen del backend, así que
   // same-origin no necesita CORS. Esta lista solo importa para clientes
   // externos (ej. otra herramienta interna que pegue al backend desde otro host).
-  ALLOWED_ORIGINS: z.string().default('http://127.0.0.1:3001'),
+  ALLOWED_ORIGINS: z.string().default(DEFAULT_ALLOWED_ORIGINS),
 
   // Admin API
-  BACKEND_API_KEY: z.string().min(16).optional(),
+  // min(32): otorga super_admin global vía header x-api-key sin rate limit
+  // dedicado (solo el limiter global de 100 req/min por IP) — 16 chars era
+  // débil para ese nivel de privilegio. Generar con: openssl rand -hex 32.
+  BACKEND_API_KEY: z.string().min(32).optional(),
 
   // Cloudflare Access: dominio de email whitelist para el panel en producción.
   // Cloudflare inyecta el header Cf-Access-Authenticated-User-Email tras OAuth.
@@ -180,6 +186,14 @@ export function validateConfig(): void {
     if (missing.length > 0) {
       throw new Error(
         `❌ Configuración incompleta en PRODUCCIÓN. Variables faltantes: ${missing.join(', ')}`,
+      );
+    }
+    // ALLOWED_ORIGINS no es "faltante" en sentido estricto (tiene default),
+    // pero dejar el default de loopback en producción es casi seguro un
+    // despliegue mal configurado (CORS bloquearía al panel real).
+    if (config.cors.allowedOrigins === DEFAULT_ALLOWED_ORIGINS) {
+      throw new Error(
+        '❌ ALLOWED_ORIGINS no configurado en PRODUCCIÓN (sigue en el default de loopback).',
       );
     }
     console.log('✅ Configuración de producción validada correctamente');

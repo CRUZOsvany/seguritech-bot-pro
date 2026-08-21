@@ -73,6 +73,15 @@ export function createAuthMiddleware(params: AuthMiddlewareParams) {
     if (typeof cfEmail === 'string' && cloudflareAllowedDomain) {
       const suffix = '@' + cloudflareAllowedDomain.toLowerCase();
       if (cfEmail.toLowerCase().endsWith(suffix)) {
+        // Auditoría: este camino otorga super_admin global a CUALQUIER email
+        // del dominio permitido, sin pasar por admin_users. Dejar rastro
+        // explícito (distinto del login normal) para poder detectar uso
+        // indebido si la política de Cloudflare Access es más laxa de lo
+        // esperado.
+        logger.warn(
+          { email: cfEmail, path: req.path },
+          'Acceso admin vía Cloudflare Access (super_admin automático)',
+        );
         req.admin = {
           sub: '',
           email: cfEmail,

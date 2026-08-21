@@ -4,7 +4,7 @@ import { z } from 'zod';
 import type { WhatsAppFlowRepository } from '@/domain/ports/WhatsAppFlowRepository';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
-import { ctx, errMsg } from './helpers';
+import { ctx } from './helpers';
 
 /**
  * Sub-router CRUD de WhatsApp Flows (formularios multipantalla de Meta).
@@ -131,7 +131,7 @@ export function createWhatsappFlowsRouter(params: {
         res.status(201).json({ flow });
       } catch (err) {
         logger.error({ err, tenantId }, 'POST /tenants/:id/whatsapp-flows failed');
-        res.status(500).json({ error: errMsg(err) || 'Error creando WhatsApp Flow' });
+        res.status(500).json({ error: 'Error creando WhatsApp Flow' });
       }
     },
   );
@@ -173,7 +173,7 @@ export function createWhatsappFlowsRouter(params: {
         res.json({ flow: updated });
       } catch (err) {
         logger.error({ err, tenantId, flowId }, 'PUT /tenants/:id/whatsapp-flows/:flowId failed');
-        res.status(500).json({ error: errMsg(err) || 'Error actualizando WhatsApp Flow' });
+        res.status(500).json({ error: 'Error actualizando WhatsApp Flow' });
       }
     },
   );
@@ -209,7 +209,7 @@ export function createWhatsappFlowsRouter(params: {
         res.json({ ok: true });
       } catch (err) {
         logger.error({ err, tenantId, flowId }, 'DELETE /tenants/:id/whatsapp-flows/:flowId failed');
-        res.status(500).json({ error: errMsg(err) || 'Error eliminando WhatsApp Flow' });
+        res.status(500).json({ error: 'Error eliminando WhatsApp Flow' });
       }
     },
   );

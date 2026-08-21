@@ -74,7 +74,13 @@ export class SupabasePosProductRepository implements PosProductRepository {
     // PWA no pueda alterar el alcance del LIKE.
     const safe = q.replace(/[%_]/g, (m) => `\\${m}`);
     const pattern = `%${safe}%`;
-    const filter = `name.ilike.${pattern},sku.ilike.${pattern},barcode.eq.${safe}`;
+    // Envolver cada valor entre comillas dobles (sintaxis de PostgREST) para
+    // que `,`/`.`/`(`/`)` en el input del usuario NO se interpreten como
+    // separadores de condiciones del filtro `.or()` — solo escapar %/_ no
+    // alcanza para esos metacaracteres estructurales. Las comillas dobles
+    // literales dentro del valor se escapan duplicándolas.
+    const quote = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const filter = `name.ilike.${quote(pattern)},sku.ilike.${quote(pattern)},barcode.eq.${quote(q)}`;
 
     const { data, error } = await this.supabase
       .from('pos_products')

@@ -1,4 +1,4 @@
-import express, { Express, Request, Response, Router } from 'express';
+import express, { Express, Request, Response, Router, NextFunction } from 'express';
 import pino from 'pino';
 import crypto from 'crypto';
 import path from 'path';
@@ -228,7 +228,13 @@ export class ExpressServer {
           }
         }
 
-        // Caso B: payload simple (curl, tests)
+        // Caso B: payload simple (curl, tests). NUNCA pasa por verifyMetaSignature,
+        // así que solo se acepta fuera de producción — en prod cualquiera con un
+        // tenantId (UUID) podría inyectar mensajes como si fueran del cliente real.
+        if (config.isProduction) {
+          res.status(404).json({ error: 'Not found' });
+          return;
+        }
         const { phoneNumber, message } = req.body;
         if (!tenantId || !phoneNumber || !message) {
           res.status(400).json({ error: 'Missing parameters' });
@@ -279,7 +285,12 @@ export class ExpressServer {
           return;
         }
 
-        // Payload simple
+        // Payload simple. Igual que en /webhook/:tenantId: nunca pasa por
+        // verifyMetaSignature, solo se acepta fuera de producción.
+        if (config.isProduction) {
+          res.status(404).json({ error: 'Not found' });
+          return;
+        }
         const { tenantId, phoneNumber, message } = req.body;
         if (!tenantId || !phoneNumber || !message) {
           res.status(400).json({ error: 'Missing parameters' });
@@ -464,7 +475,7 @@ export class ExpressServer {
     // Prod bindea a 0.0.0.0 — Cloudflare Access debe estar enfrente.
     const HOST = config.isDevelopment ? '127.0.0.1' : '0.0.0.0';
     return new Promise((resolve) => {
-      this.server = this.app.listen(PORT, HOST, () => {
+      this.server = this.getExpressApp().listen(PORT, HOST, () => {
         this.logger.info({ host: HOST, port: PORT }, `🚀 Express escuchando en ${HOST}:${PORT}`);
         resolve();
       });
@@ -482,7 +493,29 @@ export class ExpressServer {
     }
   }
 
+  private errorHandlerRegistered = false;
+
+  /**
+   * Red de seguridad final: cualquier excepción no capturada por el
+   * try/catch de una ruta individual (p.ej. un throw síncrono, o una
+   * promesa rechazada que Express 5 reenvía automáticamente al error
+   * handler) cae aquí en vez de que Express filtre el stack trace por
+   * default. Nunca expone `err.message` al cliente — solo lo loguea.
+   * Idempotente: puede llamarse más de una vez (tests que reconstruyen la
+   * app), solo se registra una vez.
+   */
+  private ensureErrorHandler(): void {
+    if (this.errorHandlerRegistered) return;
+    this.errorHandlerRegistered = true;
+    this.app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+      this.logger.error({ err, path: req.path, method: req.method }, 'Error no capturado');
+      if (res.headersSent) return;
+      res.status(500).json({ error: 'Error interno del servidor' });
+    });
+  }
+
   getExpressApp(): Express {
+    this.ensureErrorHandler();
     return this.app;
   }
 }

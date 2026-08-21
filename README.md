@@ -10,7 +10,7 @@ Plataforma de chatbots WhatsApp multi-tenant para negocios locales. Modelo **MSP
 
 ## Arquitectura
 
-**Backend-only monorepo.** El antiguo frontend Next.js fue eliminado en Sprint E. El panel admin y el simulador de WhatsApp son páginas HTML standalone (vanilla CSS+JS, sin frameworks, sin build) servidas por el mismo Express del backend desde `backend/public/`.
+**Monorepo backend + frontend.** El backend Express sirve el panel admin HTML estático, el simulador y la SPA React del workspace `frontend/` desde `backend/public/`.
 
 ```
 seguritech-bot-pro/
@@ -33,11 +33,13 @@ seguritech-bot-pro/
 │   │   └── index.ts
 │   ├── public/
 │   │   ├── panel/                      # HTML del cuarto de mandos (index/new/tenant/messages)
-│   │   └── simulator/                  # HTML del simulador WhatsApp (iPhone frame + chat)
-│   ├── supabase/migrations/            # 001 → 005
+│   │   ├── simulator/                  # HTML del simulador WhatsApp (iPhone frame + chat)
+│   │   └── app/                        # SPA React build de Vite
+│   ├── supabase/migrations/            # 001 → 017
 │   └── package.json
+├── frontend/                           # Vite + React 19 + TanStack + Tailwind 4
 ├── docker-compose.yml                  # solo servicio `backend`
-├── package.json                        # workspaces: ['backend']
+├── package.json                        # workspaces: ['backend', 'frontend']
 └── README.md
 ```
 
@@ -51,6 +53,7 @@ seguritech-bot-pro/
 - **AES-256-GCM** cifrado de tokens Meta vía `TokenCrypto`
 - **Meta WhatsApp Cloud API v21** integración multi-tenant
 - **Jest** unit + integration tests
+- **Vite + React 19 + TanStack Router/Query + shadcn/ui + Tailwind 4** para el panel en `frontend/`
 
 ---
 
@@ -61,7 +64,7 @@ seguritech-bot-pro/
 cp backend/.env.example backend/.env
 # edita backend/.env con tus credenciales reales
 
-# 2. Install desde la RAÍZ (no desde backend/)
+# 2. Install desde la RAÍZ
 npm install
 
 # 3. Arrancar (bindea a 127.0.0.1:3001 en dev)
@@ -75,6 +78,7 @@ npm run dev
 | http://127.0.0.1:3001/panel/ | Panel admin (lista de clientes) |
 | http://127.0.0.1:3001/panel/new.html | Crear cliente nuevo |
 | http://127.0.0.1:3001/panel/tenant.html?id=&lt;uuid&gt; | Editar cliente |
+| http://127.0.0.1:3001/app/ | SPA React del panel |
 | http://127.0.0.1:3001/simulator/&lt;uuid&gt; | Simulador WhatsApp del tenant |
 | http://127.0.0.1:3001/health | Liveness check |
 | http://127.0.0.1:3001/webhook | Webhook Meta (verify + receive) |
@@ -86,7 +90,7 @@ npm run dev
 
 Tres caminos válidos (basta uno), por orden de preferencia:
 
-1. **Cookie JWT HTTPOnly** — el camino principal del panel HTML. POST a `/api/auth/login` con `{email, password}` emite cookie `seguritech_session` (8h por defecto). Validada server-side con denylist (`admin_sessions_revoked`).
+1. **Cookie JWT HTTPOnly** — el camino principal del panel HTML y la SPA React. POST a `/api/auth/login` con `{email, password}` emite cookie `seguritech_session` (8h por defecto). Validada server-side con denylist (`admin_sessions_revoked`).
 2. **`Cf-Access-Authenticated-User-Email: <user@<CLOUDFLARE_ALLOWED_DOMAIN>>`** — el panel en prod tras Cloudflare Access. Encadena con el JWT, no lo reemplaza.
 3. **`x-api-key: <BACKEND_API_KEY>`** — para CLI, curl, scripts.
 
@@ -134,7 +138,7 @@ Rotación de credenciales Meta exige cookie JWT (no x-api-key ni CF Access) — 
 
 ```bash
 npm run dev              # arranca backend con ts-node
-npm run build            # tsc → backend/dist
+npm run build            # frontend build:panel + backend build
 npm start                # node backend/dist/index.js
 npm test                 # jest (unit + integration)
 npm run test:coverage    # con coverage report
@@ -188,6 +192,13 @@ Estado actual:
 - `008_bot_flow_versions.sql` — versionado de flows + rollback (Sprint H)
 - `009_admin_sessions.sql` — denylist JWT + intentos de login (lockout)
 - `010_admin_users_2fa.sql` — columnas 2FA TOTP + `must_change_password`
+- `011_pos_bootstrap.sql` — bootstrap POS
+- `012_state_machine_tenants.sql` — FSM de tenants
+- `013_admin_audit_log.sql` — audit log append-only
+- `014_bot_flow_versions.sql` — versionado de flows + rollback
+- `015_admin_sessions.sql` — denylist JWT + lockout
+- `016_whatsapp_flows.sql` — soporte de flows WhatsApp
+- `017_human_handoff_pause.sql` — pausa humana del bot
 - `seed_admin_user.sql` — seed del primer super_admin (manual, ver bootstrap arriba)
 
 ---
@@ -196,7 +207,7 @@ Estado actual:
 
 - **Tokens Meta cifrados en BD** con AES-256-GCM (`TokenCrypto`). Nunca en plaintext, nunca devueltos al panel.
 - **Webhook con HMAC** SHA-256 verificación de firma Meta (`X-Hub-Signature-256`).
-- **Sesiones admin con JWT HS256 + cookie HTTPOnly + SameSite=Strict** (Sprint F). Denylist server-side para logout (`admin_sessions_revoked`).
+- **Sesiones admin con JWT HS256 + cookie HTTPOnly + SameSite=Strict**. Denylist server-side para logout (`admin_sessions_revoked`).
 - **Bcrypt cost=12** para passwords admin. Login con timing-safe comparisons (incluso si el user no existe, gastamos `bcrypt.compare` con un hash dummy).
 - **Lockout** 5 fallos por cuenta o IP en 15 min → 429. Doble capa: `express-rate-limit` + tabla `admin_login_attempts`.
 - **Audit log append-only** (`admin_audit_log`) de todas las mutaciones del panel. Inmutable por diseño.
