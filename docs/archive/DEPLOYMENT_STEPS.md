@@ -1,3 +1,10 @@
+> **⚠️ OBSOLETO — archivado 2026-08-20.** Describe la arquitectura pre-multi-tenant
+> (tabla `phone_tenant_map`, que ya no existe — reemplazada por
+> `tenant_meta_credentials`) y un formato de respuesta del webhook que ya no
+> es el actual. No usar para desplegar. El reemplazo vigente es
+> `docs/deployment/RUNBOOK_PRODUCCION.md` (pendiente de escribir — ver
+> `.claude/SEGURITECH_ESTADO_ACTUAL.md` §3).
+
 # 🚀 PASOS DE DEPLOYMENT - BUG FIXES
 
 Después de descargar el código, ejecutar estos pasos en orden:
