@@ -10,6 +10,9 @@ import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MetaCredentialsRepository } from '@/domain/ports';
 import type { MessagesRepository, UserRepository } from '@/domain/ports';
 import type { WhatsAppFlowRepository } from '@/domain/ports/WhatsAppFlowRepository';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
+import type { PosCategoryRepository } from '@/domain/ports/pos/PosCategoryRepository';
+import type { ImportPosProductsUseCase } from '@/domain/use-cases/ImportPosProductsUseCase';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Mw } from './admin/helpers';
@@ -18,6 +21,7 @@ import { createServicesRouter } from './admin/servicesRouter';
 import { createMetaRouter } from './admin/metaRouter';
 import { createFlowsRouter } from './admin/flowsRouter';
 import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
+import { createPosCatalogRouter } from './admin/posCatalogRouter';
 
 /**
  * Router de API admin interna del panel SegurITech.
@@ -47,6 +51,9 @@ export function createAdminRouter(params: {
   /** Opcional: solo presente cuando META_TOKEN_ENCRYPTION_KEY está configurada. */
   metaCredentialsRepository?: MetaCredentialsRepository;
   whatsappFlowRepository: WhatsAppFlowRepository;
+  posProductRepository: PosProductRepository;
+  posCategoryRepository: PosCategoryRepository;
+  importPosProductsUseCase: ImportPosProductsUseCase;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -64,6 +71,9 @@ export function createAdminRouter(params: {
     userRepository,
     metaCredentialsRepository,
     whatsappFlowRepository,
+    posProductRepository,
+    posCategoryRepository,
+    importPosProductsUseCase,
     audit,
     supabase,
     logger,
@@ -88,6 +98,15 @@ export function createAdminRouter(params: {
   );
   router.use(
     createWhatsappFlowsRouter({ whatsappFlowRepository, audit, logger }),
+  );
+  router.use(
+    createPosCatalogRouter({
+      posProductRepository,
+      posCategoryRepository,
+      importPosProductsUseCase,
+      audit,
+      logger,
+    }),
   );
   router.use(
     createTenantsRouter({

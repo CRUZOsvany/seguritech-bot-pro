@@ -21,6 +21,7 @@ import { SupabasePosProductRepository } from '@/infrastructure/repositories/pos/
 import { SupabasePosCategoryRepository } from '@/infrastructure/repositories/pos/SupabasePosCategoryRepository';
 import { SupabasePosTenantConfigRepository } from '@/infrastructure/repositories/pos/SupabasePosTenantConfigRepository';
 import { SupabasePosUserRepository } from '@/infrastructure/repositories/pos/SupabasePosUserRepository';
+import { ImportPosProductsUseCase } from '@/domain/use-cases/ImportPosProductsUseCase';
 import { PosAuthService } from '@/application/pos/PosAuthService';
 import { createPosAuthMiddleware } from '@/infrastructure/auth/PosAuthMiddleware';
 import { createRequireModule } from '@/infrastructure/auth/ModuleGuard';
@@ -160,6 +161,11 @@ export class Bootstrap {
         this.logger,
       );
       const posUserRepository = new SupabasePosUserRepository(supabase, this.logger);
+      const importPosProductsUseCase = new ImportPosProductsUseCase(
+        posProductRepository,
+        posCategoryRepository,
+        this.logger,
+      );
 
       const posAuthService = new PosAuthService(
         posUserRepository,
@@ -257,6 +263,9 @@ export class Bootstrap {
         userRepository,
         metaCredentialsRepository,
         whatsappFlowRepository,
+        posProductRepository,
+        posCategoryRepository,
+        importPosProductsUseCase,
         audit: auditLog,
         supabase,
         logger: this.logger,

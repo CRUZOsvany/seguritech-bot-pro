@@ -3,13 +3,15 @@ import type pino from 'pino';
 import type {
   PosProductRepository,
   PosProductListOptions,
+  PosProductPatch,
 } from '@/domain/ports/pos/PosProductRepository';
-import type { PosProduct, PosUnitType } from '@/domain/entities/pos/Product';
+import type { NewPosProduct, PosProduct, PosUnitType } from '@/domain/entities/pos/Product';
 
 /**
  * Implementación Supabase del PosProductRepository.
  *
- * Sprint 5.1a expone solo lectura. CRUD entra en 5.2.
+ * Sprint 5.1a expuso solo lectura. Sprint 5.2 (Bloque 5) agrega create/
+ * update/upsertBySku para el import de catálogo.
  *
  * Aislamiento multi-tenant: TODOS los métodos filtran por tenant_id
  * en el WHERE. La RLS es defense-in-depth (el backend usa service_role).
@@ -136,6 +138,63 @@ export class SupabasePosProductRepository implements PosProductRepository {
     }
     return count ?? 0;
   }
+
+  async create(product: NewPosProduct): Promise<PosProduct> {
+    const { data, error } = await this.supabase
+      .from('pos_products')
+      .insert(toRow(product))
+      .select('*')
+      .single();
+    if (error) {
+      this.logger.error({ error, tenantId: product.tenantId, sku: product.sku }, 'pos.create failed');
+      throw new Error(`pos.create failed: ${error.message}`);
+    }
+    return mapRow(data);
+  }
+
+  async update(tenantId: string, id: string, patch: PosProductPatch): Promise<PosProduct> {
+    const { data, error } = await this.supabase
+      .from('pos_products')
+      .update(toRow(patch))
+      .eq('tenant_id', tenantId)
+      .eq('id', id)
+      .select('*')
+      .single();
+    if (error) {
+      this.logger.error({ error, tenantId, id }, 'pos.update failed');
+      throw new Error(`pos.update failed: ${error.message}`);
+    }
+    return mapRow(data);
+  }
+
+  async upsertBySku(product: NewPosProduct): Promise<{ product: PosProduct; created: boolean }> {
+    const existing = await this.findBySku(product.tenantId, product.sku);
+    if (existing) {
+      const updated = await this.update(product.tenantId, existing.id, product);
+      return { product: updated, created: false };
+    }
+    const created = await this.create(product);
+    return { product: created, created: true };
+  }
+}
+
+/** Convierte el shape de dominio (camelCase, parcial) a columnas de `pos_products`. */
+function toRow(input: Partial<NewPosProduct>): Record<string, unknown> {
+  const row: Record<string, unknown> = {};
+  if (input.tenantId !== undefined) row.tenant_id = input.tenantId;
+  if (input.sku !== undefined) row.sku = input.sku;
+  if (input.barcode !== undefined) row.barcode = input.barcode;
+  if (input.name !== undefined) row.name = input.name;
+  if (input.description !== undefined) row.description = input.description;
+  if (input.categoryId !== undefined) row.category_id = input.categoryId;
+  if (input.unitType !== undefined) row.unit_type = input.unitType;
+  if (input.unitPrice !== undefined) row.unit_price = input.unitPrice;
+  if (input.costPrice !== undefined) row.cost_price = input.costPrice;
+  if (input.taxRate !== undefined) row.tax_rate = input.taxRate;
+  if (input.stockQty !== undefined) row.stock_qty = input.stockQty;
+  if (input.stockMin !== undefined) row.stock_min = input.stockMin;
+  if (input.trackStock !== undefined) row.track_stock = input.trackStock;
+  return row;
 }
 
 function mapRow(row: Record<string, unknown>): PosProduct {
