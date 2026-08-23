@@ -126,6 +126,12 @@ export class Bootstrap {
           }),
       };
 
+      // posProductRepository se construye antes del ApplicationContainer porque
+      // VariableResolver/CatalogSearchService (search_catalog, §2.1 del plan V1)
+      // lo necesitan. La misma instancia se reutiliza más abajo para el POS
+      // Router (Sprint 5.1a) — es un wrapper sin estado sobre `supabase`.
+      const posProductRepository = new SupabasePosProductRepository(supabase, this.logger);
+
       this.container = new ApplicationContainer(
         userRepository,
         notificationPort,
@@ -134,6 +140,7 @@ export class Bootstrap {
         tenantRepository,
         supabase,
         auditPort,
+        posProductRepository,
         this.logger,
       );
       this.logger.info('✅ Contenedor DI listo');
@@ -159,7 +166,7 @@ export class Bootstrap {
       });
 
       // === POS (Sprint 5.1a) — fuera del ApplicationContainer ===
-      const posProductRepository = new SupabasePosProductRepository(supabase, this.logger);
+      // posProductRepository ya se construyó arriba, antes del ApplicationContainer.
       const posCategoryRepository = new SupabasePosCategoryRepository(supabase, this.logger);
       const posTenantConfigRepository = new SupabasePosTenantConfigRepository(
         supabase,

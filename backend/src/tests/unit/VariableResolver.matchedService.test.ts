@@ -9,9 +9,11 @@ import pino from 'pino';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import type { TenantConfig, User, Message, ServiceDirectoryEntry } from '@/domain/entities';
 import { BotTone, UserState } from '@/domain/entities';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 
 const silentLogger = pino({ level: 'silent' });
 const unusedSupabase = {} as unknown as SupabaseClient;
+const unusedPosProducts = {} as unknown as PosProductRepository;
 
 const SERVICE: ServiceDirectoryEntry = {
   id: 'svc-1',
@@ -58,7 +60,7 @@ function makeMessage(): Message {
 }
 
 describe('VariableResolver — matched_service_* (Fase 5.4)', () => {
-  const resolver = new VariableResolver(unusedSupabase, silentLogger);
+  const resolver = new VariableResolver(unusedSupabase, unusedPosProducts, silentLogger);
 
   it('matched_service_name resuelve el nombre de la entrada matcheada', async () => {
     const result = await resolver.resolve('{{matched_service_name}}', {

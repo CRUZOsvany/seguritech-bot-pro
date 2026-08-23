@@ -13,6 +13,7 @@ import { ApplicationContainer } from '@/app/ApplicationContainer';
 import { InMemoryUserRepository } from '@/tests/utils/InMemoryUserRepository';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { TenantConfigPort, BotFlowRepository, TenantRepository, AuditPort } from '@/domain/ports';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 
 /**
  * INTERFACE: Resultado de test
@@ -379,6 +380,8 @@ export class PerformanceSecurityTest {
     };
     const supabaseStub = {} as SupabaseClient;
     const auditPortStub: AuditPort = { log: () => { /* noop en perf test */ } };
+    // search_catalog (§2.1) no se ejerce en este script de perf/seguridad.
+    const posProductRepositoryStub = {} as PosProductRepository;
 
     this.container = new ApplicationContainer(
       userRepository,
@@ -388,6 +391,7 @@ export class PerformanceSecurityTest {
       tenantRepository,
       supabaseStub,
       auditPortStub,
+      posProductRepositoryStub,
       this.logger,
     );
   }

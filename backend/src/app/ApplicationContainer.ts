@@ -9,10 +9,12 @@ import {
   TenantRepository,
   AuditPort,
 } from '@/domain/ports';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
+import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
@@ -40,15 +42,18 @@ export class ApplicationContainer {
     tenantRepository: TenantRepository,
     supabase: SupabaseClient,
     auditPort: AuditPort,
+    posProductRepository: PosProductRepository,
     logger: pino.Logger,
   ) {
-    const variableResolver = new VariableResolver(supabase, logger);
+    const variableResolver = new VariableResolver(supabase, posProductRepository, logger);
     const dynamicSectionResolver = new DynamicSectionResolver(logger);
     const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
+    const catalogSearchService = new CatalogSearchService(posProductRepository);
     const flowInterpreter = new FlowInterpreter(
       variableResolver,
       dynamicSectionResolver,
       serviceDirectoryMatcher,
+      catalogSearchService,
       logger,
     );
 

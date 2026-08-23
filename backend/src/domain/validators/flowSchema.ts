@@ -52,6 +52,13 @@ const TransitionConditionSchema = z.discriminatedUnion('type', [
     save_to_context: z.string().min(1).optional(),
   }),
   z.object({
+    type: z.literal('catalog_found'),
+    save_to_context: z.string().min(1).optional(),
+  }),
+  z.object({
+    type: z.literal('catalog_not_found'),
+  }),
+  z.object({
     type: z.literal('call_permission_granted'),
   }),
   z.object({
@@ -216,6 +223,15 @@ const WaitInputNodeSchema = z.object({
   transitions: z.array(TransitionSchema),
 });
 
+const SearchCatalogNodeSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('search_catalog'),
+  content: z.object({
+    prompt: z.string().max(4096, 'Meta: text body ≤ 4096 chars (recomendado ≤ 1024)').optional(),
+  }),
+  transitions: z.array(TransitionSchema),
+});
+
 const EscapeToHumanNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('escape_to_human'),
@@ -372,6 +388,7 @@ export const FlowNodeSchema = z
     SendMediaCarouselNodeSchema,
     SendReactionNodeSchema,
     WaitInputNodeSchema,
+    SearchCatalogNodeSchema,
     EscapeToHumanNodeSchema,
     RequestCallPermissionNodeSchema,
     EndNodeSchema,

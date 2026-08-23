@@ -71,6 +71,8 @@ export type TransitionCondition =
   | { type: 'list_item_any'; save_to_context?: FlowVariableKey | string }
   | { type: 'keyword'; values: string[] }
   | { type: 'service_directory_match'; save_to_context?: FlowVariableKey | string }
+  | { type: 'catalog_found'; save_to_context?: FlowVariableKey | string }
+  | { type: 'catalog_not_found' }
   | { type: 'call_permission_granted' }
   | { type: 'call_permission_denied' }
   | { type: 'default' };
@@ -192,6 +194,24 @@ export interface WaitInputNode extends FlowNodeBase {
   content: {
     prompt?: string;
     save_to_context?: FlowVariableKey | string;
+  };
+}
+
+/**
+ * Busca un producto real (pos_products) a partir de texto libre del cliente
+ * (§2.1 del plan V1 — "¿tienen tornillos de 2 pulgadas?"). Mismo patrón
+ * estructural que WaitInputNode: opcionalmente pregunta algo y luego espera
+ * la respuesta del cliente para intentar el match (CatalogSearchService).
+ *
+ * El resultado se consume desde las transiciones del propio nodo — no desde
+ * `content` — con las condiciones `catalog_found`/`catalog_not_found` (mismo
+ * patrón que `service_directory_match`). Sin match, el flow NUNCA inventa:
+ * el autor del flow debe enrutar `catalog_not_found` a `escape_to_human`.
+ */
+export interface SearchCatalogNode extends FlowNodeBase {
+  type: 'search_catalog';
+  content: {
+    prompt?: string;
   };
 }
 
@@ -376,6 +396,7 @@ export type FlowNode =
   | SendMediaCarouselNode
   | SendReactionNode
   | WaitInputNode
+  | SearchCatalogNode
   | EscapeToHumanNode
   | RequestCallPermissionNode
   | EndNode

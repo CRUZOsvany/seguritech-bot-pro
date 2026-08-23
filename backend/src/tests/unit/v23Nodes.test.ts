@@ -15,6 +15,7 @@ import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
+import type { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import pino from 'pino';
 
 // ============================================================================
@@ -72,8 +73,13 @@ const mockDSR = new DynamicSectionResolver(logger);
 
 const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
 
+// CatalogSearchService stub — ningún test de este archivo usa search_catalog.
+const mockCatalogSearch = {
+  search: async () => null,
+} as unknown as CatalogSearchService;
+
 function makeInterpreter(): FlowInterpreter {
-  return new FlowInterpreter(mockVR, mockDSR, serviceDirectoryMatcher, logger);
+  return new FlowInterpreter(mockVR, mockDSR, serviceDirectoryMatcher, mockCatalogSearch, logger);
 }
 
 // ============================================================================
