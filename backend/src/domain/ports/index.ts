@@ -1,4 +1,4 @@
-import { User, TenantConfig, Message } from '../entities';
+import { User, TenantConfig, Message, ServiceDirectoryEntry } from '../entities';
 
 /**
  * Puerto para persistencia de usuario.
@@ -254,6 +254,28 @@ export interface NotificationPort {
 export interface TenantConfigPort {
   getConfig(tenantId: string): Promise<TenantConfig | null>;
   invalidate(tenantId: string): void;
+}
+
+/**
+ * Puerto: CRUD del directorio de servicios de un tenant (Capa 2). `tenantId`
+ * siempre primero, sin excepción — mismo patrón que el resto de los
+ * repositorios. Mapeo BD: tenant_service_directory (migración 020).
+ */
+export interface ServiceDirectoryRepository {
+  listByTenant(
+    tenantId: string,
+    opts?: { onlyActive?: boolean },
+  ): Promise<ServiceDirectoryEntry[]>;
+  create(
+    tenantId: string,
+    entry: Omit<ServiceDirectoryEntry, 'id' | 'tenantId'>,
+  ): Promise<ServiceDirectoryEntry>;
+  update(
+    tenantId: string,
+    id: string,
+    patch: Partial<Omit<ServiceDirectoryEntry, 'id' | 'tenantId'>>,
+  ): Promise<ServiceDirectoryEntry>;
+  delete(tenantId: string, id: string): Promise<void>;
 }
 
 /**

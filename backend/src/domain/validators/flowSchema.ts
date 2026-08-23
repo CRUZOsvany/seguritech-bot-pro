@@ -48,6 +48,10 @@ const TransitionConditionSchema = z.discriminatedUnion('type', [
     values: z.array(z.string().min(1)).min(1),
   }),
   z.object({
+    type: z.literal('service_directory_match'),
+    save_to_context: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal('call_permission_granted'),
   }),
   z.object({

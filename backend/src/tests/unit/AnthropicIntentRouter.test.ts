@@ -46,6 +46,7 @@ function makeTenantConfig(nombreNegocio: string): TenantConfig {
     notUnderstoodMessage: 'No entendí',
     orderConfirmationMessage: 'Pedido confirmado',
     catalog: [],
+    serviceDirectory: [],
   };
 }
 

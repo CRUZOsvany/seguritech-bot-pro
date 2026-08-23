@@ -92,6 +92,24 @@ export interface TenantConfig {
   catalog: CatalogItem[];
   /** WhatsApp del dueño (owner_data.whatsapp_dueno) para avisos de leads. Opcional. */
   ownerPhone?: string;
+  serviceDirectory: ServiceDirectoryEntry[];
+}
+
+/**
+ * Entrada del directorio de servicios de un tenant (Capa 2 de la arquitectura
+ * híbrida sin IA). Data-driven: el operador la carga desde el panel, sin
+ * tocar código ni el JSON del bot_flow. Mapeo BD: tenant_service_directory
+ * (migración 020).
+ */
+export interface ServiceDirectoryEntry {
+  id: string;
+  tenantId: string;
+  nombre: string;
+  keywords: string[];
+  respuesta: string;
+  precio?: number;
+  activo: boolean;
+  orden: number;
 }
 
 /**

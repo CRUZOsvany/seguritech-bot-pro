@@ -44,6 +44,7 @@ const baseConfig: TenantConfig = {
   orderConfirmationMessage: '',
   catalog: [],
   ownerPhone: '+521111111111',
+  serviceDirectory: [],
 };
 
 function makeUser(overrides: Partial<User> = {}): User {

@@ -32,6 +32,10 @@ export type FlowVariableKey =
   | 'selected_product_id'
   | 'selected_product_name'
   | 'selected_product_price'
+  | 'matched_service_id'
+  | 'matched_service_name'
+  | 'matched_service_response'
+  | 'matched_service_price'
   | 'order_id'
   | 'phone'
   | 'last_message';
@@ -66,6 +70,7 @@ export type TransitionCondition =
   | { type: 'list_item'; value: string }
   | { type: 'list_item_any'; save_to_context?: FlowVariableKey | string }
   | { type: 'keyword'; values: string[] }
+  | { type: 'service_directory_match'; save_to_context?: FlowVariableKey | string }
   | { type: 'call_permission_granted' }
   | { type: 'call_permission_denied' }
   | { type: 'default' };

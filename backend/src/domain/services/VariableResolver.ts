@@ -101,6 +101,27 @@ export class VariableResolver {
       return item ? item.price.toFixed(2) : '';
     }
 
+    case 'matched_service_name': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.nombre ?? '';
+    }
+
+    case 'matched_service_response': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.respuesta ?? '';
+    }
+
+    case 'matched_service_price': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.precio != null ? entry.precio.toFixed(2) : '';
+    }
+
     case 'order_id':
       return p.generatedOrderId ?? String(p.user.context?.order_id ?? '');
 

@@ -9,6 +9,8 @@ import type {
 import type { User, Message, TenantConfig } from '@/domain/entities';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
+import { fuzzyIncludes } from '@/domain/services/textMatch';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -105,6 +107,7 @@ export class FlowInterpreter {
   constructor(
     private readonly variableResolver: VariableResolver,
     private readonly dynamicSectionResolver: DynamicSectionResolver,
+    private readonly serviceDirectoryMatcher: ServiceDirectoryMatcher,
     private readonly logger: pino.Logger,
   ) {}
 
@@ -151,7 +154,7 @@ export class FlowInterpreter {
     }
 
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.
-    const transition = this.evaluateTransitions(currentNode, message);
+    const transition = this.evaluateTransitions(currentNode, message, tenantConfig);
 
     // save_to_context para wait_input
     if (currentNode.type === 'wait_input' && currentNode.content.save_to_context) {
@@ -166,6 +169,19 @@ export class FlowInterpreter {
     ) {
       const itemId = this.extractListItemId(currentNode, message);
       if (itemId) contextUpdates[transition.condition.save_to_context] = itemId;
+    }
+
+    // save_to_context para service_directory_match
+    if (
+      transition &&
+      transition.condition.type === 'service_directory_match' &&
+      transition.condition.save_to_context
+    ) {
+      const match = this.serviceDirectoryMatcher.match(
+        message.content.trim(),
+        tenantConfig.serviceDirectory,
+      );
+      if (match) contextUpdates[transition.condition.save_to_context] = match.id;
     }
 
     if (!transition) {
@@ -316,9 +332,13 @@ export class FlowInterpreter {
   // EVALUACIÓN DE TRANSICIONES (first-match-wins)
   // ==========================================================================
 
-  private evaluateTransitions(node: FlowNode, message: Message): Transition | null {
+  private evaluateTransitions(
+    node: FlowNode,
+    message: Message,
+    tenantConfig: TenantConfig,
+  ): Transition | null {
     for (const t of node.transitions) {
-      if (this.matchesCondition(t.condition, node, message)) {
+      if (this.matchesCondition(t.condition, node, message, tenantConfig)) {
         return t;
       }
     }
@@ -329,6 +349,7 @@ export class FlowInterpreter {
     condition: TransitionCondition,
     node: FlowNode,
     message: Message,
+    tenantConfig: TenantConfig,
   ): boolean {
     const content = message.content.trim();
     const lower = content.toLowerCase();
@@ -338,7 +359,10 @@ export class FlowInterpreter {
       return true;
 
     case 'keyword':
-      return condition.values.some((kw) => lower.includes(kw.toLowerCase()));
+      return condition.values.some((kw) => fuzzyIncludes(content, kw));
+
+    case 'service_directory_match':
+      return this.serviceDirectoryMatcher.match(content, tenantConfig.serviceDirectory) !== null;
 
     case 'button': {
       if (node.type !== 'send_buttons') return false;

@@ -12,6 +12,7 @@ import {
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
@@ -43,9 +44,11 @@ export class ApplicationContainer {
   ) {
     const variableResolver = new VariableResolver(supabase, logger);
     const dynamicSectionResolver = new DynamicSectionResolver(logger);
+    const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
     const flowInterpreter = new FlowInterpreter(
       variableResolver,
       dynamicSectionResolver,
+      serviceDirectoryMatcher,
       logger,
     );
 

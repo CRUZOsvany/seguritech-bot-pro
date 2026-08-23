@@ -13,6 +13,7 @@ import type { WhatsAppFlowRepository } from '@/domain/ports/WhatsAppFlowReposito
 import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 import type { PosCategoryRepository } from '@/domain/ports/pos/PosCategoryRepository';
 import type { ImportPosProductsUseCase } from '@/domain/use-cases/ImportPosProductsUseCase';
+import type { ServiceDirectoryRepository } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Mw } from './admin/helpers';
@@ -22,6 +23,7 @@ import { createMetaRouter } from './admin/metaRouter';
 import { createFlowsRouter } from './admin/flowsRouter';
 import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
 import { createPosCatalogRouter } from './admin/posCatalogRouter';
+import { createServiceDirectoryRouter } from './admin/serviceDirectoryRouter';
 
 /**
  * Router de API admin interna del panel SegurITech.
@@ -54,6 +56,7 @@ export function createAdminRouter(params: {
   posProductRepository: PosProductRepository;
   posCategoryRepository: PosCategoryRepository;
   importPosProductsUseCase: ImportPosProductsUseCase;
+  serviceDirectoryRepository: ServiceDirectoryRepository;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -74,6 +77,7 @@ export function createAdminRouter(params: {
     posProductRepository,
     posCategoryRepository,
     importPosProductsUseCase,
+    serviceDirectoryRepository,
     audit,
     supabase,
     logger,
@@ -107,6 +111,9 @@ export function createAdminRouter(params: {
       audit,
       logger,
     }),
+  );
+  router.use(
+    createServiceDirectoryRouter({ serviceDirectoryRepository, audit, logger }),
   );
   router.use(
     createTenantsRouter({
