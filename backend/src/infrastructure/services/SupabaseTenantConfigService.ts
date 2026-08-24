@@ -38,7 +38,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     const [tenantRes, configRes, catalogRes, ownerRes, serviceDirRes] = await Promise.all([
       this.supabase
         .from('tenants')
-        .select('nombre_negocio')
+        .select('nombre_negocio, horario_semana, horario_sabado, abre_domingo')
         .eq('id', tenantId)
         .maybeSingle(),
       this.supabase
@@ -111,6 +111,9 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     const c = configRes.data;
     const nombreNegocio = (tenantRes.data?.nombre_negocio as string | undefined) ?? '';
     const ownerPhone = (ownerRes.data?.whatsapp_dueno as string | undefined) || undefined;
+    const horarioSemana = (tenantRes.data?.horario_semana as string | null | undefined) ?? null;
+    const horarioSabado = (tenantRes.data?.horario_sabado as string | null | undefined) ?? null;
+    const abreDomingo = Boolean(tenantRes.data?.abre_domingo);
 
     const catalog: CatalogItem[] = (catalogRes.data || []).map((row: any) => ({
       id: row.id,
@@ -154,6 +157,9 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       catalog,
       ownerPhone,
       serviceDirectory,
+      horarioSemana,
+      horarioSabado,
+      abreDomingo,
     };
 
     this.cache.set(tenantId, config);

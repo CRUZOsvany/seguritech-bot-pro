@@ -18,6 +18,7 @@ import {
   UserRepository, TenantConfigPort, BotFlowRepository, NotificationPort, AuditPort,
 } from '@/domain/ports';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
+import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import type { TenantConfig, User, UserState } from '@/domain/entities';
 import type { BotFlow } from '@/domain/entities/flow';
 
@@ -45,6 +46,9 @@ const baseConfig: TenantConfig = {
   catalog: [],
   ownerPhone: '+521111111111',
   serviceDirectory: [],
+  horarioSemana: null,
+  horarioSabado: null,
+  abreDomingo: false,
 };
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -98,8 +102,13 @@ function buildController(
   } as unknown as jest.Mocked<BotFlowRepository>;
 
   const audit = auditPort ?? ({ log: jest.fn() } as unknown as jest.Mocked<AuditPort>);
+  // horarioSemana/horarioSabado son null en baseConfig → fail-open, este
+  // suite no ejercita el gate de horario (ver BusinessHoursService.test.ts).
+  const businessHours = new BusinessHoursService();
 
-  return new BotController(userRepo, notification, tenantConfig, botFlowRepo, interpreter, audit, logger);
+  return new BotController(
+    userRepo, notification, tenantConfig, botFlowRepo, interpreter, audit, businessHours, logger,
+  );
 }
 
 function makeUserRepo(overrides: Partial<jest.Mocked<UserRepository>> = {}): jest.Mocked<UserRepository> {

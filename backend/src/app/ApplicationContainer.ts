@@ -15,6 +15,7 @@ import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
+import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
@@ -49,6 +50,7 @@ export class ApplicationContainer {
     const dynamicSectionResolver = new DynamicSectionResolver(logger);
     const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
     const catalogSearchService = new CatalogSearchService(posProductRepository);
+    const businessHoursService = new BusinessHoursService();
     const flowInterpreter = new FlowInterpreter(
       variableResolver,
       dynamicSectionResolver,
@@ -64,6 +66,7 @@ export class ApplicationContainer {
       botFlowRepository,
       flowInterpreter,
       auditPort,
+      businessHoursService,
       logger,
     );
 

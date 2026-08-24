@@ -93,6 +93,16 @@ export interface TenantConfig {
   /** WhatsApp del dueño (owner_data.whatsapp_dueno) para avisos de leads. Opcional. */
   ownerPhone?: string;
   serviceDirectory: ServiceDirectoryEntry[];
+  /**
+   * Horario de atención (tenants.horario_semana/horario_sabado/abre_domingo,
+   * §2.2 del plan V1). Formato esperado "HH:MM-HH:MM" (BusinessHoursService
+   * lo parsea; texto libre/vacío = sin gating, fail-open). No hay campo
+   * horario_domingo en el schema — si abreDomingo=true, domingo usa el
+   * mismo rango que horarioSabado (ver BusinessHoursService).
+   */
+  horarioSemana: string | null;
+  horarioSabado: string | null;
+  abreDomingo: boolean;
 }
 
 /**

@@ -78,6 +78,9 @@ function makeTenantConfig(nombreNegocio: string): TenantConfig {
     orderConfirmationMessage: 'Pedido confirmado',
     catalog: [],
     serviceDirectory: [],
+    horarioSemana: null,
+    horarioSabado: null,
+    abreDomingo: false,
   };
 }
 

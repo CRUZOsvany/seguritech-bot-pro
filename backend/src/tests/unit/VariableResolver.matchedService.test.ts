@@ -39,6 +39,9 @@ function makeTenantConfig(overrides: Partial<TenantConfig> = {}): TenantConfig {
     orderConfirmationMessage: 'Pedido confirmado',
     catalog: [],
     serviceDirectory: [SERVICE],
+    horarioSemana: null,
+    horarioSabado: null,
+    abreDomingo: false,
     ...overrides,
   };
 }
