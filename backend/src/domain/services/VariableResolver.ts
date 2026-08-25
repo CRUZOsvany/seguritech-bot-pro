@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type pino from 'pino';
 import type { TenantConfig, User, Message } from '@/domain/entities';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 
 /**
  * Resuelve variables {{var}} en textos del flow.
@@ -13,6 +14,7 @@ import type { TenantConfig, User, Message } from '@/domain/entities';
 export class VariableResolver {
   constructor(
     private readonly supabase: SupabaseClient,
+    private readonly posProductRepository: PosProductRepository,
     private readonly logger: pino.Logger,
   ) {}
 
@@ -91,14 +93,42 @@ export class VariableResolver {
       const id = p.user.context?.selected_product_id;
       if (!id) return '';
       const item = p.tenantConfig.catalog.find((c) => c.id === id);
-      return item?.name ?? '';
+      if (item) return item.name;
+      // No está en el catálogo chico (catalog_items) — puede venir de
+      // search_catalog (§2.1), que matchea sobre pos_products. Lookup lazy,
+      // solo cuando la plantilla realmente usa esta variable.
+      const product = await this.posProductRepository.findById(p.tenantId, String(id));
+      return product?.name ?? '';
     }
 
     case 'selected_product_price': {
       const id = p.user.context?.selected_product_id;
       if (!id) return '';
       const item = p.tenantConfig.catalog.find((c) => c.id === id);
-      return item ? item.price.toFixed(2) : '';
+      if (item) return item.price.toFixed(2);
+      const product = await this.posProductRepository.findById(p.tenantId, String(id));
+      return product ? product.unitPrice.toFixed(2) : '';
+    }
+
+    case 'matched_service_name': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.nombre ?? '';
+    }
+
+    case 'matched_service_response': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.respuesta ?? '';
+    }
+
+    case 'matched_service_price': {
+      const id = p.user.context?.matched_service_id;
+      if (!id) return '';
+      const entry = p.tenantConfig.serviceDirectory.find((s) => s.id === id);
+      return entry?.precio != null ? entry.precio.toFixed(2) : '';
     }
 
     case 'order_id':

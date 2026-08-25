@@ -71,6 +71,7 @@ function buildApp() {
     posProductRepository,
     posCategoryRepository,
     importPosProductsUseCase,
+    serviceDirectoryRepository: noop,
     audit: { log: jest.fn() } as any,
     supabase: noop,
     logger,

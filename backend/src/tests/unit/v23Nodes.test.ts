@@ -14,6 +14,8 @@ import type { BotFlow } from '@/domain/entities/flow';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
+import type { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import pino from 'pino';
 
 // ============================================================================
@@ -58,6 +60,10 @@ function makeTenantConfig(): TenantConfig {
     notUnderstoodMessage: 'No entendí',
     orderConfirmationMessage: 'Pedido confirmado',
     catalog: [],
+    serviceDirectory: [],
+    horarioSemana: null,
+    horarioSabado: null,
+    abreDomingo: false,
   };
 }
 
@@ -68,8 +74,15 @@ const mockVR = {
 
 const mockDSR = new DynamicSectionResolver(logger);
 
+const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
+
+// CatalogSearchService stub — ningún test de este archivo usa search_catalog.
+const mockCatalogSearch = {
+  search: async () => null,
+} as unknown as CatalogSearchService;
+
 function makeInterpreter(): FlowInterpreter {
-  return new FlowInterpreter(mockVR, mockDSR, logger);
+  return new FlowInterpreter(mockVR, mockDSR, serviceDirectoryMatcher, mockCatalogSearch, logger);
 }
 
 // ============================================================================
@@ -384,5 +397,75 @@ describe('FlowInterpreter — request_call_permission para el avance del intérp
     expect(result.nextNodeId).toBe('n1');
     expect(result.flowEnded).toBe(false);
     expect(result.outputs[0].kind).toBe('call_permission_request');
+  });
+});
+
+// ============================================================================
+// SECCIÓN 5: matchesCondition — service_directory_match (Capa 2, plan v1bot)
+// ============================================================================
+
+describe('FlowInterpreter.matchesCondition — service_directory_match', () => {
+  const flow: BotFlow = {
+    version: '1.0',
+    start_node_id: 'n1',
+    nodes: [
+      {
+        id: 'n1',
+        type: 'wait_input',
+        content: {},
+        transitions: [
+          {
+            condition: { type: 'service_directory_match', save_to_context: 'matched_service_id' },
+            next_node_id: 'encontrado',
+          },
+          { condition: { type: 'default' }, next_node_id: 'no_encontrado' },
+        ],
+      },
+      {
+        id: 'encontrado',
+        type: 'send_text',
+        content: { text: 'Sí, hacemos copias.' },
+        transitions: [],
+      },
+      {
+        id: 'no_encontrado',
+        type: 'send_text',
+        content: { text: 'No encontré ese servicio.' },
+        transitions: [],
+      },
+    ],
+  };
+
+  const config = makeTenantConfig();
+  config.serviceDirectory = [
+    {
+      id: 'svc-1',
+      tenantId: 't1',
+      nombre: 'Copia de llave',
+      keywords: ['copia de llave'],
+      respuesta: 'Sí, hacemos copias.',
+      activo: true,
+      orden: 0,
+    },
+  ];
+
+  it('transiciona y guarda el id matcheado en el contexto (con tolerancia a acentos/typos)', async () => {
+    const interpreter = makeInterpreter();
+    const user = makeUser({ currentNodeId: 'n1' });
+    const message = makeMessage('quiero una cópia de llabe'); // typo + acento a propósito
+    const result = await interpreter.execute({ flow, user, message, tenantConfig: config });
+
+    expect(result.nextNodeId).toBe('encontrado');
+    expect(result.contextUpdates.matched_service_id).toBe('svc-1');
+  });
+
+  it('cae al default cuando ninguna entrada del directorio matchea', async () => {
+    const interpreter = makeInterpreter();
+    const user = makeUser({ currentNodeId: 'n1' });
+    const message = makeMessage('quiero comprar tornillos');
+    const result = await interpreter.execute({ flow, user, message, tenantConfig: config });
+
+    expect(result.nextNodeId).toBe('no_encontrado');
+    expect(result.contextUpdates.matched_service_id).toBeUndefined();
   });
 });

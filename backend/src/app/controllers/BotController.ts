@@ -6,6 +6,7 @@ import { config } from '@/config/env';
 const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
 import { Message, User, UserState } from '@/domain/entities';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
+import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import {
   NotificationPort,
   UserRepository,
@@ -58,6 +59,7 @@ export class BotController {
     private readonly botFlowRepository: BotFlowRepository,
     private readonly flowInterpreter: FlowInterpreter,
     private readonly auditPort: AuditPort,
+    private readonly businessHoursService: BusinessHoursService,
     private readonly logger: pino.Logger,
   ) {}
 
@@ -165,6 +167,31 @@ export class BotController {
             'Usuario en handoff humano — mensaje registrado, bot silenciado',
           );
           return null;
+        }
+
+        // Gate de horario de atención (§2.2): fuera de horario, el bot NO
+        // ejecuta el flow — solo avisa que está cerrado y no mueve
+        // currentNodeId/context, para retomar donde iba cuando reabra. El
+        // dueño queda fuera (mismo criterio que opt-out: sigue probando su
+        // bot a cualquier hora).
+        if (!isOwner) {
+          const hoursCheck = this.businessHoursService.isOpenNow({
+            horarioSemana: config.horarioSemana,
+            horarioSabado: config.horarioSabado,
+            abreDomingo: config.abreDomingo,
+          });
+          if (hoursCheck.unknown) {
+            this.logger.warn(
+              { tenantId },
+              'Horario de atención no parseable (formato esperado HH:MM-HH:MM) — sin gating',
+            );
+          }
+          if (!hoursCheck.isOpen) {
+            const text = config.outOfHoursMessage;
+            await this.notificationPort.sendMessage(tenantId, from, text);
+            this.logger.info({ tenantId, from }, 'Fuera de horario — flow no ejecutado');
+            return text;
+          }
         }
 
         const result = await this.flowInterpreter.execute({

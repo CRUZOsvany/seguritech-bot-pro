@@ -15,6 +15,7 @@ import {
   UserRepository, TenantConfigPort, BotFlowRepository, NotificationPort, AuditPort,
 } from '@/domain/ports';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
+import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { config } from '@/config/env';
 import type { TenantConfig, User, UserState } from '@/domain/entities';
 import type { BotFlow } from '@/domain/entities/flow';
@@ -44,6 +45,10 @@ const baseConfig: TenantConfig = {
   orderConfirmationMessage: '',
   catalog: [],
   ownerPhone: '+521111111111',
+  serviceDirectory: [],
+  horarioSemana: null,
+  horarioSabado: null,
+  abreDomingo: false,
 };
 
 function makeUser(overrides: Partial<User> = {}): User {
@@ -93,8 +98,13 @@ function buildController(
   } as unknown as jest.Mocked<BotFlowRepository>;
 
   const audit = auditPort ?? ({ log: jest.fn() } as unknown as jest.Mocked<AuditPort>);
+  // horarioSemana/horarioSabado son null en baseConfig → fail-open, este
+  // suite no ejercita el gate de horario (ver BusinessHoursService.test.ts).
+  const businessHours = new BusinessHoursService();
 
-  return new BotController(userRepo, notif, tenantConfig, botFlowRepo, interpreter, audit, logger);
+  return new BotController(
+    userRepo, notif, tenantConfig, botFlowRepo, interpreter, audit, businessHours, logger,
+  );
 }
 
 describe('BotController — gate de handoff humano', () => {

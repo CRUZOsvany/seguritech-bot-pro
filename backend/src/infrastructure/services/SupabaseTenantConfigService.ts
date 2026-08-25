@@ -1,7 +1,7 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import pino from 'pino';
 import NodeCache from 'node-cache';
-import { TenantConfig, CatalogItem, BotTone } from '@/domain/entities';
+import { TenantConfig, CatalogItem, BotTone, ServiceDirectoryEntry } from '@/domain/entities';
 import { TenantConfigPort } from '@/domain/ports';
 
 const TTL_SECONDS = 5 * 60; // 5 minutos
@@ -35,10 +35,10 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
 
     this.logger.debug({ tenantId }, 'TenantConfig cache MISS — cargando');
 
-    const [tenantRes, configRes, catalogRes, ownerRes] = await Promise.all([
+    const [tenantRes, configRes, catalogRes, ownerRes, serviceDirRes] = await Promise.all([
       this.supabase
         .from('tenants')
-        .select('nombre_negocio')
+        .select('nombre_negocio, horario_semana, horario_sabado, abre_domingo')
         .eq('id', tenantId)
         .maybeSingle(),
       this.supabase
@@ -56,6 +56,12 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
         .select('whatsapp_dueno')
         .eq('tenant_id', tenantId)
         .maybeSingle(),
+      this.supabase
+        .from('tenant_service_directory')
+        .select('*')
+        .eq('tenant_id', tenantId)
+        .eq('activo', true)
+        .order('orden', { ascending: true }),
     ]);
 
     if (configRes.error) {
@@ -95,9 +101,19 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       );
     }
 
+    if (serviceDirRes.error) {
+      this.logger.warn(
+        { error: serviceDirRes.error, tenantId },
+        'Error cargando tenant_service_directory — usando directorio vacío',
+      );
+    }
+
     const c = configRes.data;
     const nombreNegocio = (tenantRes.data?.nombre_negocio as string | undefined) ?? '';
     const ownerPhone = (ownerRes.data?.whatsapp_dueno as string | undefined) || undefined;
+    const horarioSemana = (tenantRes.data?.horario_semana as string | null | undefined) ?? null;
+    const horarioSabado = (tenantRes.data?.horario_sabado as string | null | undefined) ?? null;
+    const abreDomingo = Boolean(tenantRes.data?.abre_domingo);
 
     const catalog: CatalogItem[] = (catalogRes.data || []).map((row: any) => ({
       id: row.id,
@@ -107,6 +123,19 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       category: row.categoria ?? '',
       available: row.disponible,
     }));
+
+    const serviceDirectory: ServiceDirectoryEntry[] = (serviceDirRes.data || []).map(
+      (row: any) => ({
+        id: row.id,
+        tenantId: row.tenant_id,
+        nombre: row.nombre,
+        keywords: row.keywords ?? [],
+        respuesta: row.respuesta,
+        precio: row.precio != null ? Number(row.precio) : undefined,
+        activo: row.activo,
+        orden: row.orden ?? 0,
+      }),
+    );
 
     const config: TenantConfig = {
       tenantId,
@@ -127,6 +156,10 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
         '✅ Pedido confirmado. Te contactaremos pronto.',
       catalog,
       ownerPhone,
+      serviceDirectory,
+      horarioSemana,
+      horarioSabado,
+      abreDomingo,
     };
 
     this.cache.set(tenantId, config);

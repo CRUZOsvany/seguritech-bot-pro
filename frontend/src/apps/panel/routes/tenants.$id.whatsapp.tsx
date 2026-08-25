@@ -6,7 +6,7 @@ import { z } from 'zod';
 import {
   ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
   Bot, LayoutDashboard, MessageSquare, Plug, Route as RouteIcon,
-  ExternalLink, MessageCircle, ScrollText,
+  ExternalLink, MessageCircle, ScrollText, ListTree,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -208,6 +208,11 @@ function WhatsAppPanelPage() {
                 <Button asChild size="sm" variant="outline">
                   <Link to="/tenants/$id/guion" params={{ id }}>
                     <ScrollText className="mr-1 h-3 w-3" /> Editar Guion
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/tenants/$id/service-directory" params={{ id }}>
+                    <ListTree className="mr-1 h-3 w-3" /> Directorio de servicios
                   </Link>
                 </Button>
               </div>

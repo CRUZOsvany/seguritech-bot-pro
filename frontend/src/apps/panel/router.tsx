@@ -88,6 +88,13 @@ const tenantGuionRoute = createRoute({
   import('./routes/tenants.$id.guion').then((d) => d.Route),
 );
 
+const tenantServiceDirectoryRoute = createRoute({
+  getParentRoute: () => authedLayoutRoute,
+  path: '/tenants/$id/service-directory',
+}).lazy(() =>
+  import('./routes/tenants.$id.service-directory').then((d) => d.Route),
+);
+
 const escalacionesRoute = createRoute({
   getParentRoute: () => authedLayoutRoute,
   path: '/escalaciones',
@@ -111,6 +118,7 @@ const routeTree = rootRoute.addChildren([
     tenantDesignerRoute,
     tenantMessagesRoute,
     tenantGuionRoute,
+    tenantServiceDirectoryRoute,
     escalacionesRoute,
   ]),
 ]);

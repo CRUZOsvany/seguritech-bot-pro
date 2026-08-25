@@ -36,6 +36,7 @@ import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { BotFlow } from '@/domain/entities/flow';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { TenantRepository } from '@/domain/ports/TenantRepository';
+import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 
 const logger = pino({ level: 'silent' });
 
@@ -76,6 +77,10 @@ function makeTenantConfig(nombreNegocio: string): TenantConfig {
     notUnderstoodMessage: 'No entendí',
     orderConfirmationMessage: 'Pedido confirmado',
     catalog: [],
+    serviceDirectory: [],
+    horarioSemana: null,
+    horarioSabado: null,
+    abreDomingo: false,
   };
 }
 
@@ -168,6 +173,8 @@ function buildHarness(): Harness {
   const tenantConfigPort = new FakeTenantConfigPort();
   const tenantRepository = {} as unknown as TenantRepository;
   const supabase = {} as unknown as SupabaseClient;
+  // Ningún flow de este harness usa search_catalog (§2.1) — stub sin implementar.
+  const posProductRepository = {} as unknown as PosProductRepository;
 
   const container = new ApplicationContainer(
     userRepository,
@@ -177,6 +184,7 @@ function buildHarness(): Harness {
     tenantRepository,
     supabase,
     auditPort,
+    posProductRepository,
     logger,
   );
 

@@ -7,8 +7,12 @@ import type {
   ListItem,
 } from '@/domain/entities/flow';
 import type { User, Message, TenantConfig } from '@/domain/entities';
+import type { PosProduct } from '@/domain/entities/pos/Product';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
+import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
+import { fuzzyIncludes } from '@/domain/services/textMatch';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -94,6 +98,7 @@ const WAIT_NODE_TYPES = new Set([
   'send_buttons',
   'send_list',
   'wait_input',
+  'search_catalog',
   'request_call_permission',
 ]);
 
@@ -105,6 +110,8 @@ export class FlowInterpreter {
   constructor(
     private readonly variableResolver: VariableResolver,
     private readonly dynamicSectionResolver: DynamicSectionResolver,
+    private readonly serviceDirectoryMatcher: ServiceDirectoryMatcher,
+    private readonly catalogSearchService: CatalogSearchService,
     private readonly logger: pino.Logger,
   ) {}
 
@@ -150,8 +157,17 @@ export class FlowInterpreter {
       });
     }
 
+    // search_catalog: el match requiere una query real a pos_products (a
+    // diferencia de service_directory_match, que compara contra un arreglo
+    // ya cargado en TenantConfig) — se resuelve UNA sola vez aquí y se pasa
+    // a evaluateTransitions para no duplicar el roundtrip a la BD.
+    let catalogMatch: PosProduct | null = null;
+    if (currentNode.type === 'search_catalog') {
+      catalogMatch = await this.catalogSearchService.search(user.tenantId, message.content.trim());
+    }
+
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.
-    const transition = this.evaluateTransitions(currentNode, message);
+    const transition = this.evaluateTransitions(currentNode, message, tenantConfig, { catalogMatch });
 
     // save_to_context para wait_input
     if (currentNode.type === 'wait_input' && currentNode.content.save_to_context) {
@@ -166,6 +182,28 @@ export class FlowInterpreter {
     ) {
       const itemId = this.extractListItemId(currentNode, message);
       if (itemId) contextUpdates[transition.condition.save_to_context] = itemId;
+    }
+
+    // save_to_context para service_directory_match
+    if (
+      transition &&
+      transition.condition.type === 'service_directory_match' &&
+      transition.condition.save_to_context
+    ) {
+      const match = this.serviceDirectoryMatcher.match(
+        message.content.trim(),
+        tenantConfig.serviceDirectory,
+      );
+      if (match) contextUpdates[transition.condition.save_to_context] = match.id;
+    }
+
+    // save_to_context para catalog_found. Default a 'selected_product_id'
+    // cuando el flow no lo especifica — es la clave que ya resuelve
+    // VariableResolver (selected_product_name/price), no hace falta que cada
+    // flow la declare a mano.
+    if (transition && transition.condition.type === 'catalog_found' && catalogMatch) {
+      const key = transition.condition.save_to_context ?? 'selected_product_id';
+      contextUpdates[key] = catalogMatch.id;
     }
 
     if (!transition) {
@@ -316,9 +354,14 @@ export class FlowInterpreter {
   // EVALUACIÓN DE TRANSICIONES (first-match-wins)
   // ==========================================================================
 
-  private evaluateTransitions(node: FlowNode, message: Message): Transition | null {
+  private evaluateTransitions(
+    node: FlowNode,
+    message: Message,
+    tenantConfig: TenantConfig,
+    extra?: { catalogMatch?: PosProduct | null },
+  ): Transition | null {
     for (const t of node.transitions) {
-      if (this.matchesCondition(t.condition, node, message)) {
+      if (this.matchesCondition(t.condition, node, message, tenantConfig, extra)) {
         return t;
       }
     }
@@ -329,6 +372,8 @@ export class FlowInterpreter {
     condition: TransitionCondition,
     node: FlowNode,
     message: Message,
+    tenantConfig: TenantConfig,
+    extra?: { catalogMatch?: PosProduct | null },
   ): boolean {
     const content = message.content.trim();
     const lower = content.toLowerCase();
@@ -338,7 +383,16 @@ export class FlowInterpreter {
       return true;
 
     case 'keyword':
-      return condition.values.some((kw) => lower.includes(kw.toLowerCase()));
+      return condition.values.some((kw) => fuzzyIncludes(content, kw));
+
+    case 'service_directory_match':
+      return this.serviceDirectoryMatcher.match(content, tenantConfig.serviceDirectory) !== null;
+
+    case 'catalog_found':
+      return (extra?.catalogMatch ?? null) !== null;
+
+    case 'catalog_not_found':
+      return (extra?.catalogMatch ?? null) === null;
 
     case 'button': {
       if (node.type !== 'send_buttons') return false;
@@ -493,6 +547,14 @@ export class FlowInterpreter {
     }
 
     case 'wait_input': {
+      if (node.content.prompt) {
+        const text = await resolveText(node.content.prompt);
+        return [{ kind: 'text', text }];
+      }
+      return [];
+    }
+
+    case 'search_catalog': {
       if (node.content.prompt) {
         const text = await resolveText(node.content.prompt);
         return [{ kind: 'text', text }];
