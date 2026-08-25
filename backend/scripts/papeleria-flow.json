@@ -1,0 +1,302 @@
+{
+  "version": "1.0",
+  "start_node_id": "bienvenida",
+  "nodes": [
+    {
+      "id": "bienvenida",
+      "type": "send_buttons",
+      "config_bound": ["welcome_message", "menu_message"],
+      "content": {
+        "text": "{{welcome_message}}\n\n{{menu_message}}",
+        "buttons": [
+          { "id": "escolar", "title": "📚 Lista escolar" },
+          { "id": "servicios", "title": "🖨️ Servicios" },
+          { "id": "buscar", "title": "🔍 Buscar producto" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "escolar" }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "button", "value": "servicios" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "buscar" }, "next_node_id": "buscar" },
+        { "condition": { "type": "keyword", "values": ["lista escolar", "lista de utiles", "lista de útiles", "utiles escolares", "útiles escolares", "regreso a clases", "escolar"] }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "keyword", "values": ["servicio", "servicios", "impresion", "impresión", "fotocopia", "copias", "engargolado", "imprimir"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["buscar", "producto", "tienen", "tiene", "hay", "precio de", "cuanto cuesta", "cuánto cuesta"] }, "next_node_id": "buscar" },
+        { "condition": { "type": "keyword", "values": ["hablar con alguien", "hablar con una persona", "agente", "asesor", "humano", "persona"] }, "next_node_id": "hablar_directo" },
+        { "condition": { "type": "keyword", "values": ["salir", "gracias", "eso es todo", "nada mas", "nada más", "adios", "adiós"] }, "next_node_id": "despedida" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+
+    {
+      "_comment_escolar": "Lista escolar: captura libre + confirmación. Candidato a upgrade a send_whatsapp_flow (formulario nativo grado/escuela) el día que haya un WhatsApp Flow real registrado en Meta Business Manager para el tenant — ver §3.2 del plan V1. Hasta entonces, texto libre + humano.",
+      "id": "escolar_captura",
+      "type": "wait_input",
+      "content": {
+        "prompt": "📚 ¡Con gusto te armamos tu lista! Cuéntanos en un solo mensaje:\n• *grado escolar* y, si la tienes, *escuela*\n• o directo los artículos que necesitas\n\nEjemplo: _3° de primaria, Esc. Benito Juárez_ o _2 cuadernos profesionales, colores, 1 tijera_",
+        "save_to_context": "lista_escolar_detalle"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "escolar_confirma" }
+      ]
+    },
+    {
+      "id": "escolar_confirma",
+      "type": "send_buttons",
+      "content": {
+        "text": "Para armarte la lista y cotizarla, esto fue lo que recibí:\n\n📝 _{{lista_escolar_detalle}}_\n\n¿Es correcto?",
+        "buttons": [
+          { "id": "correcto", "title": "✅ Sí, correcto" },
+          { "id": "corregir", "title": "✏️ Corregir" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "correcto" }, "next_node_id": "escolar_escala" },
+        { "condition": { "type": "button", "value": "corregir" }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "keyword", "values": ["si", "sí", "correcto", "es correcto", "ok"] }, "next_node_id": "escolar_escala" },
+        { "condition": { "type": "keyword", "values": ["no", "corregir", "cambiar", "esta mal", "está mal"] }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "default" }, "next_node_id": "escolar_escala" }
+      ]
+    },
+    {
+      "id": "escolar_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "📚 ¡Gracias! Alguien de {{nombre_negocio}} te arma tu lista y te manda el total antes de prepararla.",
+        "owner_alert_template": "📚 LISTA ESCOLAR:\n📝 {{lista_escolar_detalle}}\n📱 WhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+
+    {
+      "id": "menu_servicios",
+      "type": "send_list",
+      "content": {
+        "text": "🖨️ ¿Qué servicio necesitas?",
+        "button_label": "Ver servicios",
+        "sections": [
+          {
+            "type": "static",
+            "title": "Servicios",
+            "items": [
+              { "id": "Impresión B/N", "title": "Impresión B/N", "description": "$2.00 por hoja" },
+              { "id": "Fotocopia B/N", "title": "Fotocopia B/N", "description": "$1.50 por copia" },
+              { "id": "Engargolado", "title": "Engargolado", "description": "$25.00 tamaño carta" }
+            ]
+          }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "list_item_any", "save_to_context": "servicio_seleccionado" }, "next_node_id": "servicio_captura" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
+      ]
+    },
+    {
+      "id": "servicio_captura",
+      "type": "wait_input",
+      "content": {
+        "prompt": "Perfecto, *{{servicio_seleccionado}}*. Dinos cuántas hojas/piezas necesitas (y si quieres, mándanos el archivo o dinos cómo nos lo haces llegar).",
+        "save_to_context": "detalle_servicio"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "servicio_escala" }
+      ]
+    },
+    {
+      "id": "servicio_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "🖨️ Listo, alguien de {{nombre_negocio}} te confirma el total y cuándo puedes pasar.",
+        "owner_alert_template": "🖨️ SERVICIO: {{servicio_seleccionado}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+
+    {
+      "_comment_buscar": "search_catalog consulta pos_products (§2.0/§2.1 plan V1). service_directory_match cubre preguntas de negocio que no son un producto (ej. '¿aceptan tarjeta?', '¿hacen envíos?') vía tenant_service_directory, configurable desde el panel sin tocar este flow.",
+      "id": "buscar",
+      "type": "search_catalog",
+      "content": {
+        "prompt": "🔍 ¿Qué producto buscas? Escríbelo tal cual, por ejemplo: _cuaderno profesional_, _colores_, _usb 16gb_"
+      },
+      "transitions": [
+        { "condition": { "type": "catalog_found", "save_to_context": "selected_product_id" }, "next_node_id": "buscar_encontrado" },
+        { "condition": { "type": "service_directory_match", "save_to_context": "matched_service_id" }, "next_node_id": "buscar_servicio_encontrado" },
+        { "condition": { "type": "catalog_not_found" }, "next_node_id": "buscar_no_encontrado" }
+      ]
+    },
+    {
+      "id": "buscar_encontrado",
+      "type": "send_buttons",
+      "content": {
+        "text": "Sí tenemos: *{{selected_product_name}}* — {{selected_product_price}}\n\n¿Qué quieres hacer?",
+        "buttons": [
+          { "id": "agregar", "title": "🛒 Agregar a pedido" },
+          { "id": "otro", "title": "🔍 Buscar otro" },
+          { "id": "hablar", "title": "💬 Hablar" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "agregar" }, "next_node_id": "pedido_cantidad" },
+        { "condition": { "type": "button", "value": "otro" }, "next_node_id": "buscar" },
+        { "condition": { "type": "button", "value": "hablar" }, "next_node_id": "hablar_directo" },
+        { "condition": { "type": "keyword", "values": ["agregar", "quiero", "si", "sí", "lo quiero"] }, "next_node_id": "pedido_cantidad" },
+        { "condition": { "type": "keyword", "values": ["otro", "buscar otro", "otra cosa"] }, "next_node_id": "buscar" },
+        { "condition": { "type": "default" }, "next_node_id": "buscar" }
+      ]
+    },
+    {
+      "id": "pedido_cantidad",
+      "type": "wait_input",
+      "content": {
+        "prompt": "¿Cuántas piezas de *{{selected_product_name}}* quieres?",
+        "save_to_context": "cantidad_producto"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "pedido_confirma" }
+      ]
+    },
+    {
+      "id": "pedido_confirma",
+      "type": "send_buttons",
+      "content": {
+        "text": "Tu pedido:\n🛒 {{cantidad_producto}} × {{selected_product_name}} ({{selected_product_price}} c/u)\n\n¿Es correcto?",
+        "buttons": [
+          { "id": "correcto", "title": "✅ Sí, correcto" },
+          { "id": "corregir", "title": "✏️ Corregir" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "correcto" }, "next_node_id": "pedido_escala" },
+        { "condition": { "type": "button", "value": "corregir" }, "next_node_id": "pedido_cantidad" },
+        { "condition": { "type": "keyword", "values": ["si", "sí", "correcto", "es correcto", "ok"] }, "next_node_id": "pedido_escala" },
+        { "condition": { "type": "keyword", "values": ["no", "corregir", "cambiar", "esta mal", "está mal"] }, "next_node_id": "pedido_cantidad" },
+        { "condition": { "type": "default" }, "next_node_id": "pedido_escala" }
+      ]
+    },
+    {
+      "id": "pedido_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "🛒 ¡Gracias! Alguien de {{nombre_negocio}} te confirma disponibilidad y cómo te lo entregamos.",
+        "owner_alert_template": "🛒 PEDIDO: {{cantidad_producto}} × {{selected_product_name}} ({{selected_product_price}} c/u)\n📱 WhatsApp: {{phone}}\n🆔 order_id: {{order_id}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+    {
+      "id": "buscar_servicio_encontrado",
+      "type": "send_buttons",
+      "content": {
+        "text": "{{matched_service_response}}",
+        "buttons": [
+          { "id": "buscar", "title": "🔍 Buscar producto" },
+          { "id": "hablar", "title": "💬 Hablar" },
+          { "id": "menu", "title": "🏠 Menú" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "buscar" }, "next_node_id": "buscar" },
+        { "condition": { "type": "button", "value": "hablar" }, "next_node_id": "hablar_directo" },
+        { "condition": { "type": "button", "value": "menu" }, "next_node_id": "bienvenida" },
+        { "condition": { "type": "default" }, "next_node_id": "bienvenida" }
+      ]
+    },
+    {
+      "id": "buscar_no_encontrado",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "No encontré ese producto en nuestro catálogo. Te conecto con alguien de {{nombre_negocio}} para confirmarte si lo manejamos.",
+        "owner_alert_template": "🔍 BÚSQUEDA SIN MATCH:\n💬 \"{{last_message}}\"\n📱 WhatsApp: {{phone}}"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+
+    {
+      "id": "hablar_directo",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "💬 Claro, te conecto con alguien de {{nombre_negocio}}.",
+        "owner_alert_template": "💬 Cliente pidió hablar directo.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: \"{{last_message}}\""
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+
+    {
+      "id": "no_entendi",
+      "type": "send_buttons",
+      "config_bound": ["not_understood_message"],
+      "content": {
+        "text": "{{not_understood_message}}",
+        "buttons": [
+          { "id": "escolar", "title": "📚 Lista escolar" },
+          { "id": "servicios", "title": "🖨️ Servicios" },
+          { "id": "buscar", "title": "🔍 Buscar producto" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "escolar" }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "button", "value": "servicios" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "buscar" }, "next_node_id": "buscar" },
+        { "condition": { "type": "keyword", "values": ["escolar", "lista"] }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "keyword", "values": ["servicio", "servicios", "impresion", "impresión"] }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "keyword", "values": ["buscar", "producto"] }, "next_node_id": "buscar" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi_2" }
+      ]
+    },
+    {
+      "id": "no_entendi_2",
+      "type": "send_buttons",
+      "content": {
+        "text": "Sigo sin entenderte 😕. Elige una opción o te conecto directo con alguien:",
+        "buttons": [
+          { "id": "escolar", "title": "📚 Lista escolar" },
+          { "id": "servicios", "title": "🖨️ Servicios" },
+          { "id": "buscar", "title": "🔍 Buscar producto" }
+        ]
+      },
+      "transitions": [
+        { "condition": { "type": "button", "value": "escolar" }, "next_node_id": "escolar_captura" },
+        { "condition": { "type": "button", "value": "servicios" }, "next_node_id": "menu_servicios" },
+        { "condition": { "type": "button", "value": "buscar" }, "next_node_id": "buscar" },
+        { "condition": { "type": "default" }, "next_node_id": "no_entendi_escala" }
+      ]
+    },
+    {
+      "id": "no_entendi_escala",
+      "type": "escape_to_human",
+      "content": {
+        "user_response": "No logré entenderte 🙏. Te conecto con alguien de {{nombre_negocio}} para que te ayude directo.",
+        "owner_alert_template": "⚠️ El bot no logró entender al cliente tras 2 intentos.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: \"{{last_message}}\"\nContáctalo directo desde el chat."
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+
+    {
+      "id": "despedida",
+      "type": "send_text",
+      "content": {
+        "text": "Gracias por contactar a {{nombre_negocio}}. 📚"
+      },
+      "transitions": [
+        { "condition": { "type": "default" }, "next_node_id": "fin" }
+      ]
+    },
+    {
+      "id": "fin",
+      "type": "end",
+      "content": {},
+      "transitions": []
+    }
+  ]
+}
