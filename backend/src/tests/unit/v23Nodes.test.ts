@@ -64,6 +64,7 @@ function makeTenantConfig(): TenantConfig {
     horarioSemana: null,
     horarioSabado: null,
     abreDomingo: false,
+    catalogSynonyms: {},
   };
 }
 

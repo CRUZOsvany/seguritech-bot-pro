@@ -1,0 +1,111 @@
+sku,name,category,unit_price,stock_qty,barcode,description,cost_price,unit_type
+PAP-0001,Cuaderno Profesional Cuadro Chico 100 hojas,Cuadernos y libretas,28.5,120,7501234500011,"Pasta dura, cuadro chico de 5mm",17.0,piece
+PAP-0002,Cuaderno Profesional Cuadro Chico 200 hojas,Cuadernos y libretas,45.0,80,7501234500012,"Pasta dura, doble grosor",28.0,piece
+PAP-0003,Cuaderno Profesional Cuadro Grande 100 hojas,Cuadernos y libretas,28.5,95,7501234500013,,17.0,piece
+PAP-0004,Cuaderno Profesional Raya 100 hojas,Cuadernos y libretas,27.0,90,7501234500014,,16.5,piece
+PAP-0005,Cuaderno Universitario Cuadro Chico 100 hojas,Cuadernos y libretas,22.0,110,7501234500015,"Argollado, perforado 3 hoyos",13.5,piece
+PAP-0006,Cuaderno Universitario Raya 100 hojas,Cuadernos y libretas,22.0,100,7501234500016,,13.5,piece
+PAP-0007,Libreta Italiana Cuadro Chico 100 hojas,Cuadernos y libretas,24.0,60,7501234500017,Forma italiana (apaisada),15.0,piece
+PAP-0008,Cuaderno Cosido Colegial Cuadro 100 hojas,Cuadernos y libretas,15.0,150,7501234500018,Pasta blanda económica,9.0,piece
+PAP-0009,Libreta de Taquigrafía,Cuadernos y libretas,18.0,40,7501234500019,,11.0,piece
+PAP-0010,Cuaderno de Dibujo Sin Renglón 100 hojas,Cuadernos y libretas,32.0,55,7501234500020,Hoja blanca gruesa para dibujo,20.0,piece
+PAP-0011,Libreta de Notas Bolsillo,Cuadernos y libretas,12.0,200,7501234500021,,6.5,piece
+PAP-0012,Agenda Escolar 2026-2027,Cuadernos y libretas,65.0,45,7501234500022,Ciclo escolar completo,40.0,piece
+PAP-0101,Lápiz del Número 2 (pieza),Escritura,3.5,500,7501234501011,,1.8,piece
+PAP-0102,Caja de Lápices del Número 2 (12 pzas),Escritura,35.0,60,7501234501012,,20.0,box
+PAP-0103,Pluma Tinta Azul Punto Mediano,Escritura,6.0,400,7501234501013,,2.5,piece
+PAP-0104,Pluma Tinta Negra Punto Mediano,Escritura,6.0,380,7501234501014,,2.5,piece
+PAP-0105,Pluma Tinta Roja Punto Mediano,Escritura,6.0,150,7501234501015,,2.5,piece
+PAP-0106,Set de Plumones para Pizarrón Blanco (4 colores),Escritura,55.0,35,7501234501016,,32.0,package
+PAP-0107,Plumón Permanente Punto Fino Negro,Escritura,12.0,90,7501234501017,,6.0,piece
+PAP-0108,Marcatextos Resaltador Amarillo,Escritura,9.5,180,7501234501018,,4.5,piece
+PAP-0109,Set de Resaltadores 5 Colores,Escritura,48.0,50,7501234501019,,28.0,package
+PAP-0110,Portaminas 0.5mm,Escritura,22.0,70,7501234501020,,12.0,piece
+PAP-0111,Minas 0.5mm HB (tubo 12 pzas),Escritura,14.0,85,7501234501021,,7.0,package
+PAP-0112,Pluma Gel Punto Fino Negro,Escritura,10.0,140,7501234501022,,5.0,piece
+PAP-0201,Colores de Madera Caja 12 piezas,Colores y arte,38.0,130,7501234502011,,22.0,box
+PAP-0202,Colores de Madera Caja 24 piezas,Colores y arte,68.0,90,7501234502012,,42.0,box
+PAP-0203,Colores Triangulares Caja 12 piezas,Colores y arte,42.0,75,7501234502013,Ergonómicos para niños,26.0,box
+PAP-0204,Crayones de Cera Caja 12 piezas,Colores y arte,25.0,110,7501234502014,,14.0,box
+PAP-0205,Plastilina 12 Colores,Colores y arte,30.0,95,7501234502015,,17.0,box
+PAP-0206,Acuarelas 12 Colores con Pincel,Colores y arte,45.0,60,7501234502016,,26.0,box
+PAP-0207,Set de Pinceles Punta Redonda (5 pzas),Colores y arte,35.0,50,7501234502017,,20.0,package
+PAP-0208,Foamy Hoja Tamaño Carta (colores surtidos),Colores y arte,4.5,300,7501234502018,Precio por hoja individual,2.0,piece
+PAP-0209,Diamantina Frasco Chico,Colores y arte,8.0,120,7501234502019,,3.5,piece
+PAP-0210,Pistola de Silicón Chica,Colores y arte,65.0,25,7501234502020,,38.0,piece
+PAP-0211,Barras de Silicón Delgadas (bolsa 20 pzas),Colores y arte,20.0,45,7501234502021,,10.0,package
+PAP-0301,Resma de Papel Bond Carta 500 hojas,Papel y cartulina,115.0,70,7501234503011,,78.0,package
+PAP-0302,Resma de Papel Bond Oficio 500 hojas,Papel y cartulina,125.0,40,7501234503012,,85.0,package
+PAP-0303,Paquete de Hojas Blancas (100 hojas),Papel y cartulina,28.0,150,7501234503013,,18.0,package
+PAP-0304,Cartulina Blanca Tamaño Carta (pieza),Papel y cartulina,4.0,400,7501234503014,,1.8,piece
+PAP-0305,Cartulina de Colores Surtidos (pieza),Papel y cartulina,5.0,350,7501234503015,,2.2,piece
+PAP-0306,Cartoncillo Grueso Tamaño Carta,Papel y cartulina,6.0,180,7501234503016,,3.0,piece
+PAP-0307,Papel China Colores Surtidos (paquete 20 hojas),Papel y cartulina,22.0,60,7501234503017,,12.0,package
+PAP-0308,Papel Crepé Rollo,Papel y cartulina,15.0,80,7501234503018,,8.0,piece
+PAP-0309,Papel Lustre Colores Surtidos (paquete 20 hojas),Papel y cartulina,20.0,55,7501234503019,,11.0,package
+PAP-0310,Cartulina Fluorescente Surtida (pieza),Papel y cartulina,7.0,90,7501234503020,,3.5,piece
+PAP-0401,"Juego de Geometría Completo (regla, escuadras, transportador, compás)",Geometría y matemáticas,48.0,85,7501234504011,,28.0,package
+PAP-0402,Regla de 30cm,Geometría y matemáticas,8.0,220,7501234504012,,3.5,piece
+PAP-0403,Compás Metálico Profesional,Geometría y matemáticas,35.0,40,7501234504013,,20.0,piece
+PAP-0404,Transportador 180 Grados,Geometría y matemáticas,6.0,150,7501234504014,,2.5,piece
+PAP-0405,Calculadora Científica 240 Funciones,Geometría y matemáticas,185.0,30,7501234504015,Recomendada para secundaria/prepa,120.0,piece
+PAP-0406,Calculadora Básica de Bolsillo,Geometría y matemáticas,45.0,55,7501234504016,,25.0,piece
+PAP-0501,Pegamento en Barra Grande,Pegamento y corrección,18.0,200,7501234505011,,10.0,piece
+PAP-0502,Pegamento Blanco Líquido 250ml,Pegamento y corrección,22.0,130,7501234505012,,12.0,piece
+PAP-0503,Resistol Escolar 120ml,Pegamento y corrección,15.0,160,7501234505013,,8.0,piece
+PAP-0504,Corrector Líquido con Brocha,Pegamento y corrección,14.0,140,7501234505014,,7.0,piece
+PAP-0505,Cinta Correctora (corrector en cinta),Pegamento y corrección,20.0,110,7501234505015,,11.0,piece
+PAP-0506,Cinta Adhesiva Transparente 18mm,Pegamento y corrección,12.0,250,7501234505016,,5.5,piece
+PAP-0507,Cinta Canela para Empaque,Pegamento y corrección,25.0,90,7501234505017,,13.0,piece
+PAP-0508,Diurex Chico (cinta adhesiva pequeña),Pegamento y corrección,10.0,300,7501234505018,,4.5,piece
+PAP-0601,Mochila Escolar Primaria (varios diseños),Mochilas y loncheras,350.0,25,7501234506011,"Diseño surtido, preguntar disponibilidad",210.0,piece
+PAP-0602,Mochila Escolar Secundaria/Prepa,Mochilas y loncheras,450.0,20,7501234506012,,270.0,piece
+PAP-0603,Lonchera Térmica,Mochilas y loncheras,180.0,30,7501234506013,,105.0,piece
+PAP-0604,Estuche Escolar Doble Cierre,Mochilas y loncheras,85.0,45,7501234506014,,48.0,piece
+PAP-0605,Lunch Bag Aislante,Mochilas y loncheras,120.0,22,7501234506015,,68.0,piece
+PAP-0701,Folder Tamaño Carta Amarillo (pieza),Oficina y archivo,3.5,400,7501234507011,,1.5,piece
+PAP-0702,Folder Tamaño Oficio Amarillo (pieza),Oficina y archivo,4.0,300,7501234507012,,1.8,piece
+PAP-0703,Carpeta de Argollas 3 Pulgadas,Oficina y archivo,65.0,50,7501234507013,,38.0,piece
+PAP-0704,Carpeta de Argollas 1 Pulgada,Oficina y archivo,35.0,70,7501234507014,,20.0,piece
+PAP-0705,Caja de Clips Estándar (100 pzas),Oficina y archivo,12.0,150,7501234507015,,6.0,box
+PAP-0706,Broche Baco Caja 50 piezas,Oficina y archivo,18.0,90,7501234507016,,9.5,box
+PAP-0707,Engrapadora Estándar,Oficina y archivo,55.0,40,7501234507017,,32.0,piece
+PAP-0708,Caja de Grapas Estándar (5000 pzas),Oficina y archivo,15.0,120,7501234507018,,7.0,box
+PAP-0709,Perforadora de 2 Orificios,Oficina y archivo,85.0,25,7501234507019,,50.0,piece
+PAP-0710,Sobre Carta Blanco (pieza),Oficina y archivo,2.5,500,7501234507020,,1.0,piece
+PAP-0711,Sobre Manila Oficio (pieza),Oficina y archivo,6.0,200,7501234507021,,2.8,piece
+PAP-0712,Tijeras Escolares Punta Redonda,Oficina y archivo,18.0,180,7501234507022,,9.0,piece
+PAP-0713,Sacapuntas Sencillo,Oficina y archivo,5.0,300,7501234507023,,2.0,piece
+PAP-0714,Sacapuntas Doble con Depósito,Oficina y archivo,12.0,150,7501234507024,,6.0,piece
+PAP-0715,Goma de Borrar Blanca,Oficina y archivo,6.0,350,7501234507025,,2.5,piece
+PAP-0716,Goma Migajón,Oficina y archivo,10.0,140,7501234507026,Ideal para dibujo a lápiz,5.0,piece
+PAP-0801,Memoria USB 16GB,Tecnología y accesorios,95.0,60,7501234508011,,55.0,piece
+PAP-0802,Memoria USB 32GB,Tecnología y accesorios,145.0,45,7501234508012,,88.0,piece
+PAP-0803,Pilas AA (paquete 4 piezas),Tecnología y accesorios,35.0,100,7501234508013,,20.0,package
+PAP-0804,Pilas AAA (paquete 4 piezas),Tecnología y accesorios,35.0,95,7501234508014,,20.0,package
+PAP-0805,Audífonos Económicos con Cable,Tecnología y accesorios,65.0,50,7501234508015,,35.0,piece
+PAP-0806,Cable USB Tipo C 1 metro,Tecnología y accesorios,55.0,70,7501234508016,,30.0,piece
+PAP-0901,Papel para Regalo (pliego),Fiestas y regalos,15.0,120,7501234509011,,7.0,piece
+PAP-0902,Bolsa de Regalo Mediana,Fiestas y regalos,12.0,150,7501234509012,,6.0,piece
+PAP-0903,Globos Metálicos Número (pieza),Fiestas y regalos,45.0,40,7501234509013,,25.0,piece
+PAP-0904,Paquete de Globos de Látex (50 pzas),Fiestas y regalos,35.0,60,7501234509014,,18.0,package
+PAP-0905,Listón de Regalo Rollo,Fiestas y regalos,18.0,80,7501234509015,,9.0,piece
+PAP-0906,Tarjeta de Felicitación Genérica,Fiestas y regalos,22.0,90,7501234509016,,11.0,piece
+SRV-0001,Impresión Blanco y Negro (por hoja),Servicios de impresión,2.0,0,,"Tamaño carta, una cara",,service
+SRV-0002,Impresión a Color (por hoja),Servicios de impresión,6.0,0,,"Tamaño carta, una cara",,service
+SRV-0003,Fotocopia Blanco y Negro (por copia),Servicios de impresión,1.5,0,,,,service
+SRV-0004,Fotocopia a Color (por copia),Servicios de impresión,5.0,0,,,,service
+SRV-0005,Engargolado Tamaño Carta,Servicios de impresión,25.0,0,,Incluye pasta e imagen transparente,,service
+SRV-0006,Laminado Tamaño Carta,Servicios de impresión,15.0,0,,,,service
+SRV-0007,Escaneo de Documento (por hoja),Servicios de impresión,5.0,0,,Envío por WhatsApp o correo,,service
+SRV-0008,Envío a Domicilio Local (Chilpancingo),Servicios de impresión,40.0,0,,"Tarifa base, puede variar por zona",,service
+EDGE-NOSTOCK-01,Cuaderno Profesional Edición Limitada Regreso a Clases,Cuadernos y libretas,55.0,0,7501234599001,Sin existencia — pendiente de reabasto,33.0,piece
+EDGE-LONGNAME-01,Set Completo de Colores Profesionales para Artista de 48 Piezas con Estuche Metálico y Sacapuntas Incluido Edición Especial,Colores y arte,320.0,10,7501234599002,,190.0,box
+EDGE-ACCENTS-01,Plumón Metálico Edición Ñoño Aniversario,Escritura,28.0,35,7501234599003,,15.0,piece
+EDGE-SHORTNAME-01,USB,Tecnología y accesorios,95.0,15,7501234599004,Alias corto deliberado para USB 16GB (ver PAP-0801),55.0,piece
+EDGE-ZEROPRICE-01,Bolsa de Plástico para Compra,Oficina y archivo,0.0,500,7501234599005,"Cortesía, no se cobra",0.0,piece
+EDGE-CATCOLLISION-01,Organizador de Escritorio con Compartimentos,Servicios,75.0,20,7501234599006,"Producto físico en categoría llamada ""Servicios"" a propósito",44.0,piece
+EDGE-CSVQUOTE-01,Set de Marcadores Permanentes Edición 2026,Escritura,60.0,28,7501234599007,"Incluye 12 colores, resistente al agua, ""edición 2026"" limitada",35.0,package
+EDGE-DUPBARCODE-01,Marcador para Pizarrón Blanco Azul,Escritura,12.0,60,7501234599008,,6.0,piece
+EDGE-DUPBARCODE-02,Marcador para Pizarrón Blanco Verde,Escritura,12.0,60,7501234599008,Mismo barcode que EDGE-DUPBARCODE-01 a propósito,6.0,piece
+EDGE-SIMILARSKU-01,Cuaderno Profesional Cuadro Chico 100 hojas (Proveedor B),Cuadernos y libretas,29.0,40,7501234599009,Mismo producto que PAP-0001 pero de otro proveedor/lote,18.0,piece

@@ -163,7 +163,11 @@ export class FlowInterpreter {
     // a evaluateTransitions para no duplicar el roundtrip a la BD.
     let catalogMatch: PosProduct | null = null;
     if (currentNode.type === 'search_catalog') {
-      catalogMatch = await this.catalogSearchService.search(user.tenantId, message.content.trim());
+      catalogMatch = await this.catalogSearchService.search(
+        user.tenantId,
+        message.content.trim(),
+        tenantConfig.catalogSynonyms,
+      );
     }
 
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.

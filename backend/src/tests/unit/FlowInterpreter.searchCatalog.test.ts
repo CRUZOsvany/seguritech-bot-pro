@@ -50,6 +50,7 @@ function makeTenantConfig(): TenantConfig {
     horarioSemana: null,
     horarioSabado: null,
     abreDomingo: false,
+    catalogSynonyms: {},
   };
 }
 
@@ -160,7 +161,10 @@ describe('FlowInterpreter — search_catalog', () => {
       tenantConfig: makeTenantConfig(),
     });
 
-    expect(searchSpy).toHaveBeenCalledWith('t1', 'tornillo estrella');
+    // Tercer argumento: tenantConfig.catalogSynonyms (§2.1 plan V1, gap
+    // cerrado 2026-08-24) — {} en makeTenantConfig() = mismo comportamiento
+    // que antes del fix, sin regresión.
+    expect(searchSpy).toHaveBeenCalledWith('t1', 'tornillo estrella', {});
     expect(result.contextUpdates.selected_product_id).toBe('pos-1');
     expect(result.nextNodeId).toBe('end');
     expect(result.outputs[0]).toEqual({
@@ -181,7 +185,7 @@ describe('FlowInterpreter — search_catalog', () => {
       tenantConfig: makeTenantConfig(),
     });
 
-    expect(searchSpy).toHaveBeenCalledWith('t1', 'algo que no existe');
+    expect(searchSpy).toHaveBeenCalledWith('t1', 'algo que no existe', {});
     expect(result.contextUpdates.selected_product_id).toBeUndefined();
     // escape_to_human sin transitions[] propias termina el flow (mismo
     // comportamiento que cualquier nodo sin salida — ver humanHandoff.test.ts).
@@ -208,6 +212,22 @@ describe('FlowInterpreter — search_catalog', () => {
 
     expect(result.contextUpdates.custom_key).toBe('pos-1');
     expect(result.contextUpdates.selected_product_id).toBeUndefined();
+  });
+
+  it('reenvía tenantConfig.catalogSynonyms tal cual a CatalogSearchService.search() (§2.1, gap cerrado 2026-08-24)', async () => {
+    const { interpreter, searchSpy } = makeInterpreter(null);
+    const flow = makeFlow();
+    const user = makeUser({ currentNodeId: 'search', context: {} });
+    const synonyms = { libreta: 'cuaderno' };
+
+    await interpreter.execute({
+      flow,
+      user,
+      message: makeMessage('libreta'),
+      tenantConfig: { ...makeTenantConfig(), catalogSynonyms: synonyms },
+    });
+
+    expect(searchSpy).toHaveBeenCalledWith('t1', 'libreta', synonyms);
   });
 
   it('la búsqueda se ejecuta UNA sola vez por mensaje aunque haya varias transiciones', async () => {

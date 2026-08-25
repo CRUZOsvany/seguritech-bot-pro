@@ -42,6 +42,7 @@ function makeTenantConfig(overrides: Partial<TenantConfig> = {}): TenantConfig {
     horarioSemana: null,
     horarioSabado: null,
     abreDomingo: false,
+    catalogSynonyms: {},
     ...overrides,
   };
 }
