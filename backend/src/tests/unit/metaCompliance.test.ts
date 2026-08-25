@@ -49,6 +49,7 @@ const baseConfig: TenantConfig = {
   horarioSemana: null,
   horarioSabado: null,
   abreDomingo: false,
+  catalogSynonyms: {},
 };
 
 function makeUser(overrides: Partial<User> = {}): User {

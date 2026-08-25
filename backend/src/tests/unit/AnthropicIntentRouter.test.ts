@@ -50,6 +50,7 @@ function makeTenantConfig(nombreNegocio: string): TenantConfig {
     horarioSemana: null,
     horarioSabado: null,
     abreDomingo: false,
+    catalogSynonyms: {},
   };
 }
 

@@ -103,6 +103,16 @@ export interface TenantConfig {
   horarioSemana: string | null;
   horarioSabado: string | null;
   abreDomingo: boolean;
+  /**
+   * Sinónimos léxicos para `search_catalog`, resueltos por `giro` del tenant
+   * (§2.1 plan V1 — gap cerrado 2026-08-24, ver
+   * `.claude/PROMPT_DEMO_PAPELERIA_STRESS_TEST.md`). Vacío = búsqueda solo
+   * por nombre real, comportamiento previo sin regresión. Mismo shape que
+   * `CatalogSynonyms` de `domain/services/CatalogSearchService` (no se
+   * importa aquí a propósito: `domain/entities` no depende de
+   * `domain/services`).
+   */
+  catalogSynonyms: Record<string, string>;
 }
 
 /**

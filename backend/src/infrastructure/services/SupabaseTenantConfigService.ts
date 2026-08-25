@@ -3,8 +3,24 @@ import pino from 'pino';
 import NodeCache from 'node-cache';
 import { TenantConfig, CatalogItem, BotTone, ServiceDirectoryEntry } from '@/domain/entities';
 import { TenantConfigPort } from '@/domain/ports';
+import { PAPELERIA_SYNONYMS } from '@/domain/moulds/papeleria.synonyms';
+import type { CatalogSynonyms } from '@/domain/services/CatalogSearchService';
 
 const TTL_SECONDS = 5 * 60; // 5 minutos
+
+/**
+ * Diccionario de sinónimos por `giro` (§2.1 plan V1, gap cerrado 2026-08-24).
+ * ferreteria/cerrajeria: pendiente (fuera de alcance — ver §3.1 y §3.3 de
+ * PLAN_V1_BOT_FLOWS_SIN_IA.md) — `{}` por ahora, sin romper nada:
+ * `CatalogSearchService.search()` ya soporta `synonyms={}` como default.
+ */
+const SYNONYMS_BY_GIRO: Record<string, CatalogSynonyms> = {
+  papeleria: PAPELERIA_SYNONYMS,
+};
+
+function resolveCatalogSynonyms(giro: string | null | undefined): CatalogSynonyms {
+  return SYNONYMS_BY_GIRO[giro ?? ''] ?? {};
+}
 
 /**
  * Carga configuración del bot + catálogo + nombre de negocio desde Supabase
@@ -38,7 +54,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     const [tenantRes, configRes, catalogRes, ownerRes, serviceDirRes] = await Promise.all([
       this.supabase
         .from('tenants')
-        .select('nombre_negocio, horario_semana, horario_sabado, abre_domingo')
+        .select('nombre_negocio, horario_semana, horario_sabado, abre_domingo, giro')
         .eq('id', tenantId)
         .maybeSingle(),
       this.supabase
@@ -114,6 +130,9 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
     const horarioSemana = (tenantRes.data?.horario_semana as string | null | undefined) ?? null;
     const horarioSabado = (tenantRes.data?.horario_sabado as string | null | undefined) ?? null;
     const abreDomingo = Boolean(tenantRes.data?.abre_domingo);
+    const catalogSynonyms = resolveCatalogSynonyms(
+      tenantRes.data?.giro as string | null | undefined,
+    );
 
     const catalog: CatalogItem[] = (catalogRes.data || []).map((row: any) => ({
       id: row.id,
@@ -160,6 +179,7 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       horarioSemana,
       horarioSabado,
       abreDomingo,
+      catalogSynonyms,
     };
 
     this.cache.set(tenantId, config);
