@@ -495,7 +495,7 @@ export function createTenantsRouter(params: {
   // POST /api/admin/simulate
   // ============================================================
   router.post('/simulate', async (req: Request, res: Response) => {
-    const { tenantId, phoneNumber, content, persist, source, flowId, versionId, state } = req.body ?? {};
+    const { tenantId, phoneNumber, content, persist, source, flowId, versionId, state, simulateAt } = req.body ?? {};
 
     if (typeof tenantId !== 'string' || tenantId.trim() === '') {
       res.status(400).json({ error: 'tenantId requerido (string)' });
@@ -535,6 +535,15 @@ export function createTenantsRouter(params: {
       res.status(400).json({ error: 'state debe ser un objeto { currentNodeId?, context? }' });
       return;
     }
+    // Fase 4 (reconexión Designer/Simulador): ISO 8601 opcional — hora a la
+    // que se simula el mensaje, para probar el gate de horario de atención.
+    if (
+      simulateAt !== undefined &&
+      (typeof simulateAt !== 'string' || Number.isNaN(new Date(simulateAt).getTime()))
+    ) {
+      res.status(400).json({ error: 'simulateAt debe ser una fecha ISO 8601 válida' });
+      return;
+    }
 
     try {
       const result = await simulateMessageUseCase.execute({
@@ -546,6 +555,7 @@ export function createTenantsRouter(params: {
         flowId,
         versionId,
         state: state as { currentNodeId?: string; context?: Record<string, unknown> } | undefined,
+        simulateAt,
       });
 
       if (result.error) {

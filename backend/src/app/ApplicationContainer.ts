@@ -86,6 +86,7 @@ export class ApplicationContainer {
       tenantConfigPort,
       botFlowRepository,
       flowInterpreter,
+      businessHoursService,
       logger,
     );
 
