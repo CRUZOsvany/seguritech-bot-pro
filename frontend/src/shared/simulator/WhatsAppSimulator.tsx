@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile,
+  Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile, Clock,
 } from 'lucide-react';
 import {
   simulate, simulateReset,
@@ -26,14 +26,31 @@ import { Alert, AlertDescription } from '@/shared/ui/alert';
  *   phoneNumber  — teléfono de prueba (default un número simulado fijo).
  *   hasFlow      — si false, muestra aviso de que no hay flujo que simular.
  *   compact      — si true, reduce altura (para split-screen del designer).
- *   source       — 'active' (default) o 'draft'. 'version' no se expone aquí (P6).
+ *   source       — 'active' (default), 'draft' o 'version'.
  *   flowId       — requerido si source='draft'.
+ *   versionId    — requerido si source='version'.
  *   onBeforeSend — hook opcional, se espera antes de cada turno (p.ej. el
  *                  Designer lo usa para guardar el draft sucio del canvas
  *                  antes de simularlo, así el turno prueba lo último editado).
  */
 
 const DEFAULT_SIM_PHONE = '5210000000000';
+
+/**
+ * ISO 8601 de HOY (calendario en America/Mexico_City) a la hora `HH:MM`
+ * elegida, con offset fijo -06:00. México eliminó el horario de verano en
+ * la reforma de 2022 (excepto franja fronteriza) — el offset de Ciudad de
+ * México ya no varía en el año, así que no hace falta resolver DST aquí.
+ */
+function buildSimulateAtIso(time: string): string {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Mexico_City',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  return `${today}T${time}:00-06:00`;
+}
 
 type Turn = { from: 'user' | 'bot'; output?: InterpreterOutput; text?: string };
 
@@ -44,20 +61,30 @@ export function WhatsAppSimulator({
   compact = false,
   source = 'active',
   flowId,
+  versionId,
+  versionLabel,
   onBeforeSend,
 }: {
   tenantId: string;
   phoneNumber?: string;
   hasFlow?: boolean;
   compact?: boolean;
-  source?: Extract<SimulateSource, 'active' | 'draft'>;
+  source?: SimulateSource;
   flowId?: string;
+  versionId?: string;
+  /** Etiqueta a mostrar en el chip cuando source='version', ej. "v3". */
+  versionLabel?: string;
   onBeforeSend?: () => Promise<void> | void;
 }) {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Fase 4: simular "fuera de horario". Apagado por default — no manda
+  // simulateAt y el comportamiento es idéntico al de antes de esta feature.
+  const [outOfHours, setOutOfHours] = useState(false);
+  const [simulatedTime, setSimulatedTime] = useState('22:00');
 
   // Estado efímero de la conversación. Lo encadenamos entre turnos para que el
   // simulador avance sin escribir en BD (modo persist=false). Vive en un ref
@@ -75,6 +102,8 @@ export function WhatsAppSimulator({
       const res = await simulate(tenantId, phoneNumber, content, stateRef.current, {
         source,
         flowId: source === 'draft' ? flowId : undefined,
+        versionId: source === 'version' ? versionId : undefined,
+        simulateAt: outOfHours ? buildSimulateAtIso(simulatedTime) : undefined,
       });
       stateRef.current = { currentNodeId: res.nextNodeId, context: res.context };
       setTurns((t) => [...t, ...res.outputs.map((o) => ({ from: 'bot' as const, output: o }))]);
@@ -116,10 +145,18 @@ export function WhatsAppSimulator({
           {/* Indicador inequívoco de qué flow se está probando (P1). */}
           <span
             className={`ml-auto rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-              source === 'draft' ? 'bg-amber-400 text-amber-950' : 'bg-white/25 text-white'
+              source === 'draft'
+                ? 'bg-amber-400 text-amber-950'
+                : source === 'version'
+                  ? 'bg-sky-300 text-sky-950'
+                  : 'bg-white/25 text-white'
             }`}
           >
-            {source === 'draft' ? 'BORRADOR' : 'PUBLICADO'}
+            {source === 'draft'
+              ? 'BORRADOR'
+              : source === 'version'
+                ? `VERSIÓN ${versionLabel ?? ''}`.trim()
+                : 'PUBLICADO'}
           </span>
         </div>
 
@@ -173,6 +210,28 @@ export function WhatsAppSimulator({
           <AlertDescription>{err}</AlertDescription>
         </Alert>
       )}
+
+      {/* Fase 4: forzar "fuera de horario" — solo cambia lo que manda al
+          backend (simulateAt); apagado, el comportamiento es el de siempre. */}
+      <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+        <label className="flex items-center gap-1.5 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={outOfHours}
+            onChange={(e) => setOutOfHours(e.target.checked)}
+            className="h-3 w-3"
+          />
+          <Clock className="h-3 w-3" aria-hidden />
+          Simular a esta hora
+        </label>
+        <input
+          type="time"
+          value={simulatedTime}
+          onChange={(e) => setSimulatedTime(e.target.value)}
+          disabled={!outOfHours}
+          className="h-6 rounded border border-input bg-background px-1 text-[11px] disabled:opacity-50"
+        />
+      </div>
 
       <div className="flex justify-center">
         <Button size="sm" variant="ghost" onClick={reset} disabled={busy}>

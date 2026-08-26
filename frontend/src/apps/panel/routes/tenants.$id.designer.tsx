@@ -23,6 +23,10 @@ import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Textarea } from '@/shared/ui/textarea';
 import { Input } from '@/shared/ui/input';
 import { Label } from '@/shared/ui/label';
+import {
+  Select, SelectContent, SelectGroup, SelectItem, SelectLabel,
+  SelectSeparator, SelectTrigger, SelectValue,
+} from '@/shared/ui/select';
 import { ApiError } from '@/shared/api/client';
 import type { PublishErrorBody } from '@/shared/api/flows';
 import {
@@ -45,6 +49,7 @@ import { validateGraph } from '../designer/validation/graphValidator';
 import { ValidationPanel } from '../designer/validation/ValidationPanel';
 import { VersionsPanel } from '../designer/VersionsPanel';
 import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
+import type { SimulateSource } from '@/shared/api/tenants';
 import { useSession } from '@/shared/auth/useSession';
 
 /**
@@ -303,9 +308,22 @@ function DesignerCanvas({
     setShowVersions((v) => !v);
     setShowValidation(false);
   }, []);
-  // P1: qué flow prueba el simulador embebido. Default 'draft' — el Designer
-  // existe para iterar sobre el borrador, no sobre lo ya publicado.
-  const [simSource, setSimSource] = useState<'active' | 'draft'>('draft');
+  // P1/Fase 3: qué flow prueba el simulador embebido. Default 'draft' — el
+  // Designer existe para iterar sobre el borrador, no sobre lo ya publicado.
+  // Se codifica en un solo string para que el <Select> tenga un `value`
+  // simple: 'active' | 'draft' | `version:<versionId>`.
+  const [simChoice, setSimChoice] = useState<string>('draft');
+  const simSource: SimulateSource = simChoice === 'active'
+    ? 'active'
+    : simChoice === 'draft'
+      ? 'draft'
+      : 'version';
+  const simVersionId = simChoice.startsWith('version:')
+    ? simChoice.slice('version:'.length)
+    : undefined;
+  const simVersion = simVersionId
+    ? (versionsQ.data ?? []).find((v) => v.id === simVersionId)
+    : undefined;
 
   // Validación de grafo en vivo. Se recalcula cuando cambian los nodos/edges
   // del store; `toBotFlow` es referencia estable del store.
@@ -534,39 +552,46 @@ function DesignerCanvas({
               <div className="flex items-center gap-2">
                 <Send className="h-3.5 w-3.5 text-muted-foreground" aria-hidden />
                 <p className="text-xs font-medium text-muted-foreground">
-                  Simulador — {simSource === 'draft' ? 'probando el BORRADOR' : 'probando lo PUBLICADO'}
+                  Simulador — {simSource === 'draft'
+                    ? 'probando el BORRADOR'
+                    : simSource === 'version'
+                      ? `probando la versión ${simVersion ? `v${simVersion.versionNumber}` : ''}`
+                      : 'probando lo PUBLICADO'}
                 </p>
               </div>
-              <div className="inline-flex rounded-md border border-border/70 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setSimSource('draft')}
-                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                    simSource === 'draft'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  Draft
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSimSource('active')}
-                  className={`rounded px-2 py-0.5 text-[11px] font-medium transition-colors ${
-                    simSource === 'active'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'text-muted-foreground hover:bg-muted'
-                  }`}
-                >
-                  Publicado
-                </button>
-              </div>
+              {/* Fase 3: selector de fuente — publicado / borrador / una versión
+                  histórica específica. useVersions ya está cargado arriba para
+                  el panel de rollback (P6); se reusa la misma query. */}
+              <Select value={simChoice} onValueChange={setSimChoice}>
+                <SelectTrigger size="sm" className="h-7 w-[180px] text-[11px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Borrador actual</SelectItem>
+                  <SelectItem value="active">Publicado</SelectItem>
+                  {(versionsQ.data ?? []).length > 0 && (
+                    <>
+                      <SelectSeparator />
+                      <SelectGroup>
+                        <SelectLabel>Versiones publicadas</SelectLabel>
+                        {(versionsQ.data ?? []).map((v) => (
+                          <SelectItem key={v.id} value={`version:${v.id}`}>
+                            v{v.versionNumber}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <WhatsAppSimulator
               tenantId={tenantId}
               compact
               source={simSource}
               flowId={flowId}
+              versionId={simVersionId}
+              versionLabel={simVersion ? `v${simVersion.versionNumber}` : undefined}
               // Si se está probando el draft y el canvas tiene cambios sin
               // guardar, los guarda antes del turno — para que el simulador
               // siempre pruebe lo último editado, no una copia vieja del draft.
