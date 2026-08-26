@@ -527,6 +527,8 @@ Estas son las reglas que han causado dolor cuando se rompieron. Tatuárselas.
 
 14. **Cada nuevo endpoint en `/api/admin/*` debe registrar en audit log toda mutación.** Inmutable, append-only. No hay updates ni deletes en `admin_audit_log`.
 
+15. **`curl` desde Git Bash en Windows contra endpoints que crean/editan datos con acentos: usar `--data-binary @archivo.json`, nunca `-d '...'` inline.** Confirmado en la sesión del stress test de "Papelería DEMO" (2026-08-25): `-d '{"nombre_negocio":"Papelería DEMO",...}'` inline corrompió los acentos UTF-8 en la fila real de Supabase (`"Papeler�a DEMO"`) — el bug es de la capa de shell/`curl` en ese entorno, no del backend. Escribir el JSON a un archivo (UTF-8) y pasarlo con `--data-binary @archivo.json` lo evita por completo. Ver `.claude/CONTRATOS_API_ADMIN.md` para los contratos reales de la API admin descubiertos en la misma sesión.
+
 ---
 
 ## 9. Roadmap por sprints
