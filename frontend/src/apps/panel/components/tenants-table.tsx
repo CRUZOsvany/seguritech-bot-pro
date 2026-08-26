@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { ExternalLink, CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -94,14 +94,9 @@ export function TenantsTable({ tenants }: Props) {
                   </Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
-                  <a
-                    href={`/simulator/${encodeURIComponent(t.id)}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
+                  <Link to="/tenants/$id/designer" params={{ id: t.id }}>
                     Simular
-                    <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
+                  </Link>
                 </Button>
               </div>
             </TableCell>
