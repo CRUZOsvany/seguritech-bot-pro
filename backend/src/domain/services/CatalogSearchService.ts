@@ -46,6 +46,16 @@ export type CatalogSynonyms = Record<string, string>;
  * los flows concretos (§3 del plan). Vacío por defecto: la búsqueda sigue
  * funcionando igual de bien sobre el nombre real del producto.
  */
+/**
+ * Cuántos candidatos se piden al repo por término antes de rankear. El repo
+ * (`SupabasePosProductRepository.search()`) no tiene `.order()` — Postgres
+ * regresa el orden que le convenga, no por relevancia — así que `limit=1`
+ * (como era antes) equivalía a apostarle al primer row al azar. 8 alcanza de
+ * sobra para desambiguar variantes de un mismo producto (ej. "100 hojas" vs
+ * "200 hojas" vs "(Proveedor B)") sin pedir el catálogo completo.
+ */
+const SEARCH_CANDIDATES_LIMIT = 8;
+
 export class CatalogSearchService {
   constructor(private readonly posProducts: PosProductRepository) {}
 
@@ -55,10 +65,56 @@ export class CatalogSearchService {
     synonyms: CatalogSynonyms = {},
   ): Promise<PosProduct | null> {
     for (const term of this.extractSearchTerms(rawMessage, synonyms)) {
-      const results = await this.posProducts.search(tenantId, term, 1);
-      if (results.length > 0) return results[0];
+      const results = await this.posProducts.search(tenantId, term, SEARCH_CANDIDATES_LIMIT);
+      if (results.length === 1) return results[0];
+      if (results.length > 1) return this.rankResults(term, results);
     }
     return null;
+  }
+
+  /**
+   * Bug real del stress test de "Papelería DEMO" (Fase 7, caso #9): sin esto,
+   * el primer row que devolviera el repo "ganaba" sin importar qué tan buen
+   * match fuera — buscar "cuaderno profesional 100 hojas" podía devolver el
+   * SKU de 200 hojas. Scoring simple, en 3 niveles (cada nivel solo desempata
+   * si el anterior queda tablas):
+   *   1. Match exacto de la frase completa normalizada contra el nombre.
+   *   2. Cuenta de tokens del término presentes en el nombre (más = mejor).
+   *   3. Diferencia de longitud entre término y nombre normalizado (menor = mejor —
+   *      evita que "cuaderno" solo prefiera el nombre más largo/decorado).
+   * Empate total → se conserva el orden que ya traía la respuesta del repo
+   * (no se inventa un desempate nuevo).
+   */
+  private rankResults(term: string, results: PosProduct[]): PosProduct {
+    const normTerm = normalizeText(term);
+    const termTokens = normTerm.split(/[^a-z0-9]+/).filter((t) => t.length > 0);
+
+    const scoreOf = (product: PosProduct) => {
+      const normName = normalizeText(product.name);
+      const exact = normName === normTerm ? 1 : 0;
+      const tokenCount = termTokens.filter((t) => normName.includes(t)).length;
+      const lengthDiff = Math.abs(normName.length - normTerm.length);
+      return { exact, tokenCount, lengthDiff };
+    };
+
+    let best = results[0];
+    let bestScore = scoreOf(best);
+    for (let i = 1; i < results.length; i++) {
+      const candidate = results[i];
+      const candidateScore = scoreOf(candidate);
+      const better =
+        candidateScore.exact > bestScore.exact ||
+        (candidateScore.exact === bestScore.exact &&
+          candidateScore.tokenCount > bestScore.tokenCount) ||
+        (candidateScore.exact === bestScore.exact &&
+          candidateScore.tokenCount === bestScore.tokenCount &&
+          candidateScore.lengthDiff < bestScore.lengthDiff);
+      if (better) {
+        best = candidate;
+        bestScore = candidateScore;
+      }
+    }
+    return best;
   }
 
   private extractSearchTerms(rawMessage: string, synonyms: CatalogSynonyms): string[] {
