@@ -3,6 +3,7 @@
   "start_node_id": "bienvenida",
   "nodes": [
     {
+      "_comment_bienvenida": "service_directory_match agregado al final (antes de default) — Fase 2a del cierre de hallazgos del stress test (2026-08-25): antes, texto libre que no matcheaba ningún keyword/botón caía directo en no_entendi sin nunca consultar el directorio de servicios (ej. 'curp' desde el menú principal). No reemplaza el menú rápido de arriba (esos keywords siguen ganando primero, first-match-wins) — solo rescata lo que antes se perdía.",
       "id": "bienvenida",
       "type": "send_buttons",
       "config_bound": ["welcome_message", "menu_message"],
@@ -23,6 +24,7 @@
         { "condition": { "type": "keyword", "values": ["buscar", "producto", "tienen", "tiene", "hay", "precio de", "cuanto cuesta", "cuánto cuesta"] }, "next_node_id": "buscar" },
         { "condition": { "type": "keyword", "values": ["hablar con alguien", "hablar con una persona", "agente", "asesor", "humano", "persona"] }, "next_node_id": "hablar_directo" },
         { "condition": { "type": "keyword", "values": ["salir", "gracias", "eso es todo", "nada mas", "nada más", "adios", "adiós"] }, "next_node_id": "despedida" },
+        { "condition": { "type": "service_directory_match", "save_to_context": "matched_service_id" }, "next_node_id": "buscar_servicio_encontrado" },
         { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
