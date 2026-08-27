@@ -6,7 +6,7 @@ import { z } from 'zod';
 import {
   ArrowLeft, Play, Pause, Loader2, KeyRound, Trash2, Workflow,
   Bot, LayoutDashboard, MessageSquare, Plug, Route as RouteIcon,
-  ExternalLink, MessageCircle, ScrollText, ListTree,
+  MessageCircle, ScrollText, ListTree,
 } from 'lucide-react';
 import {
   Card, CardContent, CardDescription, CardHeader, CardTitle,
@@ -190,11 +190,6 @@ function WhatsAppPanelPage() {
                 </div>
               </div>
               <div className="flex flex-wrap gap-2 border-t pt-3">
-                <Button asChild size="sm" variant="outline">
-                  <a href={`/simulator/${encodeURIComponent(id)}`} target="_blank" rel="noopener noreferrer">
-                    Simular <ExternalLink className="ml-1 h-3 w-3" />
-                  </a>
-                </Button>
                 <Button asChild size="sm" variant="outline">
                   <Link to="/tenants/$id/designer" params={{ id }}>
                     <Workflow className="mr-1 h-3 w-3" /> Abrir Bot Designer
