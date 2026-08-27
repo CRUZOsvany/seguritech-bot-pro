@@ -392,8 +392,7 @@ export interface SimulateState {
 
 /**
  * Fuente del flow a simular. Espejo de `SimulateSource` en
- * SimulateMessageUseCase (backend). 'version' queda reservado para P6
- * (rollback/UI de versiones); no se expone todavía en el simulador del panel.
+ * SimulateMessageUseCase (backend).
  */
 export type SimulateSource = 'active' | 'draft' | 'version';
 
@@ -402,7 +401,13 @@ export async function simulate(
   phoneNumber: string,
   content: string,
   state?: SimulateState,
-  options?: { source?: SimulateSource; flowId?: string; versionId?: string },
+  options?: {
+    source?: SimulateSource;
+    flowId?: string;
+    versionId?: string;
+    /** ISO 8601 — hora a la que se simula el mensaje, para probar el gate de horario de atención (Fase 4). */
+    simulateAt?: string;
+  },
 ): Promise<SimulateResult> {
   return apiFetch<SimulateResult>('POST', '/api/admin/simulate', {
     tenantId,
@@ -413,6 +418,7 @@ export async function simulate(
     ...(options?.source ? { source: options.source } : {}),
     ...(options?.flowId ? { flowId: options.flowId } : {}),
     ...(options?.versionId ? { versionId: options.versionId } : {}),
+    ...(options?.simulateAt ? { simulateAt: options.simulateAt } : {}),
   });
 }
 
