@@ -392,8 +392,25 @@ export class FlowInterpreter {
     case 'service_directory_match':
       return this.serviceDirectoryMatcher.match(content, tenantConfig.serviceDirectory) !== null;
 
-    case 'catalog_found':
-      return (extra?.catalogMatch ?? null) !== null;
+    case 'catalog_found': {
+      const match = extra?.catalogMatch ?? null;
+      if (match === null) return false;
+      // DEC-03 (auditoría 2026-08-26, hallazgo B-04): un producto marcado
+      // como servicio (unit_type='service', ya soportado por el CHECK de la
+      // migración 011) cede el paso al directorio de servicios SI éste
+      // tiene una respuesta real configurada para el mismo mensaje. Un
+      // servicio con precio escalonado (ej. "engargolado hasta 100 hojas
+      // $35, de 100-200 $50") no debe contestarse con el precio unitario
+      // plano del POS cuando el operador ya redactó la explicación completa
+      // en el panel. Si el directorio no tiene nada para este mensaje, el
+      // producto igual gana — mejor una respuesta real que "no entendí".
+      if (match.unitType === 'service') {
+        const hasServiceAnswer =
+          this.serviceDirectoryMatcher.match(content, tenantConfig.serviceDirectory) !== null;
+        if (hasServiceAnswer) return false;
+      }
+      return true;
+    }
 
     case 'catalog_not_found':
       return (extra?.catalogMatch ?? null) === null;

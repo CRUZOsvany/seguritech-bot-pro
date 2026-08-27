@@ -58,7 +58,7 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | B-01 | Ranking de búsqueda | 🔵 | Ya resuelto en PR #61 (620f166), antes de esta sesión |
 | B-02 | Sin desambiguación multi-match | ⬜ | Depende de B-01 (ya listo) |
 | B-03 | `service_directory_match` en `bienvenida` | 🔵 | Fallback ya resuelto en PR #62 (c60df86). DEC-04 (dinámico vs estático) sigue abierta, es mejora, no bug |
-| B-04 | Prioridad catálogo vs servicios | ❓ | Esperando DEC-03 |
+| B-04 | Prioridad catálogo vs servicios | ✅ ejecutado esta sesión — DEC-03 = condicional por categoría. `pos_products.unit_type='service'` (ya soportado por el CHECK de la migración 011, sin schema nuevo) cede el paso a `service_directory_match` SI el directorio tiene respuesta real; si no, el producto igual gana. 3 tests nuevos, `FlowInterpreter.serviceVsCatalogPriority.test.ts`. Confirmado con datos reales: `papeleria_demo_inventario_completo.csv` ya tiene `SRV-0005,Engargolado Tamaño Carta,...,service` |
 | B-05 | Sinónimos por giro | 🔵 | Confirmado cerrado, ya lo decía la auditoría |
 
 ### Grupo C — Deuda del motor
@@ -72,14 +72,14 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | C-06 | Sin expiración de sesión | ❓ esperando DEC-07 |
 | C-07 | Sin leído/"escribiendo" | ⬜ bloqueado por A-01 |
 | C-08 | Escape words hardcodeadas | ⬜ |
-| C-09 | Todo termina en humano | ❓ **la más importante — esperando DEC-01** |
+| C-09 | Todo termina en humano | ✅ **DEC-01 = A, sigue escalando siempre.** Confirmado como decisión de producto, no como bug — sin código a ejecutar. |
 | C-10 | `IntentRouterPort` huérfano | 🔵 informativo, sin acción |
 
 ### Grupo D — Deuda técnica backend
 | ID | Título | Estado |
 |---|---|---|
 | D-01 | Caché de TenantConfig no se invalida | ✅ ejecutado esta sesión — alcance real era más chico de lo que sugería la auditoría: solo `bot_configuration` (PATCH /tenants/:id) y `tenant_service_directory` están cacheados en TenantConfig; `pos_products`/catálogo NUNCA pasaban por esta caché (se consultan en vivo), así que no necesitaban invalidación. `AssignMoldeUseCase` ya invalidaba (sin cambios ahí). 5 tests nuevos, `adminCacheInvalidation.test.ts` |
-| D-02 | POS sin endpoints de escritura | ❓ esperando DEC-09 |
+| D-02 | POS sin endpoints de escritura | ✅ **DEC-09 = No.** Diferido explícitamente a Fase 2, ver §4 Ola 4 de la auditoría original — no se toca hasta después del primer cliente pagando solo con el bot. |
 | D-03 | `/simulate persist:true` sin audit log | ⬜ |
 | D-04 | Rate limit global estrangula webhook | ✅ ejecutado esta sesión — `skip` agregado al limitador global para excluir `/webhook`, que ahora solo lo gobierna el limitador dedicado (1000/min). 2 tests nuevos, `webhookRateLimitExclusion.test.ts` |
 | D-05 | Cobertura audit log 27/29 | = D-03, ver ahí |
@@ -91,7 +91,7 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | ID | Título | Estado |
 |---|---|---|
 | E-01 | Cero tests frontend | ⬜ esperando DEC-11 |
-| E-02 | POS PWA no existe | = D-02, ver DEC-09 |
+| E-02 | POS PWA no existe | = D-02, resuelta vía DEC-09 (diferido a Fase 2) |
 | E-03 | Sin CRUD de catálogo producto a producto | ⬜ |
 
 ### Grupo F — Higiene
@@ -99,21 +99,21 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 |---|---|---|
 | F-01 | Archivos nombre corrupto en `docs/archive/` | 🔵 no reproducible en este entorno |
 | F-02 | `supabase/` raíz sin gitignore | ✅ ejecutado esta sesión — `.gitignore` actualizado, `git rm --cached` de los 2 archivos (estaban tracked, no solo sin ignorar) |
-| F-03 | Borrar `docs/archive/` completo | ❓ esperando confirmación |
+| F-03 | Borrar `docs/archive/` completo | ✅ ejecutado esta sesión — 22 archivos borrados (`git rm -r`), historial completo sigue en `git log`. `docs/INDEX.md` actualizado (ya no enlaza a `archive/`) |
 | F-04 | Limpiar ramas locales mergeadas | ✅ ejecutado esta sesión — 14 ramas confirmadas mergeadas (`git merge-base --is-ancestor`) borradas con `git branch -d` (rechaza cualquiera no mergeada, red de seguridad extra) |
 
 ### Decisiones (Sección 3 de la auditoría original)
 | # | Decisión | Estado |
 |---|---|---|
-| DEC-01 | ¿Bot cotiza y cierra? | ❓ |
-| DEC-02 | ¿Carrito multi-producto en V1? | ❓ |
-| DEC-03 | Prioridad catálogo vs servicios | ❓ **preguntada esta sesión** |
+| DEC-01 | ¿Bot cotiza y cierra? | ✅ **A: sigue escalando siempre.** Status quo, sin código nuevo requerido. C-09 queda resuelta como decisión (no como bug) — el flow actual ya hace esto. C-01 (motor de cálculo) pierde su urgencia de "requisito para cerrar" pero puede seguir teniendo valor para mejorar la calidad de la alerta al dueño; queda como mejora futura, no bloqueante. |
+| DEC-02 | ¿Carrito multi-producto en V1? | Sin decidir explícitamente — de baja prioridad ahora que DEC-01=A (no hay checkout que requiera carrito) |
+| DEC-03 | Prioridad catálogo vs servicios | ✅ **Condicional por categoría** — implementado, ver B-04 |
 | DEC-04 | `menu_servicios` estático/dinámico | ❓ |
 | DEC-05 | Desempate de ranking | 🔵 **ya resuelto en código de forma distinta a la propuesta** — ver nota abajo |
 | DEC-06 | Prioridad de transiciones | ❓ |
 | DEC-07 | TTL de sesión | ❓ |
 | DEC-08 | Delay artificial entre mensajes | ❓ |
-| DEC-09 | ¿POS en V1 comercial? | ❓ |
+| DEC-09 | ¿POS en V1 comercial? | ✅ **No — bot primero, POS fase 2.** Sin código a ejecutar ahora; D-02/E-02 quedan diferidos explícitamente. |
 | DEC-10 | SKUs mínimos para lanzar | ❓ |
 | DEC-11 | Alcance de tests frontend | ❓ |
 | DEC-12 | ¿Rubros médico/farmacia en V1? | ❓ |
@@ -134,4 +134,4 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 
 | Fecha | Cambio |
 |---|---|
-| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), D-07 (ya resuelto, no reproducible), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real). Ejecutados sin necesidad de decisión de negocio, commit `2f0670a` (rama `chore/auditoria-2026-08-26-ola-0`): D-06 (documentar tabla huérfana), F-02 (gitignore + destrackear `supabase/.branches` y `.temp`), F-04 (14 ramas locales mergeadas borradas). Ejecutados con tests nuevos, mismo día, siguiente commit: D-04 (rate limit del webhook, `webhookRateLimitExclusion.test.ts`) y D-01 (invalidación de caché de TenantConfig en `PATCH /tenants/:id` con `bot_configuration` y en las 3 mutaciones de `service-directory`, `adminCacheInvalidation.test.ts`). Suite completa: 41 suites, 303/303, typecheck limpio. Pendiente de Cris: aplicar migración 019 en Supabase Dashboard, y las decisiones DEC-01/02/03/04/06/07/08/09/10/11/12/14 + confirmar F-03. |
+| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), D-07 (ya resuelto, no reproducible), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real, **sigue pendiente que Cris la aplique en el SQL Editor**). Ejecutados sin necesidad de decisión de negocio, commit `2f0670a` (rama `chore/auditoria-2026-08-26-ola-0`): D-06 (documentar tabla huérfana), F-02 (gitignore + destrackear `supabase/.branches` y `.temp`), F-04 (14 ramas locales mergeadas borradas). Commit `46433f2`: D-04 (rate limit del webhook) y D-01 (invalidación de caché de TenantConfig). Cris decidió DEC-01=A (bot sigue escalando siempre, resuelve C-09 como decisión no como bug), DEC-09=No (POS diferido a Fase 2, resuelve D-02/E-02), DEC-03=condicional por categoría, F-03=borrar `docs/archive/`. Ejecutados en este mismo turno: F-03 (22 archivos borrados, `docs/INDEX.md` actualizado) y B-04/DEC-03 (prioridad `unit_type='service'` sobre catálogo en `FlowInterpreter.ts`, sin migración nueva porque el schema ya soportaba `unit_type='service'` desde la migración 011; confirmado contra datos reales del CSV demo — `SRV-0005 Engargolado`). Suite completa: 42 suites, 306/306, typecheck limpio. Pendiente de Cris: aplicar migración 019, y las decisiones DEC-02/04/06/07/08/10/11/12/14. |
