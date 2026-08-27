@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type pino from 'pino';
 import { z } from 'zod';
-import type { ServiceDirectoryRepository } from '@/domain/ports';
+import type { ServiceDirectoryRepository, TenantConfigPort } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
 import { ctx } from './helpers';
@@ -58,10 +58,17 @@ const UpdateEntrySchema = z.object({
 
 export function createServiceDirectoryRouter(params: {
   serviceDirectoryRepository: ServiceDirectoryRepository;
+  /**
+   * D-01 (auditoría 2026-08-26): serviceDirectory es parte del TenantConfig
+   * cacheado (TTL 5 min). Sin invalidar tras cada mutación, una entrada
+   * nueva/editada/borrada desde el panel tardaba hasta 5 min en reflejarse
+   * en lo que el bot realmente contesta.
+   */
+  tenantConfigPort?: TenantConfigPort;
   audit: AuditLogService;
   logger: pino.Logger;
 }): Router {
-  const { serviceDirectoryRepository, audit, logger } = params;
+  const { serviceDirectoryRepository, tenantConfigPort, audit, logger } = params;
   const router = Router();
 
   // --------------------------------------------------------------------------
@@ -111,6 +118,8 @@ export function createServiceDirectoryRouter(params: {
           orden: parsed.data.orden ?? 0,
         });
 
+        tenantConfigPort?.invalidate(tenantId);
+
         audit.log({
           ...c,
           action: 'service_directory.create',
@@ -149,6 +158,8 @@ export function createServiceDirectoryRouter(params: {
       try {
         const updated = await serviceDirectoryRepository.update(tenantId, entryId, parsed.data);
 
+        tenantConfigPort?.invalidate(tenantId);
+
         audit.log({
           ...c,
           action: 'service_directory.update',
@@ -183,6 +194,8 @@ export function createServiceDirectoryRouter(params: {
 
       try {
         await serviceDirectoryRepository.delete(tenantId, entryId);
+
+        tenantConfigPort?.invalidate(tenantId);
 
         audit.log({
           ...c,

@@ -14,6 +14,7 @@ import type { PosProductRepository } from '@/domain/ports/pos/PosProductReposito
 import type { PosCategoryRepository } from '@/domain/ports/pos/PosCategoryRepository';
 import type { ImportPosProductsUseCase } from '@/domain/use-cases/ImportPosProductsUseCase';
 import type { ServiceDirectoryRepository } from '@/domain/ports';
+import type { TenantConfigPort } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Mw } from './admin/helpers';
@@ -57,6 +58,15 @@ export function createAdminRouter(params: {
   posCategoryRepository: PosCategoryRepository;
   importPosProductsUseCase: ImportPosProductsUseCase;
   serviceDirectoryRepository: ServiceDirectoryRepository;
+  /**
+   * D-01 (auditoría 2026-08-26): opcional para no romper wiring/tests
+   * existentes, pero SIEMPRE presente en Bootstrap real. Cuando está, se
+   * invalida la caché in-process de TenantConfig (node-cache, TTL 5 min en
+   * SupabaseTenantConfigService) tras cada mutación de `bot_configuration`
+   * o del directorio de servicios — sin esto, el panel "guardaba" cambios
+   * que el bot seguía sin ver hasta que expirara el TTL.
+   */
+  tenantConfigPort?: TenantConfigPort;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -78,6 +88,7 @@ export function createAdminRouter(params: {
     posCategoryRepository,
     importPosProductsUseCase,
     serviceDirectoryRepository,
+    tenantConfigPort,
     audit,
     supabase,
     logger,
@@ -113,7 +124,7 @@ export function createAdminRouter(params: {
     }),
   );
   router.use(
-    createServiceDirectoryRouter({ serviceDirectoryRepository, audit, logger }),
+    createServiceDirectoryRouter({ serviceDirectoryRepository, tenantConfigPort, audit, logger }),
   );
   router.use(
     createTenantsRouter({
@@ -126,6 +137,7 @@ export function createAdminRouter(params: {
       botFlowRepository,
       messagesRepository,
       userRepository,
+      tenantConfigPort,
       audit,
       supabase,
       logger,

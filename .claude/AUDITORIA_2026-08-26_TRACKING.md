@@ -78,10 +78,10 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 ### Grupo D — Deuda técnica backend
 | ID | Título | Estado |
 |---|---|---|
-| D-01 | Caché de TenantConfig no se invalida | ⬜ siguiente a ejecutar |
+| D-01 | Caché de TenantConfig no se invalida | ✅ ejecutado esta sesión — alcance real era más chico de lo que sugería la auditoría: solo `bot_configuration` (PATCH /tenants/:id) y `tenant_service_directory` están cacheados en TenantConfig; `pos_products`/catálogo NUNCA pasaban por esta caché (se consultan en vivo), así que no necesitaban invalidación. `AssignMoldeUseCase` ya invalidaba (sin cambios ahí). 5 tests nuevos, `adminCacheInvalidation.test.ts` |
 | D-02 | POS sin endpoints de escritura | ❓ esperando DEC-09 |
 | D-03 | `/simulate persist:true` sin audit log | ⬜ |
-| D-04 | Rate limit global estrangula webhook | ⬜ siguiente a ejecutar |
+| D-04 | Rate limit global estrangula webhook | ✅ ejecutado esta sesión — `skip` agregado al limitador global para excluir `/webhook`, que ahora solo lo gobierna el limitador dedicado (1000/min). 2 tests nuevos, `webhookRateLimitExclusion.test.ts` |
 | D-05 | Cobertura audit log 27/29 | = D-03, ver ahí |
 | D-06 | `tenant_knowledge_chunks` tabla sin uso | ✅ ejecutado esta sesión — nota agregada al header de `018_tenant_knowledge_base.sql` explicando que está reservada, no huérfana por accidente |
 | D-07 | `baseUrl` deprecado | 🔵 ya estaba resuelto — `tsconfig.json` ya tenía `"ignoreDeprecations": "5.0"`; `tsc --noEmit` corre limpio, sin TS5101. Hallazgo de la auditoría no reproducible hoy |
@@ -134,4 +134,4 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 
 | Fecha | Cambio |
 |---|---|
-| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real). Ejecutados sin necesidad de decisión de negocio: D-07 (baseUrl), D-06 (documentar tabla huérfana), F-02 (gitignore supabase/), F-04 (limpieza de ramas locales mergeadas). Pendiente de Cris: aplicar migración 019 en Supabase Dashboard, y las decisiones DEC-01/02/03/04/06/07/08/09/10/11/12/14 + confirmar F-03. |
+| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), D-07 (ya resuelto, no reproducible), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real). Ejecutados sin necesidad de decisión de negocio, commit `2f0670a` (rama `chore/auditoria-2026-08-26-ola-0`): D-06 (documentar tabla huérfana), F-02 (gitignore + destrackear `supabase/.branches` y `.temp`), F-04 (14 ramas locales mergeadas borradas). Ejecutados con tests nuevos, mismo día, siguiente commit: D-04 (rate limit del webhook, `webhookRateLimitExclusion.test.ts`) y D-01 (invalidación de caché de TenantConfig en `PATCH /tenants/:id` con `bot_configuration` y en las 3 mutaciones de `service-directory`, `adminCacheInvalidation.test.ts`). Suite completa: 41 suites, 303/303, typecheck limpio. Pendiente de Cris: aplicar migración 019 en Supabase Dashboard, y las decisiones DEC-01/02/03/04/06/07/08/09/10/11/12/14 + confirmar F-03. |

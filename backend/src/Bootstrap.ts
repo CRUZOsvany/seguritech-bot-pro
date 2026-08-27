@@ -279,6 +279,7 @@ export class Bootstrap {
         posCategoryRepository,
         importPosProductsUseCase,
         serviceDirectoryRepository,
+        tenantConfigPort: tenantConfigService, // D-01, auditoría 2026-08-26
         audit: auditLog,
         supabase,
         logger: this.logger,
