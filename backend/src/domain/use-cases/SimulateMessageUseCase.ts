@@ -6,6 +6,7 @@ import type {
   BotFlowRepository,
 } from '@/domain/ports';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
+import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { Message, User, UserState } from '@/domain/entities';
 import type { BotFlow } from '@/domain/entities/flow';
 import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchema';
@@ -44,6 +45,13 @@ export interface SimulateInput {
     currentNodeId?: string;
     context?: Record<string, unknown>;
   };
+  /**
+   * Fase 4 (reconexión del Designer/Simulador): ISO 8601 opcional — hora a
+   * la que se simula el mensaje, para probar el gate de horario de atención
+   * sin esperar a que sea de noche de verdad. Ausente ⇒ sin gate, mismo
+   * comportamiento que siempre (el simulador no respeta horarios).
+   */
+  simulateAt?: string;
 }
 
 export interface SimulateResult {
@@ -71,6 +79,7 @@ export class SimulateMessageUseCase {
     private readonly tenantConfigPort: TenantConfigPort,
     private readonly botFlowRepository: BotFlowRepository,
     private readonly flowInterpreter: FlowInterpreter,
+    private readonly businessHoursService: BusinessHoursService,
     private readonly logger: pino.Logger,
   ) {}
 
@@ -139,6 +148,34 @@ export class SimulateMessageUseCase {
     const user = persist
       ? await this.getOrCreatePersistentUser(tenantId, phoneNumber)
       : this.makeEphemeralUser(tenantId, phoneNumber, input.state);
+
+    // 3.5. Fase 4: gate de horario de atención, copiado tal cual del punto de
+    // inserción real en BotController (mismo config.outOfHoursMessage, misma
+    // condición isOpenNow). Solo aplica si el caller mandó `simulateAt` — el
+    // panel lo manda cuando el operador activa "simular a esta hora"; sin
+    // eso, el simulador no gatea por horario (comportamiento de siempre).
+    // A diferencia de BotController, aquí no hay concepto de "dueño" que se
+    // salte el gate — el simulador es una herramienta de prueba, no un canal
+    // real de mensajes.
+    if (input.simulateAt) {
+      const simulatedNow = new Date(input.simulateAt);
+      const hoursCheck = this.businessHoursService.isOpenNow(
+        {
+          horarioSemana: tenantConfig.horarioSemana,
+          horarioSabado: tenantConfig.horarioSabado,
+          abreDomingo: tenantConfig.abreDomingo,
+        },
+        simulatedNow,
+      );
+      if (!hoursCheck.isOpen) {
+        return {
+          outputs: [{ kind: 'text', text: tenantConfig.outOfHoursMessage }],
+          nextNodeId: user.currentNodeId ?? '',
+          context: user.context ?? {},
+          flowEnded: false,
+        };
+      }
+    }
 
     // 4. Construir Message
     const message: Message = {

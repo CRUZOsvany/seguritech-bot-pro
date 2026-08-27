@@ -15,6 +15,7 @@ import {
   BotFlowRepository,
 } from '@/domain/ports';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
+import type { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import type { TenantConfig } from '@/domain/entities';
 import type { BotFlow } from '@/domain/entities/flow';
 
@@ -34,6 +35,7 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
   let tenantConfigPort: jest.Mocked<TenantConfigPort>;
   let botFlowRepository: jest.Mocked<BotFlowRepository>;
   let flowInterpreter: jest.Mocked<FlowInterpreter>;
+  let businessHoursService: jest.Mocked<BusinessHoursService>;
   let useCase: SimulateMessageUseCase;
 
   beforeEach(() => {
@@ -72,11 +74,20 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
       }),
     } as unknown as jest.Mocked<FlowInterpreter>;
 
+    // Ninguno de los tests de este archivo manda `simulateAt` — el gate de
+    // horario (Fase 4) queda sin ejercitar a propósito, cubierto aparte en
+    // SimulateMessageUseCase.businessHours.test.ts. Mock vacío, no debe
+    // llamarse nunca desde aquí.
+    businessHoursService = {
+      isOpenNow: jest.fn(),
+    } as unknown as jest.Mocked<BusinessHoursService>;
+
     useCase = new SimulateMessageUseCase(
       userRepository,
       tenantConfigPort,
       botFlowRepository,
       flowInterpreter,
+      businessHoursService,
       logger,
     );
   });
