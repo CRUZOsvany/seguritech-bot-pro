@@ -35,7 +35,7 @@ seguritech-bot-pro/
 │   │   ├── panel/                      # HTML del cuarto de mandos (index/new/tenant/messages)
 │   │   ├── simulator/                  # HTML del simulador WhatsApp (iPhone frame + chat)
 │   │   └── app/                        # SPA React build de Vite
-│   ├── supabase/migrations/            # 001 → 017
+│   ├── supabase/migrations/            # 001 → 020
 │   └── package.json
 ├── frontend/                           # Vite + React 19 + TanStack + Tailwind 4
 ├── docker-compose.yml                  # solo servicio `backend`
@@ -82,7 +82,7 @@ npm run dev
 | http://127.0.0.1:3001/simulator/&lt;uuid&gt; | Simulador WhatsApp del tenant |
 | http://127.0.0.1:3001/health | Liveness check |
 | http://127.0.0.1:3001/webhook | Webhook Meta (verify + receive) |
-| http://127.0.0.1:3001/api/admin/* | API admin (15 rutas) |
+| http://127.0.0.1:3001/api/admin/* | API admin (modularizada en sub-routers: flows, meta, services, tenants, pos-catalog, service-directory, audit-log) |
 
 ---
 
@@ -192,14 +192,18 @@ Estado actual:
 - `008_bot_flow_versions.sql` — versionado de flows + rollback (Sprint H)
 - `009_admin_sessions.sql` — denylist JWT + intentos de login (lockout)
 - `010_admin_users_2fa.sql` — columnas 2FA TOTP + `must_change_password`
-- `011_pos_bootstrap.sql` — bootstrap POS
-- `012_state_machine_tenants.sql` — FSM de tenants
-- `013_admin_audit_log.sql` — audit log append-only
-- `014_bot_flow_versions.sql` — versionado de flows + rollback
-- `015_admin_sessions.sql` — denylist JWT + lockout
+- `011_pos_module_bootstrap.sql` — bootstrap POS (Sprint 5.1a)
+- `012_tenant_services.sql` — capa modular de servicios (`tenant_services`, fuente única de verdad de qué tiene contratado cada tenant)
+- `013_bot_flows_channel.sql` — columna `channel` en `bot_flows` (flows separados por WhatsApp/Messenger)
+- `014_backfill_services.sql` — backfill de tenants existentes a la capa de servicios (012)
+- `015_bot_flows_draft.sql` — `draft_json`/`draft_updated_at` en `bot_flows` para el Bot Designer
 - `016_whatsapp_flows.sql` — soporte de flows WhatsApp
 - `017_human_handoff_pause.sql` — pausa humana del bot
+- `018_tenant_knowledge_base.sql` — `tenant_knowledge_chunks` (base de conocimiento, Secretaria Digital Fase 1, ADR-014)
+- `019_bot_users_meta_compliance.sql` — ventana de servicio 24h + opt-out real en `bot_users`
+- `020_tenant_service_directory.sql` — directorio data-driven de servicios heterogéneos por tenant
 - `seed_admin_user.sql` — seed del primer super_admin (manual, ver bootstrap arriba)
+- `seed_pos_papeleria_pilot.sql` — seed de catálogo POS piloto (papelería)
 
 ---
 

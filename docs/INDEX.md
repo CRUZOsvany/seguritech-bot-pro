@@ -27,7 +27,7 @@
 - [Cómo diseñar un chatbot de WhatsApp](whatsapp/DISENO_DE_CHATBOTS.md) — discovery, patrones anti-loop/anti-dato-basura, node types, cumplimiento Meta, QA. Caso de estudio: cerrajerías.
 
 ## Deploy
-- [Pasos de deploy](deployment/DEPLOYMENT_STEPS.md)
+- [Runbook de producción](deployment/RUNBOOK_PRODUCCION.md)
 
 ## Tests
 - [Quick start](testing/QUICK_START_TESTS.md)
