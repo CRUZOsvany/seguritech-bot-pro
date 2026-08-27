@@ -1,5 +1,8 @@
-import { createLazyRoute } from '@tanstack/react-router';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { createLazyRoute, Link } from '@tanstack/react-router';
+import {
+  AlertCircle, Loader2, Workflow, ScrollText, ListTree,
+  MessageCircle, MessageSquare, ShoppingCart,
+} from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTenant } from '../hooks/use-tenant';
@@ -91,6 +94,43 @@ function TenantDetailPage() {
           {GIRO_LABELS[tenant.giro] ?? tenant.giro} ·{' '}
           <code className="text-[10px]">{tenant.id.slice(0, 8)}…</code>
         </p>
+      </div>
+
+      {/* Accesos directos — el Designer/simulador, el guion, el directorio de
+          servicios, etc. ya existen y están registrados en router.tsx; antes
+          solo se llegaba a través de Servicios → Configurar → sub-tabs. No
+          reemplaza esos tabs, solo evita el rodeo. */}
+      <div className="flex flex-wrap gap-2">
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/designer" params={{ id: tenant.id }}>
+            <Workflow className="mr-1 h-3 w-3" /> Diseñador y simulador
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/guion" params={{ id: tenant.id }}>
+            <ScrollText className="mr-1 h-3 w-3" /> Guion
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/service-directory" params={{ id: tenant.id }}>
+            <ListTree className="mr-1 h-3 w-3" /> Directorio de servicios
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/whatsapp" params={{ id: tenant.id }}>
+            <MessageCircle className="mr-1 h-3 w-3" /> WhatsApp
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/pos" params={{ id: tenant.id }}>
+            <ShoppingCart className="mr-1 h-3 w-3" /> POS
+          </Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/tenants/$id/messages" params={{ id: tenant.id }}>
+            <MessageSquare className="mr-1 h-3 w-3" /> Mensajes
+          </Link>
+        </Button>
       </div>
 
       <Tabs defaultValue="services" className="w-full">
