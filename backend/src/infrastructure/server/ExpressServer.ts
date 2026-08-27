@@ -153,6 +153,12 @@ export class ExpressServer {
       }),
     );
 
+    // D-04 (auditoría 2026-08-26): este limitador global corría ANTES del
+    // específico de /webhook de abajo y no lo excluía — el techo real del
+    // webhook de Meta era 100/min, no los 1000/min que el limitador de abajo
+    // sugiere. Con `skip` aquí, /webhook queda gobernado solo por el
+    // limitador dedicado (1000/min); el resto de rutas (incluida /api/*)
+    // sigue en 100/min.
     this.app.use(
       rateLimit({
         windowMs: 60 * 1000,
@@ -160,6 +166,7 @@ export class ExpressServer {
         message: 'Demasiadas solicitudes, intenta más tarde',
         standardHeaders: true,
         legacyHeaders: false,
+        skip: (req) => req.path.startsWith('/webhook'),
       }),
     );
 

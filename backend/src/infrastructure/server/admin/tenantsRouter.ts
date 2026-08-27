@@ -9,6 +9,7 @@ import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantReposi
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MessagesRepository, UserRepository } from '@/domain/ports';
+import type { TenantConfigPort } from '@/domain/ports';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
@@ -30,6 +31,8 @@ export function createTenantsRouter(params: {
   botFlowRepository: BotFlowRepository;
   messagesRepository: MessagesRepository;
   userRepository: UserRepository;
+  /** D-01 (auditoría 2026-08-26): ver nota en AdminRouter.ts. */
+  tenantConfigPort?: TenantConfigPort;
   audit: AuditLogService;
   supabase: SupabaseClient;
   logger: pino.Logger;
@@ -44,6 +47,7 @@ export function createTenantsRouter(params: {
     botFlowRepository,
     messagesRepository,
     userRepository,
+    tenantConfigPort,
     audit,
     supabase,
     logger,
@@ -178,6 +182,13 @@ export function createTenantsRouter(params: {
     }
     try {
       await tenantRepository.update(id, parsed.data);
+      // D-01 (auditoría 2026-08-26): bot_configuration (guion) es parte del
+      // TenantConfig cacheado (TTL 5 min, SupabaseTenantConfigService). Sin
+      // esto, el panel "guardaba" el guion nuevo pero el bot seguía
+      // respondiendo el viejo hasta que expirara el TTL.
+      if (parsed.data.bot_configuration) {
+        tenantConfigPort?.invalidate(id);
+      }
       audit.log({
         ...c,
         action: 'tenant.update',

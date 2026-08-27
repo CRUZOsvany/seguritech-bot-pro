@@ -9,6 +9,13 @@
 -- aislamiento por tenant_id (crear docs/adr/ADR-014 antes de mergear código
 -- que use esta tabla, según regla 6 del plan).
 --
+-- ESTADO (nota agregada 2026-08-26, hallazgo D-06 de la auditoría del mismo
+-- día): tabla RESERVADA, sin código que la use todavía (cero entidad, puerto,
+-- repositorio o router en backend/src). No es una tabla huérfana por
+-- accidente — el plan de Secretaria Digital que la necesita está PAUSADO
+-- deliberadamente desde 2026-08-20 (ver la nota de pausa al inicio de
+-- SEGURITECH_AI_SECRETARIA_PLAN.md). Se retoma cuando ese plan se reabra.
+--
 -- PRERREQUISITO: extensión pgvector. Si `create extension vector` falla con
 -- "extension \"vector\" is not available", habilítala primero desde
 -- Supabase Dashboard → Database → Extensions → busca "vector" → Enable,

@@ -72,3 +72,8 @@ _check_zip/
 .cache/
 .npm/
 .pm2/
+
+# Supabase CLI local state (F-02, auditoría 2026-08-26) — solo metadata de la
+# CLI en esta máquina, no migraciones reales (esas viven en backend/supabase/)
+supabase/.branches/
+supabase/.temp/

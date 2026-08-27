@@ -36,4 +36,4 @@
 
 ---
 
-*Documentación histórica (sprints anteriores, troubleshooting de issues ya resueltos, primeras versiones del adapter Meta) en [`archive/`](archive/) — referencia bitácora, no refleja el estado actual del código.*
+*`docs/archive/` (documentación histórica de sprints anteriores) se borró el 2026-08-26 (F-03, auditoría del mismo día) — el historial completo sigue disponible en `git log`/`git show` para cualquier archivo que se necesite consultar.*
