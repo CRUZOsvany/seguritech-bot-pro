@@ -4,6 +4,18 @@ import { config } from '@/config/env';
 
 /** TTL de la pausa por handoff humano, en ms. Default global 48h (env HANDOFF_PAUSE_MINUTES, D3). */
 const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
+
+/**
+ * DEC-07 (auditoría 2026-08-26): TTL de sesión conversacional a media
+ * captura. Un cliente que quedó en "¿cuántas piezas quieres?" y no vuelve a
+ * escribir hasta días después no debe recibir esa misma pregunta a un
+ * "buenos días" nuevo. 2h, no 6h — una conversación de WhatsApp está viva
+ * minutos u horas, no medio día; con 6h el caso más común (pregunta a las
+ * 2pm, vuelve a las 7pm) seguía cayendo en el bug que esto arregla.
+ */
+const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+
+const SESSION_EXPIRED_NOTICE = 'Pasó un rato desde tu último mensaje, empezamos de nuevo 🙂';
 import { Message, User, UserState } from '@/domain/entities';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
 import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
@@ -169,6 +181,42 @@ export class BotController {
           return null;
         }
 
+        // Gate de expiración de sesión conversacional (DEC-07, auditoría
+        // 2026-08-26). Solo aplica a media captura: un usuario nuevo o que
+        // terminó su flow (currentNodeId undefined o 'end') ya arranca
+        // limpio y en silencio vía el "Caso 2" de FlowInterpreter — avisar
+        // "empezamos de nuevo" ahí no tendría sentido (no había nada
+        // empezado). Va DESPUÉS del gate de handoff humano: si el dueño
+        // está atendiendo manualmente, este gate no debe resetear nada por
+        // debajo suyo.
+        let effectiveUser = user;
+        const midFlow = !!user.currentNodeId && user.currentNodeId !== 'end';
+        if (midFlow && user.lastInboundAt) {
+          const ttlExpired =
+            message.timestamp.getTime() - user.lastInboundAt.getTime() > SESSION_TTL_MS;
+          const closedBetween = this.businessHoursService.hadClosureBetween(
+            {
+              horarioSemana: config.horarioSemana,
+              horarioSabado: config.horarioSabado,
+              abreDomingo: config.abreDomingo,
+            },
+            user.lastInboundAt,
+            message.timestamp,
+          );
+          if (ttlExpired || closedBetween) {
+            await this.notificationPort.sendMessage(tenantId, from, SESSION_EXPIRED_NOTICE);
+            // Limpia currentNodeId/context de verdad (mismo patrón que la
+            // palabra de escape en FlowInterpreter) para que el "Caso 2" del
+            // interpreter arranque el flow desde start_node_id, y para que
+            // {{variables}} de la sesión vieja no se filtren en la nueva.
+            effectiveUser = { ...user, currentNodeId: undefined, context: {} };
+            this.logger.info(
+              { tenantId, from, ttlExpired, closedBetween },
+              'Sesión conversacional expirada — reset con aviso',
+            );
+          }
+        }
+
         // Gate de horario de atención (§2.2): fuera de horario, el bot NO
         // ejecuta el flow — solo avisa que está cerrado y no mueve
         // currentNodeId/context, para retomar donde iba cuando reabra. El
@@ -196,15 +244,17 @@ export class BotController {
 
         const result = await this.flowInterpreter.execute({
           flow,
-          user,
+          user: effectiveUser,
           message,
           tenantConfig: config,
         });
 
-        // Persistir nextNodeId + contextUpdates
-        const mergedContext = { ...(user.context ?? {}), ...result.contextUpdates };
+        // Persistir nextNodeId + contextUpdates. Parte de effectiveUser (no
+        // de user): si el gate de arriba reseteó la sesión, el contexto
+        // viejo no debe resucitar aquí.
+        const mergedContext = { ...(effectiveUser.context ?? {}), ...result.contextUpdates };
         await this.userRepository.update({
-          ...user,
+          ...effectiveUser,
           currentNodeId: result.nextNodeId,
           context: mergedContext,
           updatedAt: new Date(),

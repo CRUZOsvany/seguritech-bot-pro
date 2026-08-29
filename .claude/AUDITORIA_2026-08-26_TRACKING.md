@@ -69,7 +69,7 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | C-03 | Orden de transiciones invisible | ❓ esperando DEC-06 |
 | C-04 | `wait_input` sin validar | ⬜ |
 | C-05 | Sin extracción de cantidades | ⬜ |
-| C-06 | Sin expiración de sesión | ❓ esperando DEC-07 |
+| C-06 | Sin expiración de sesión | ✅ ejecutado — DEC-07 con 3 correcciones del owner sobre la propuesta original: TTL 2h (no 6h), aviso condicional (solo a media captura, no en `start_node`/`end`), cierre real del negocio como frontera adicional vía `BusinessHoursService.hadClosureBetween()` (nuevo, sampling cada 15 min), gate después del handoff humano, limpia contexto de verdad. 7 tests en `BotController.sessionTtl.test.ts` + 5 en `BusinessHoursService.test.ts`. Nota: depende de `bot_users.last_inbound_at` (migración 019) — con `lastInboundAt=null` (migración sin aplicar) el gate se salta con seguridad, no truena, ver A-03-bis |
 | C-07 | Sin leído/"escribiendo" | ⬜ bloqueado por A-01 |
 | C-08 | Escape words hardcodeadas | ⬜ |
 | C-09 | Todo termina en humano | ✅ **DEC-01 = A, sigue escalando siempre.** Confirmado como decisión de producto, no como bug — sin código a ejecutar. |
@@ -106,19 +106,19 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | # | Decisión | Estado |
 |---|---|---|
 | DEC-01 | ¿Bot cotiza y cierra? | ✅ **A: sigue escalando siempre.** Status quo, sin código nuevo requerido. C-09 queda resuelta como decisión (no como bug) — el flow actual ya hace esto. C-01 (motor de cálculo) pierde su urgencia de "requisito para cerrar" pero puede seguir teniendo valor para mejorar la calidad de la alerta al dueño; queda como mejora futura, no bloqueante. |
-| DEC-02 | ¿Carrito multi-producto en V1? | Sin decidir explícitamente — de baja prioridad ahora que DEC-01=A (no hay checkout que requiera carrito) |
+| DEC-02 | ¿Carrito multi-producto en V1? | ✅ **Sí** — pendiente de implementar (Ola 2, C-01). Con DEC-01=A el valor es juntar varios artículos en UNA alerta estructurada al dueño, no cerrar la venta. |
 | DEC-03 | Prioridad catálogo vs servicios | ✅ **Condicional por categoría** — implementado, ver B-04 |
-| DEC-04 | `menu_servicios` estático/dinámico | ❓ |
+| DEC-04 | `menu_servicios` estático/dinámico | ✅ **Dinámico** — decidido, pendiente de implementar (no hecho todavía) |
 | DEC-05 | Desempate de ranking | 🔵 **ya resuelto en código de forma distinta a la propuesta** — ver nota abajo |
-| DEC-06 | Prioridad de transiciones | ❓ |
-| DEC-07 | TTL de sesión | ❓ |
-| DEC-08 | Delay artificial entre mensajes | ❓ |
+| DEC-06 | Prioridad de transiciones | ✅ **Scoring automático por especificidad** — decidido, pendiente de implementar (no hecho todavía) |
+| DEC-07 | TTL de sesión | ✅ **ejecutado**, ver C-06 — con 3 correcciones del owner sobre la propuesta original (TTL 2h no 6h, aviso condicional, cierre de negocio como frontera) |
+| DEC-08 | Delay artificial entre mensajes | ✅ **Sí, 600-1200ms** — decidido, pendiente de implementar. Bloqueado por A-01 para probarse contra número real. |
 | DEC-09 | ¿POS en V1 comercial? | ✅ **No — bot primero, POS fase 2.** Sin código a ejecutar ahora; D-02/E-02 quedan diferidos explícitamente. |
-| DEC-10 | SKUs mínimos para lanzar | ❓ |
+| DEC-10 | SKUs mínimos para lanzar | ✅ **150** — decisión de negocio, sin código (bloquea A-04, carga real con el cliente) |
 | DEC-11 | Alcance de tests frontend | ❓ |
-| DEC-12 | ¿Rubros médico/farmacia en V1? | ❓ |
+| DEC-12 | ¿Rubros médico/farmacia en V1? | ✅ **Ofrecerlos con guardrail ahora** — pendiente de implementar: rechazar en `flowSchema.ts` categorías de `catalog_items` que permitan cotizar/vender medicamento con receta o lenguaje de diagnóstico para esos 2 giros. No hecho todavía. |
 | DEC-13 | `tenant_knowledge_chunks`: construir o documentar | 🔵 **resuelta de facto: documentada** (D-06 ejecutado) |
-| DEC-14 | Observabilidad mínima | ❓ |
+| DEC-14 | Observabilidad mínima | ✅ **UptimeRobot + Sentry juntos** — decidido, pendiente de implementar (infraestructura externa, no código de este repo salvo el SDK de Sentry) |
 
 **Nota DEC-05:** el fix real de B-01 (PR #61) NO usó el desempate propuesto por la auditoría (precio ascendente). Usó: 1) match exacto de frase → 2) cuenta de tokens del término presentes en el nombre → 3) cercanía de longitud entre término y nombre normalizado. No hay desempate por precio en absoluto. Si quieres que el desempate final sea por precio ascendente cuando el scoring quede empatado en los 3 niveles, es un cambio pequeño adicional — avisa si lo quieres.
 
@@ -134,4 +134,5 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 
 | Fecha | Cambio |
 |---|---|
-| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), D-07 (ya resuelto, no reproducible), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real, **sigue pendiente que Cris la aplique en el SQL Editor**). Ejecutados sin necesidad de decisión de negocio, commit `2f0670a` (rama `chore/auditoria-2026-08-26-ola-0`): D-06 (documentar tabla huérfana), F-02 (gitignore + destrackear `supabase/.branches` y `.temp`), F-04 (14 ramas locales mergeadas borradas). Commit `46433f2`: D-04 (rate limit del webhook) y D-01 (invalidación de caché de TenantConfig). Cris decidió DEC-01=A (bot sigue escalando siempre, resuelve C-09 como decisión no como bug), DEC-09=No (POS diferido a Fase 2, resuelve D-02/E-02), DEC-03=condicional por categoría, F-03=borrar `docs/archive/`. Ejecutados en este mismo turno: F-03 (22 archivos borrados, `docs/INDEX.md` actualizado) y B-04/DEC-03 (prioridad `unit_type='service'` sobre catálogo en `FlowInterpreter.ts`, sin migración nueva porque el schema ya soportaba `unit_type='service'` desde la migración 011; confirmado contra datos reales del CSV demo — `SRV-0005 Engargolado`). Suite completa: 42 suites, 306/306, typecheck limpio. Pendiente de Cris: aplicar migración 019, y las decisiones DEC-02/04/06/07/08/10/11/12/14. |
+| 2026-08-26 | Documento creado. Verificadas B-01/B-03 (ya resueltas por PR #61/#62, fuera del rango de commits que la auditoría revisó), F-01 (no reproducible en este entorno), D-07 (ya resuelto, no reproducible), A-03 (migración 019 confirmada NO aplicada en Cloud, con impacto identificado en `BotController.ts:115` — degradado a A-03-bis, P0 real, **sigue pendiente que Cris la aplique en el SQL Editor**). Ejecutados sin necesidad de decisión de negocio, commit `2f0670a` (rama `chore/auditoria-2026-08-26-ola-0`): D-06 (documentar tabla huérfana), F-02 (gitignore + destrackear `supabase/.branches` y `.temp`), F-04 (14 ramas locales mergeadas borradas). Commit `46433f2`: D-04 (rate limit del webhook) y D-01 (invalidación de caché de TenantConfig). Cris decidió DEC-01=A (bot sigue escalando siempre, resuelve C-09 como decisión no como bug), DEC-09=No (POS diferido a Fase 2, resuelve D-02/E-02), DEC-03=condicional por categoría, F-03=borrar `docs/archive/`. Ejecutados en este mismo turno: F-03 (22 archivos borrados, `docs/INDEX.md` actualizado) y B-04/DEC-03 (prioridad `unit_type='service'` sobre catálogo en `FlowInterpreter.ts`, sin migración nueva porque el schema ya soportaba `unit_type='service'` desde la migración 011; confirmado contra datos reales del CSV demo — `SRV-0005 Engargolado`). Suite completa: 42 suites, 306/306, typecheck limpio. PR #70 abierto con todo lo anterior. |
+| 2026-08-26 (cont.) | Resto de decisiones recogidas: DEC-02=Sí (carrito), DEC-04=dinámico, DEC-06=scoring automático, DEC-08=sí 600-1200ms, DEC-10=150 SKUs, DEC-12=médico/farmacia con guardrail, DEC-14=UptimeRobot+Sentry. **DEC-07 implementada** con 3 correcciones reales del owner sobre la propuesta original de la auditoría (TTL 2h no 6h, aviso condicional solo a media captura, cierre real del negocio como frontera adicional vía `BusinessHoursService.hadClosureBetween()` nuevo, gate después del handoff humano, limpieza de contexto de verdad) — ver C-06. 12 tests nuevos (`BotController.sessionTtl.test.ts` + `BusinessHoursService.test.ts`). Suite completa: 43 suites, 318/318, typecheck limpio, eslint sin errores nuevos. Quedan sin implementar (decididas, no urgentes): DEC-02 (carrito, Ola 2), DEC-04 (menú dinámico), DEC-06 (scoring), DEC-08 (delay, bloqueado por A-01), DEC-12 (guardrail médico/farmacia). DEC-11 sigue sin preguntarse. |
