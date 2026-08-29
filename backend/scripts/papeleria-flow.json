@@ -74,23 +74,20 @@
     {
       "id": "menu_servicios",
       "type": "send_list",
+      "_comment_menu_servicios": "DEC-04 (auditoría 2026-08-26): sección dinámica desde tenant_service_directory en vez de items estáticos a mano — el operador edita servicios desde el panel sin volver a tocar este JSON. Si el directorio queda vacío, el motor ya transiciona a 'default' (0 items totales), no hace falta un caso especial aquí.",
       "content": {
         "text": "🖨️ ¿Qué servicio necesitas?",
         "button_label": "Ver servicios",
         "sections": [
           {
-            "type": "static",
+            "type": "dynamic",
             "title": "Servicios",
-            "items": [
-              { "id": "Impresión B/N", "title": "Impresión B/N", "description": "$2.00 por hoja" },
-              { "id": "Fotocopia B/N", "title": "Fotocopia B/N", "description": "$1.50 por copia" },
-              { "id": "Engargolado", "title": "Engargolado", "description": "$25.00 tamaño carta" }
-            ]
+            "items_source": "service_directory"
           }
         ]
       },
       "transitions": [
-        { "condition": { "type": "list_item_any", "save_to_context": "servicio_seleccionado" }, "next_node_id": "servicio_captura" },
+        { "condition": { "type": "list_item_any", "save_to_context": "matched_service_id" }, "next_node_id": "servicio_captura" },
         { "condition": { "type": "default" }, "next_node_id": "no_entendi" }
       ]
     },
@@ -98,7 +95,7 @@
       "id": "servicio_captura",
       "type": "wait_input",
       "content": {
-        "prompt": "Perfecto, *{{servicio_seleccionado}}*. Dinos cuántas hojas/piezas necesitas (y si quieres, mándanos el archivo o dinos cómo nos lo haces llegar).",
+        "prompt": "Perfecto, *{{matched_service_name}}*. Dinos cuántas hojas/piezas necesitas (y si quieres, mándanos el archivo o dinos cómo nos lo haces llegar).",
         "save_to_context": "detalle_servicio"
       },
       "transitions": [
@@ -110,7 +107,7 @@
       "type": "escape_to_human",
       "content": {
         "user_response": "🖨️ Listo, alguien de {{nombre_negocio}} te confirma el total y cuándo puedes pasar.",
-        "owner_alert_template": "🖨️ SERVICIO: {{servicio_seleccionado}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}"
+        "owner_alert_template": "🖨️ SERVICIO: {{matched_service_name}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}"
       },
       "transitions": [
         { "condition": { "type": "default" }, "next_node_id": "fin" }

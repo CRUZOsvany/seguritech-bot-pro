@@ -42,6 +42,26 @@ export class DynamicSectionResolver {
           title: this.truncate(c.name, 24),
           description: this.truncate(`$${c.price.toFixed(2)}`, 72),
         }));
+    case 'service_directory':
+      // DEC-04 (auditoría 2026-08-26): mismo id que `service_directory_match`
+      // guarda en contexto (`matched_service_id`) cuando el cliente escribe
+      // texto libre — así el flow puede usar `save_to_context:
+      // 'matched_service_id'` en la transición list_item_any y reusar
+      // {{matched_service_name}}/{{matched_service_response}}/
+      // {{matched_service_price}} (VariableResolver) sin importar si el
+      // cliente llegó por texto o por lista.
+      return [...tenantConfig.serviceDirectory]
+        .filter((e) => e.activo)
+        .sort((a, b) => a.orden - b.orden)
+        .slice(0, 10)
+        .map((e) => ({
+          id: e.id,
+          title: this.truncate(e.nombre, 24),
+          description: this.truncate(
+            e.precio != null ? `$${e.precio.toFixed(2)}` : e.respuesta,
+            72,
+          ),
+        }));
     default: {
       const _exhaustive: never = source;
       this.logger.warn({ source: _exhaustive }, 'items_source desconocido');
