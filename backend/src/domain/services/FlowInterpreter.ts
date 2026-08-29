@@ -355,21 +355,90 @@ export class FlowInterpreter {
   }
 
   // ==========================================================================
-  // EVALUACIÓN DE TRANSICIONES (first-match-wins)
+  // EVALUACIÓN DE TRANSICIONES (scoring por especificidad — DEC-06)
   // ==========================================================================
 
+  /**
+   * DEC-06 (auditoría 2026-08-26, hallazgo C-03): antes era first-match-wins
+   * puro sobre `node.transitions[]` — el ORDEN del array decidía el
+   * comportamiento del bot, invisible para quien edita el flow (mover una
+   * transición tres posiciones podía cambiar la respuesta sin que nadie lo
+   * notara). Ahora se evalúan TODAS las transiciones del nodo, se quedan las
+   * que matchean, y gana la de mayor especificidad — el orden en el JSON ya
+   * no importa salvo para desempatar entre dos transiciones del MISMO nivel
+   * (ahí sí gana la que viene primero, comportamiento idéntico al de antes
+   * para ese caso). Con 0 o 1 match no hay nada que rankear — mismo
+   * resultado que first-match-wins, sin costo extra.
+   */
   private evaluateTransitions(
     node: FlowNode,
     message: Message,
     tenantConfig: TenantConfig,
     extra?: { catalogMatch?: PosProduct | null },
   ): Transition | null {
-    for (const t of node.transitions) {
-      if (this.matchesCondition(t.condition, node, message, tenantConfig, extra)) {
-        return t;
-      }
+    const matching = node.transitions.filter((t) =>
+      this.matchesCondition(t.condition, node, message, tenantConfig, extra),
+    );
+    if (matching.length === 0) return null;
+    if (matching.length === 1) return matching[0];
+
+    const ranked = matching
+      .map((t, originalIndex) => ({
+        t,
+        originalIndex,
+        score: this.transitionSpecificity(t.condition),
+      }))
+      .sort((a, b) => b.score - a.score || a.originalIndex - b.originalIndex);
+
+    this.logger.debug(
+      {
+        tenantId: message.tenantId,
+        nodeId: node.id,
+        candidatos: ranked.map((r) => ({ type: r.t.condition.type, score: r.score })),
+        elegida: ranked[0].t.condition.type,
+      },
+      'Varias transiciones matchearon — desempatado por especificidad (DEC-06)',
+    );
+
+    return ranked[0].t;
+  }
+
+  /**
+   * Especificidad de cada tipo de condición, mayor = gana. Derivado de
+   * comportamiento YA decidido en código, no inventado: `catalog_found` va
+   * por encima de `service_directory_match` porque el test de B-04
+   * ("producto normal, unit_type != service") exige que el catálogo gane
+   * aunque el directorio también matchee — la excepción real (servicio con
+   * respuesta en el directorio) ya la resuelve `catalog_found` devolviendo
+   * `false` en ese caso (DEC-03), no el orden de este ranking.
+   */
+  private transitionSpecificity(condition: TransitionCondition): number {
+    switch (condition.type) {
+    case 'button':
+      return 100;
+    case 'list_item':
+      return 90;
+    case 'call_permission_granted':
+    case 'call_permission_denied':
+      return 85;
+    case 'catalog_found':
+      return 80;
+    case 'service_directory_match':
+      return 70;
+    case 'list_item_any':
+      return 60;
+    case 'keyword':
+      return 50;
+    case 'catalog_not_found':
+      return 20;
+    case 'default':
+      return 0;
+    default: {
+      const _exhaustive: never = condition;
+      this.logger.warn({ condition: _exhaustive }, 'Tipo de condición desconocido en scoring');
+      return 0;
     }
-    return null;
+    }
   }
 
   private matchesCondition(
