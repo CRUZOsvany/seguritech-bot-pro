@@ -87,3 +87,31 @@ describe('BusinessHoursService.isOpenNow', () => {
     expect(utcService.isOpenNow(hours, cdmx(MONDAY, 14, 30)).isOpen).toBe(false);
   });
 });
+
+describe('BusinessHoursService.hadClosureBetween (DEC-07, auditoría 2026-08-26)', () => {
+  const service = new BusinessHoursService();
+  const hours = { horarioSemana: '09:00-19:00', horarioSabado: '09:00-19:00', abreDomingo: false };
+
+  it('ambos extremos dentro del rango, sin cierre entre medio: false', () => {
+    expect(service.hadClosureBetween(hours, cdmx(MONDAY, 10, 0), cdmx(MONDAY, 12, 0))).toBe(false);
+  });
+
+  it('el rango cruza el cierre de las 19:00: true', () => {
+    // 18:30 (abierto) a 19:30 (cerrado) el mismo lunes.
+    expect(service.hadClosureBetween(hours, cdmx(MONDAY, 18, 30), cdmx(MONDAY, 19, 30))).toBe(true);
+  });
+
+  it('el rango cruza toda una noche cerrada (18:00 lunes a 10:00 martes): true', () => {
+    expect(service.hadClosureBetween(hours, cdmx(MONDAY, 18, 0), cdmx('2026-08-25', 10, 0))).toBe(true);
+  });
+
+  it('to <= from: false sin evaluar nada (evita loop infinito con timestamps invertidos)', () => {
+    expect(service.hadClosureBetween(hours, cdmx(MONDAY, 12, 0), cdmx(MONDAY, 10, 0))).toBe(false);
+    expect(service.hadClosureBetween(hours, cdmx(MONDAY, 12, 0), cdmx(MONDAY, 12, 0))).toBe(false);
+  });
+
+  it('sin horario configurado (fail-open): nunca hay cierre que detectar', () => {
+    const noHours = { horarioSemana: null, horarioSabado: null, abreDomingo: false };
+    expect(service.hadClosureBetween(noHours, cdmx(MONDAY, 3, 0), cdmx(MONDAY, 23, 0))).toBe(false);
+  });
+});

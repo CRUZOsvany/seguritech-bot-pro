@@ -60,6 +60,31 @@ export class BusinessHoursService {
     return this.checkRange(hours.horarioSemana, minutesOfDay);
   }
 
+  /**
+   * DEC-07 (auditoría 2026-08-26): true si el negocio estuvo cerrado en
+   * algún momento entre `from` y `to`. Usado para tratar un cierre real
+   * (la noche, la comida) como frontera de una conversación, incluso si el
+   * TTL numérico de sesión (2h, ver BotController) todavía no se cumplió —
+   * "cierra a las 2pm por comida, cliente vuelve a las 4pm" son solo 2h,
+   * pero sigue siendo una conversación nueva.
+   *
+   * Sampling cada 15 min sobre `isOpenNow()` — no reimplementa los límites
+   * exactos de horario (cruces de medianoche, domingo, etc.), reutiliza el
+   * mismo parser ya probado. Cualquier cierre real de al menos 15 min se
+   * detecta; el caso de uso real (gaps de sesión de horas, no días) nunca
+   * se acerca al tope de seguridad.
+   */
+  hadClosureBetween(hours: BusinessHours, from: Date, to: Date): boolean {
+    if (to.getTime() <= from.getTime()) return false;
+    const STEP_MS = 15 * 60 * 1000;
+    const MAX_SAMPLES = 500; // ~5 días a 15 min — tope de seguridad, no se espera llegar aquí
+    let sampled = 0;
+    for (let t = from.getTime(); t <= to.getTime() && sampled < MAX_SAMPLES; t += STEP_MS, sampled += 1) {
+      if (!this.isOpenNow(hours, new Date(t)).isOpen) return true;
+    }
+    return false;
+  }
+
   private hasAnyConfiguredRange(hours: BusinessHours): boolean {
     return this.parseRange(hours.horarioSemana) !== null || this.parseRange(hours.horarioSabado) !== null;
   }
