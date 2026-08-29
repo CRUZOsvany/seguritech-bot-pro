@@ -3,6 +3,11 @@ import type pino from 'pino';
 import type { BotFlow } from '@/domain/entities/flow';
 import { BotFlowRepository, BotFlowChannel } from '@/domain/ports/BotFlowRepository';
 import { validateFlow } from '@/domain/validators/flowSchema';
+import {
+  assertRestrictedGiroCatalogGuardrail,
+  flowExposesCatalogItems,
+  isRestrictedGiro,
+} from '@/domain/validators/restrictedGiroCatalogGuardrail';
 
 /**
  * created_by es columna UUID (FK a admin_users). Las sesiones no-cookie
@@ -304,6 +309,12 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
     // 2. Validar (deja propagar FlowValidationError con detalle Meta).
     const flow = validateFlow(row.draft_json);
 
+    // 2.5. DEC-12 (auditoría 2026-08-26): giros restringidos (medico,
+    // farmacia) no pueden publicar un flow que exponga catalog_items si el
+    // catálogo del tenant tiene categorías de medicamento controlado/con
+    // receta — deja propagar RestrictedGiroGuardrailError.
+    await this.enforceRestrictedGiroGuardrail(tenantId, flow);
+
     // 3. Calcular siguiente version_number e insertar la versión.
     //    NOTA: supabase-js no da transacción multi-statement. Insertamos la
     //    versión ANTES de activar; si activar falla, la fila de versión queda
@@ -333,6 +344,39 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
 
     this.logger.info({ flowId, tenantId, versionNumber }, '[SupabaseBotFlowRepository] draft publicado');
     return { versionNumber };
+  }
+
+  /**
+   * DEC-12 (auditoría 2026-08-26): solo consulta `tenants`/`catalog_items`
+   * cuando el flow de verdad expone `catalog_items` — el camino común
+   * (giro no restringido, o flow sin send_list dinámico de catálogo) no
+   * paga el costo de las 2 queries extra.
+   */
+  private async enforceRestrictedGiroGuardrail(tenantId: string, flow: BotFlow): Promise<void> {
+    if (!flowExposesCatalogItems(flow)) return;
+
+    const { data: tenantRow, error: tenantErr } = await this.supabase
+      .from('tenants')
+      .select('giro')
+      .eq('id', tenantId)
+      .maybeSingle();
+    if (tenantErr) {
+      this.logger.error({ tenantErr, tenantId }, 'enforceRestrictedGiroGuardrail: read tenant failed');
+      throw new Error(`enforceRestrictedGiroGuardrail read tenant failed: ${tenantErr.message}`);
+    }
+    if (!isRestrictedGiro(tenantRow?.giro)) return;
+
+    const { data: catalogRows, error: catalogErr } = await this.supabase
+      .from('catalog_items')
+      .select('category')
+      .eq('tenant_id', tenantId);
+    if (catalogErr) {
+      this.logger.error({ catalogErr, tenantId }, 'enforceRestrictedGiroGuardrail: read catalog failed');
+      throw new Error(`enforceRestrictedGiroGuardrail read catalog failed: ${catalogErr.message}`);
+    }
+
+    const categories = (catalogRows ?? []).map((r) => String(r.category ?? ''));
+    assertRestrictedGiroCatalogGuardrail(flow, tenantRow?.giro, categories);
   }
 
   async listVersions(flowId: string, tenantId: string): Promise<Array<{
