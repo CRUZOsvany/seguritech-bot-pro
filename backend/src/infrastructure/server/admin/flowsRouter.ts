@@ -5,6 +5,7 @@ import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
 import { FlowValidationError } from '@/domain/validators/flowSchema';
+import { RestrictedGiroGuardrailError } from '@/domain/validators/restrictedGiroCatalogGuardrail';
 import { ctx, errMsg } from './helpers';
 
 /**
@@ -137,6 +138,15 @@ export function createFlowsRouter(params: {
         // FlowValidationError: límites Meta, seguro de exponer al panel.
         if (err instanceof FlowValidationError) {
           res.status(400).json({ error: err.message, issues: err.issues });
+          return;
+        }
+        // RestrictedGiroGuardrailError (DEC-12, auditoría 2026-08-26):
+        // giro médico/farmacia con categorías de catálogo restringidas.
+        if (err instanceof RestrictedGiroGuardrailError) {
+          res.status(400).json({
+            error: err.message,
+            offendingCategories: err.offendingCategories,
+          });
           return;
         }
         logger.warn({ err: errMsg(err), flowId }, 'POST publish failed');

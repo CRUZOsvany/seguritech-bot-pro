@@ -8,7 +8,9 @@
  * hace el backend al publicar (DEC-4); aquí solo se modela la forma.
  */
 
-export type ItemsSource = 'catalog_items';
+// DEC-04 (auditoría 2026-08-26): agregado 'service_directory' en espejo con
+// backend/src/domain/entities/flow.ts. Ver esa nota para el porqué.
+export type ItemsSource = 'catalog_items' | 'service_directory';
 
 export type TransitionCondition =
   | { type: 'button'; value: string }

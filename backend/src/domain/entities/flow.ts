@@ -47,8 +47,13 @@ export type FlowVariableKey =
 /**
  * Fuentes válidas para secciones dinámicas de send_list.
  * Agregar nuevas fuentes requiere cambio deliberado de este tipo.
+ *
+ * 'service_directory' (DEC-04, auditoría 2026-08-26): hidrata desde
+ * `tenant_service_directory` — el operador edita el directorio desde el
+ * panel sin volver a tocar el JSON del flow. Antes `menu_servicios` era una
+ * sección 'static' escrita a mano: doble fuente de verdad garantizada.
  */
-export type ItemsSource = 'catalog_items';
+export type ItemsSource = 'catalog_items' | 'service_directory';
 
 // ============================================================================
 // TRANSICIONES

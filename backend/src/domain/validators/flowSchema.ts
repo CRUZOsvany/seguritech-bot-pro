@@ -95,7 +95,7 @@ const ListSectionSchema = z.discriminatedUnion('type', [
       .string()
       .min(1)
       .max(24, 'Meta: section title ≤ 24 chars'),
-    items_source: z.literal('catalog_items'),
+    items_source: z.union([z.literal('catalog_items'), z.literal('service_directory')]),
   }),
 ]);
 
