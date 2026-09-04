@@ -31,6 +31,26 @@ function resolveCatalogSynonyms(giro: string | null | undefined): CatalogSynonym
  *
  * Sprint 1.5: incluye nombreNegocio cargado desde tabla tenants (necesario
  * para VariableResolver de Sprint B).
+ *
+ * ADVERTENCIA — dos catálogos paralelos (hallazgo 2026-09-03, sesión de
+ * análisis de terminal): `catalog` en este servicio se llena desde la tabla
+ * `catalog_items` (legacy), NO desde `pos_products` (el catálogo real de
+ * POS, 110+ SKUs en tenants como "Papelería DEMO", consultado en vivo por
+ * `CatalogSearchService`/nodo `search_catalog`). Consumidores actuales de
+ * `catalog`/`catalogSize`:
+ *   - `VariableResolver.selected_product_name/price`: sí tiene fallback a
+ *     `posProductRepository.findById` cuando el id no está en `catalog`
+ *     (ver comentario "§2.1" ahí) — no rompe con `catalog_items` vacío.
+ *   - `VariableResolver.catalog_listing` (`{{catalog_listing}}`) y
+ *     `DynamicSectionResolver` con `items_source: 'catalog_items'`: SIN
+ *     fallback — si un flow los usa y `catalog_items` está vacío (caso
+ *     típico: un tenant con inventario solo en `pos_products`), muestran
+ *     "Aún no hay productos en el catálogo" aunque el negocio sí tenga
+ *     stock real. `papeleria-flow.json` no usa ninguno de los dos hoy, así
+ *     que `catalogSize: 0` en el log es benigno para ese flow — pero es una
+ *     trampa para moldes/flows nuevos. Si se retoma, evaluar si conviene
+ *     que `catalog_items` deje de ser una tabla separada y en su lugar
+ *     `catalog`/`catalog_listing` lean también de `pos_products`.
  */
 export class SupabaseTenantConfigService implements TenantConfigPort {
   private cache: NodeCache;
