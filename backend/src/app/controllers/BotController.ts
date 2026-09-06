@@ -5,18 +5,9 @@ import { config } from '@/config/env';
 /** TTL de la pausa por handoff humano, en ms. Default global 48h (env HANDOFF_PAUSE_MINUTES, D3). */
 const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
 
-/**
- * DEC-07 (auditoría 2026-08-26): TTL de sesión conversacional a media
- * captura. Un cliente que quedó en "¿cuántas piezas quieres?" y no vuelve a
- * escribir hasta días después no debe recibir esa misma pregunta a un
- * "buenos días" nuevo. 2h, no 6h — una conversación de WhatsApp está viva
- * minutos u horas, no medio día; con 6h el caso más común (pregunta a las
- * 2pm, vuelve a las 7pm) seguía cayendo en el bug que esto arregla.
- */
-const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
-
-const SESSION_EXPIRED_NOTICE = 'Pasó un rato desde tu último mensaje, empezamos de nuevo 🙂';
 import { Message, User, UserState } from '@/domain/entities';
+import { SESSION_EXPIRED_NOTICE, isSessionExpired } from '@/domain/services/SessionTtlPolicy';
+import { enrichOwnerAlert } from '@/domain/services/OwnerAlertFormatter';
 import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
 import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import {
@@ -192,9 +183,8 @@ export class BotController {
         let effectiveUser = user;
         const midFlow = !!user.currentNodeId && user.currentNodeId !== 'end';
         if (midFlow && user.lastInboundAt) {
-          const ttlExpired =
-            message.timestamp.getTime() - user.lastInboundAt.getTime() > SESSION_TTL_MS;
-          const closedBetween = this.businessHoursService.hadClosureBetween(
+          const expired = isSessionExpired(
+            this.businessHoursService,
             {
               horarioSemana: config.horarioSemana,
               horarioSabado: config.horarioSabado,
@@ -203,17 +193,14 @@ export class BotController {
             user.lastInboundAt,
             message.timestamp,
           );
-          if (ttlExpired || closedBetween) {
+          if (expired) {
             await this.notificationPort.sendMessage(tenantId, from, SESSION_EXPIRED_NOTICE);
             // Limpia currentNodeId/context de verdad (mismo patrón que la
             // palabra de escape en FlowInterpreter) para que el "Caso 2" del
             // interpreter arranque el flow desde start_node_id, y para que
             // {{variables}} de la sesión vieja no se filtren en la nueva.
             effectiveUser = { ...user, currentNodeId: undefined, context: {} };
-            this.logger.info(
-              { tenantId, from, ttlExpired, closedBetween },
-              'Sesión conversacional expirada — reset con aviso',
-            );
+            this.logger.info({ tenantId, from }, 'Sesión conversacional expirada — reset con aviso');
           }
         }
 
@@ -414,7 +401,7 @@ export class BotController {
         // El destino (ownerPhone) viene de owner_data.whatsapp_dueno vía TenantConfig.
         if (ownerPhone && output.ownerAlert?.trim()) {
           try {
-            const enrichedAlert = this.enrichOwnerAlert(output.ownerAlert, to);
+            const enrichedAlert = enrichOwnerAlert(output.ownerAlert, to);
             await this.notificationPort.sendMessage(tenantId, ownerPhone, enrichedAlert);
             this.logger.info({ tenantId }, 'Aviso de lead enviado al dueño');
           } catch (err) {
@@ -611,24 +598,6 @@ export class BotController {
       'Handoff reanudado por comando de WhatsApp del dueño',
     );
     return reply(`Listo, reanudé el bot para …${target.phoneNumber.slice(-4)}.`);
-  }
-
-  /**
-   * Agrega al owner_alert (escrito a mano en el flow) un pie fijo con link
-   * wa.me al cliente, hora, y el código para reanudarlo con #listo — sin
-   * depender de que cada molde lo repita. P4.
-   */
-  private enrichOwnerAlert(alert: string, clientPhone: string): string {
-    const digits = this.normalizeDigits(clientPhone);
-    const code = clientPhone.slice(-4);
-    const now = new Date();
-    const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    return (
-      `${alert}\n\n` +
-      `💬 https://wa.me/${digits}\n` +
-      `🕐 ${time}\n\n` +
-      `Cuando termines: *#listo ${code}*`
-    );
   }
 
   private generateId(): string {

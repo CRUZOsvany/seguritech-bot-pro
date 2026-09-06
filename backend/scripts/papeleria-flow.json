@@ -152,7 +152,9 @@
       "type": "wait_input",
       "content": {
         "prompt": "¿Cuántas piezas de *{{selected_product_name}}* quieres?",
-        "save_to_context": "cantidad_producto"
+        "save_to_context": "cantidad_producto",
+        "validation": "numeric",
+        "validation_error": "No logré entender la cantidad 🤔. Escríbela solo con el número, por ejemplo: *3*"
       },
       "transitions": [
         { "condition": { "type": "default" }, "next_node_id": "pedido_confirma" }
