@@ -150,8 +150,15 @@ export class FlowInterpreter {
       const localTransition = currentNode
         ? this.evaluateTransitions(currentNode, message, tenantConfig, {})
         : null;
+      // Fix del hallazgo #1 (ejecución Fase 1): catalog_not_found es TRUE
+      // por ausencia de cómputo, no porque una búsqueda real haya
+      // fallado — el pre-chequeo no corre CatalogSearchService. Sin esta
+      // exclusión, cualquier palabra de escape en un nodo search_catalog
+      // queda absorbida como "búsqueda sin resultado" en vez de resetear.
       const nodeHandlesItLocally =
-        !!localTransition && localTransition.condition.type !== 'default';
+        !!localTransition &&
+        localTransition.condition.type !== 'default' &&
+        localTransition.condition.type !== 'catalog_not_found';
 
       if (!nodeHandlesItLocally) {
         this.logger.debug(

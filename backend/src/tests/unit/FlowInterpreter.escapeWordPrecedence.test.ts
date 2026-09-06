@@ -275,4 +275,67 @@ describe('FlowInterpreter — precedencia de ESCAPE_WORDS vs transición local (
 
     expect(result.nextNodeId).toBe('bienvenida');
   });
+
+  it('nodo search_catalog: "menu" resetea al start, NO se absorbe como catalog_not_found', async () => {
+    // Forma real del nodo `buscar` de backend/scripts/papeleria-flow.json:
+    // sus únicas transiciones son catalog_found / service_directory_match /
+    // catalog_not_found — ninguna `default`. `catalog_not_found` es TRUE por
+    // ausencia de cómputo (el pre-chequeo del escape no corre
+    // CatalogSearchService), así que sin la exclusión explícita cualquier
+    // palabra de escape quedaba absorbida como "búsqueda sin resultado".
+    const flow: BotFlow = {
+      version: '1.0',
+      start_node_id: 'bienvenida',
+      nodes: [
+        { id: 'bienvenida', type: 'send_text', content: { text: 'Hola' }, transitions: [] },
+        {
+          id: 'buscar',
+          type: 'search_catalog',
+          content: { prompt: '🔍 ¿Qué producto buscas?' },
+          transitions: [
+            {
+              condition: { type: 'catalog_found', save_to_context: 'selected_product_id' },
+              next_node_id: 'buscar_encontrado',
+            },
+            {
+              condition: { type: 'service_directory_match', save_to_context: 'matched_service_id' },
+              next_node_id: 'buscar_servicio_encontrado',
+            },
+            { condition: { type: 'catalog_not_found' }, next_node_id: 'buscar_no_encontrado' },
+          ],
+        },
+        { id: 'buscar_encontrado', type: 'send_text', content: { text: 'ok' }, transitions: [] },
+        {
+          id: 'buscar_servicio_encontrado',
+          type: 'send_text',
+          content: { text: 'servicio' },
+          transitions: [],
+        },
+        {
+          id: 'buscar_no_encontrado',
+          type: 'send_text',
+          content: { text: 'no encontrado' },
+          transitions: [],
+        },
+      ],
+    };
+    const interpreter = makeInterpreter();
+    const user = makeUser({ currentNodeId: 'buscar', context: { algo: 'previo' } });
+
+    const result = await interpreter.execute({
+      flow,
+      user,
+      // "menu" no matchea ningún producto (el stub de CatalogSearchService
+      // devuelve null) ni ninguna entrada del directorio (vacío en el config
+      // de prueba).
+      message: makeMessage('menu'),
+      tenantConfig: makeTenantConfig(),
+    });
+
+    expect(result.nextNodeId).toBe('bienvenida');
+    expect(result.nextNodeId).not.toBe('buscar_no_encontrado');
+    // Reset de verdad: el contexto previo se limpia, como en cualquier
+    // palabra de escape que sí aplica.
+    expect(result.contextUpdates.algo).toBeNull();
+  });
 });
