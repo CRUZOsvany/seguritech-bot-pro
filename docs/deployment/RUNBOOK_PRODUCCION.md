@@ -2,8 +2,10 @@
 
 > **Qué es esto.** El CÓMO, con comandos reales para copiar y pegar. El QUÉ y EN QUÉ ORDEN vive en `.claude/SEGURITECH_ROADMAP_OPERATIVO.md` (Camino B, Camino C). Este documento expande esa checklist a pasos ejecutables — no la reemplaza, la complementa.
 >
-> **Versión:** 1.0 — 2026-08-20
-> **Arquitectura decidida** (no inventada aquí, ya estaba en el roadmap): VPS Hetzner + nginx (reverse proxy) + PM2, **no** Docker/docker-compose en producción (ese `docker-compose.yml` del repo sirve para probar el build localmente, no es el camino de deploy elegido) y **no** Cloudflare Tunnel en producción (`cloudflared` es solo para el túnel de desarrollo mientras Meta verifica — ver Camino B, ítem "Webhook público... HTTPS válido").
+> **Versión:** 1.1 — 2026-09-06 (v1.0: 2026-08-20)
+> **Arquitectura objetivo** (la del roadmap, todavía **no** ejecutada — A-02 sigue abierto): VPS Hetzner + nginx (reverse proxy) + PM2, y **no** Cloudflare Tunnel en producción (`cloudflared` es solo para el túnel de desarrollo mientras Meta verifica — ver Camino B, ítem "Webhook público... HTTPS válido"). Los pasos 1-14 de abajo describen ese camino.
+>
+> ⚠️ **Lo que corre HOY no es esto.** El despliegue real vive en un servidor Ubuntu de la LAN (`adminangel@192.168.1.250`, hostname `seguritech-server`) y arranca con **docker compose**, no con PM2. La versión 1.0 de este runbook decía que el `docker-compose.yml` del repo "sirve para probar el build localmente, no es el camino de deploy elegido" — eso dejó de ser cierto. El procedimiento real está en el **Anexo A** al final; los pasos 5 (secretos), 6 (`backend/.env`), 7 (migraciones) y 12 (webhook Meta) aplican igual a los dos caminos, el resto (1-4, 9, 11) es exclusivo del camino Hetzner+PM2.
 > **Regla del proyecto:** los secretos se generan y se pegan interactivamente, **nunca** se le piden a un LLM ni se los pega uno en un prompt (regla operativa 3 del MAESTRO). Cada comando `openssl rand` de abajo corre tú mismo en el VPS.
 
 ---
@@ -159,6 +161,8 @@ Llena, como mínimo, estas variables (ver `backend/.env.example` para la lista c
 
 **Con `NODE_ENV=production`, `validateConfig()` (`backend/src/config/env.ts`) revienta el arranque si falta alguna variable crítica** — es la validación real, no solo esta tabla.
 
+Este archivo es el mismo para los dos caminos de deploy: PM2 lo lee vía `dotenv`, y `docker-compose.yml` vía `env_file:` — no hay un segundo `.env` en la raíz del repo. Si despliegas con Docker, lee además el **Anexo A.1**: tres variables que antes inyectaba el compose (`ALLOWED_ORIGINS`, `META_API_URL`, `LOG_LEVEL`/`BOT_NAME`) ahora tienen que estar sí o sí en este archivo.
+
 ---
 
 ## 7. Migraciones y seed del primer admin (Supabase Cloud)
@@ -301,3 +305,56 @@ Con eso, el **P0 del roadmap operativo está cerrado** — ese es el hito real d
 | `getaddrinfo ENOTFOUND` contra Supabase | Repetir el diagnóstico de la alerta 0-bis (`.claude/SEGURITECH_ESTADO_ACTUAL.md`) — puede ser el proyecto Free pausado por inactividad |
 
 Un runbook de incidentes más completo (qué hacer con el bot ya en vivo y clientes reales dependiendo de él) es el Camino J del roadmap operativo — pendiente de escribir cuando haya un primer cliente real corriendo.
+
+---
+
+## Anexo A — Despliegue real con Docker Compose (servidor LAN)
+
+> **Este es el camino que está en uso hoy**, no los pasos 1-4/9/11 de arriba. Agregado el 2026-09-06 al descubrir que el runbook v1.0 describía un despliegue (Hetzner + PM2) que nunca se ejecutó, mientras el bot ya corría en Docker en la LAN.
+
+**Dónde:** `ssh adminangel@192.168.1.250` (hostname `seguritech-server`, Ubuntu Server 26.04.1 LTS). Docker + docker-compose-v2, usuario en el grupo `docker` (no hace falta `sudo`). Supabase Postgres es **externo** — no corre en este servidor.
+
+### A.1 Configuración
+
+`docker-compose.yml` lee **`backend/.env`** vía `env_file:` — el mismo archivo del paso 6, sin duplicación. Solo `NODE_ENV=production` y `WEBHOOK_PORT=3001` están fijados en el compose (ganan sobre el `.env`, a propósito).
+
+```bash
+cd ~/seguritech-bot-pro
+cp backend/.env.example backend/.env   # solo la primera vez
+nano backend/.env
+```
+
+Ojo con tres variables que **antes las inyectaba el compose y ahora salen del `.env`**:
+
+| Variable | Valor en este servidor | Por qué importa |
+|---|---|---|
+| `ALLOWED_ORIGINS` | `http://192.168.1.250:3001` | Si se queda en el default de loopback (`http://127.0.0.1:3001`), `validateConfig()` **aborta el arranque** a propósito. El valor del `.env.example` (`http://localhost:3000`) pasa el check pero bloquea el panel por CORS. |
+| `META_API_URL` | `https://graph.facebook.com/v23.0` | Sin ella el schema usa v23.0 por default; el compose viejo pinneaba v21.0. Fijarla explícitamente evita que la versión cambie sola en un upgrade. |
+| `LOG_LEVEL` / `BOT_NAME` | `info` / `SegurITech Bot Pro` | Cosméticas, pero ya no tienen default desde el compose. |
+
+`ADMIN_JWT_SECRET` (>= 64 chars, paso 5) es obligatoria: `validateConfig()` la exige en producción y su ausencia deja el contenedor en crash-loop.
+
+### A.2 Operación
+
+```bash
+docker compose up -d --build     # desplegar / redesplegar tras un git pull
+docker compose ps                # estado + healthcheck
+docker compose logs -f backend   # logs en vivo
+docker compose restart backend   # reinicio sin rebuild
+```
+
+### A.3 Red — el 3001 está abierto a la LAN, a propósito
+
+El compose publica `"3001:3001"`, que bindea `0.0.0.0`: el panel se abre desde cualquier máquina de la LAN en `http://192.168.1.250:3001`.
+
+⚠️ **`ufw` no protege este puerto.** Las reglas de la cadena `DOCKER` en iptables se evalúan antes que las de ufw, así que un `ufw` con solo SSH abierto **no** cierra el 3001 — es un error clásico de diagnóstico. Cuando haya nginx o `cloudflared` corriendo en el propio servidor, cambiar el mapeo a `"127.0.0.1:3001:3001"` (una línea, comentada en el compose) y el puerto deja de ser alcanzable desde fuera del host.
+
+### A.4 Troubleshooting específico de Docker
+
+| Síntoma | Revisar primero |
+|---|---|
+| `docker compose up` falla con `env file ./backend/.env not found` | No existe el archivo — es el paso A.1, no un bug del compose |
+| `Configuración incompleta en PRODUCCIÓN` en `docker compose logs` | Falta una var crítica en `backend/.env` — ver tabla del paso 6 y A.1 |
+| `ALLOWED_ORIGINS no configurado en PRODUCCIÓN` | Quedó el default de loopback — ver la tabla de A.1 |
+| El contenedor queda `unhealthy` | El healthcheck pega a `/health` dentro del contenedor; si el proceso murió al arrancar, `docker compose logs backend` tiene el error real |
+| Cambié `backend/.env` y no toma el valor nuevo | `env_file` se lee al **crear** el contenedor: `docker compose up -d` (no `restart`) |
