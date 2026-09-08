@@ -27,6 +27,7 @@ export function TransitionsEditor({ node }: { node: FlowNode }) {
       case 'button':               return `botón: ${c.value}`;
       case 'list_item':            return `ítem: ${c.value}`;
       case 'list_item_any':        return 'cualquier ítem';
+      case 'card_any':             return 'cualquier card';
       case 'keyword':              return `palabra: ${c.values.join(', ')}`;
       case 'call_permission_granted': return 'permiso concedido';
       case 'call_permission_denied':  return 'permiso denegado';
@@ -34,9 +35,19 @@ export function TransitionsEditor({ node }: { node: FlowNode }) {
     }
   }
 
-  /** Selects del tipo de condición disponibles según el tipo de nodo. */
-  function availableConditionTypes(nodeType: FlowNode['type']): TransitionCondition['type'][] {
-    switch (nodeType) {
+  /**
+   * Selects del tipo de condición disponibles según el nodo.
+   *
+   * El carrusel depende de cómo estén declaradas sus cards: las literales se
+   * enrutan con `button` (el id lo escribe el autor del flow) y las de
+   * catálogo con `card_any` (los ids los genera el backend en runtime, así
+   * que no hay nada que un `button` pueda nombrar).
+   */
+  function availableConditionTypes(n: FlowNode): TransitionCondition['type'][] {
+    if (n.type === 'send_media_carousel') {
+      return n.content.dynamic_cards ? ['card_any', 'default'] : ['button', 'default'];
+    }
+    switch (n.type) {
       case 'send_buttons':
         return ['button', 'default'];
       case 'send_list':
@@ -63,6 +74,9 @@ export function TransitionsEditor({ node }: { node: FlowNode }) {
       case 'list_item_any':
         condition = { type: 'list_item_any' };
         break;
+      case 'card_any':
+        condition = { type: 'card_any' };
+        break;
       case 'keyword':
         condition = { type: 'keyword', values: [] };
         break;
@@ -79,7 +93,7 @@ export function TransitionsEditor({ node }: { node: FlowNode }) {
     updateTransitionCondition(node.id, idx, condition);
   }
 
-  const available = availableConditionTypes(node.type);
+  const available = availableConditionTypes(node);
 
   return (
     <div className="flex flex-col gap-2">

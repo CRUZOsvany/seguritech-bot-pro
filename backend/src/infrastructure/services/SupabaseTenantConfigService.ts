@@ -161,6 +161,12 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
       price: Number(row.precio),
       category: row.categoria ?? '',
       available: row.disponible,
+      // Meta solo acepta https en el header de una card de carrusel; una
+      // http:// o una ruta relativa se descartan aquí y no más abajo, para
+      // que el resolver no tenga que revalidar el origen del dato.
+      ...(typeof row.imagen_url === 'string' && row.imagen_url.startsWith('https://')
+        ? { imageUrl: row.imagen_url }
+        : {}),
     }));
 
     const serviceDirectory: ServiceDirectoryEntry[] = (serviceDirRes.data || []).map(
@@ -194,6 +200,10 @@ export class SupabaseTenantConfigService implements TenantConfigPort {
         c.mensaje_confirmacion_pedido ??
         '✅ Pedido confirmado. Te contactaremos pronto.',
       catalog,
+      ...(typeof c.imagen_fallback_url === 'string' &&
+      c.imagen_fallback_url.startsWith('https://')
+        ? { fallbackImageUrl: c.imagen_fallback_url }
+        : {}),
       ownerPhone,
       serviceDirectory,
       horarioSemana,

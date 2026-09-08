@@ -97,13 +97,19 @@ Nodo terminal. El usuario queda idle. El próximo mensaje vuelve al
 { "type": "button",        "value": "btn_id" }
 { "type": "list_item",     "value": "item_id" }
 { "type": "list_item_any", "save_to_context"?: "<clave>" }
+{ "type": "card_any",      "save_to_context"?: "<clave>" }
 { "type": "keyword",       "values": ["sí", "si", "confirmar"] }
 { "type": "default" }
 ```
 
 ### Orden de evaluación (importante)
 
-El motor evalúa `transitions[]` en el orden del array. **First-match-wins**.
+El motor evalúa **todas** las transiciones del nodo, se queda con las que
+matchean y gana la de mayor especificidad (DEC-06, auditoría 2026-08-26):
+`button` 100 > `list_item` 90 > `call_permission_*` 85 > `catalog_found` 80 >
+`service_directory_match` 70 > `list_item_any`/`card_any` 60 > `keyword` 50 >
+`catalog_not_found` 20 > `default` 0. El orden del array **solo** desempata
+entre transiciones del mismo escalón.
 
 **Regla operativa**: en nodos `send_list` mixtos (con sección estática
 "Volver" + sección dinámica de catálogo), los `list_item` específicos deben
@@ -234,3 +240,72 @@ se cierre.
   → V2.
 - Versionado/diff de flows. → V2 si surge necesidad de auditoría
   (hoy se sobreescribe).
+
+## Cards dinámicas en `send_media_carousel`
+
+Un carrusel declara **o** cards literales **o** cards de catálogo, nunca las
+dos. El schema lo rechaza al publicar.
+
+```jsonc
+// Cards escritas a mano
+{ "body": "Nuestras herramientas", "cards": [ /* 1..10 */ ] }
+
+// Cards hidratadas desde el catálogo del tenant
+{
+  "body": "Esto es lo que tenemos",
+  "dynamic_cards": {
+    "cards_source": "catalog_items",
+    "button_title": "Lo quiero"   // <= 20 chars, igual en todas las cards
+  }
+}
+```
+
+El motor arma una card por producto disponible de `catalog_items`, hasta 10:
+header con la imagen, body con `nombre\n$precio`, y **un** botón `quick_reply`
+cuyo `id` es el id del producto.
+
+### La imagen no es opcional
+
+Meta exige header image/video en **cada** card. Un producto sin `imagen_url`
+propia usa `bot_configurations.imagen_fallback_url` (la foto genérica del
+negocio, migración 021). Si el tenant tampoco la tiene, ese producto **queda
+fuera** del carrusel.
+
+Si no queda ninguna card — catálogo vacío, o ningún producto con foto y sin
+respaldo — el nodo **no se envía** y el motor toma su transición `default`.
+Es el mismo contrato que un `send_list` que resuelve a 0 items, y cierra el
+"pendiente abierto" de la sección anterior para este nodo: **opción 1**. Un
+carrusel dinámico sin `default` deja la conversación parada en el nodo.
+
+### Routing: `card_any`, no `button`
+
+Los ids de las cards los genera el motor desde el catálogo en runtime, así que
+un `button` del JSON no puede nombrar ninguno — el schema rechaza esa
+combinación. Se usa `card_any`, que guarda el id del producto en contexto:
+
+```jsonc
+{ "condition": { "type": "card_any", "save_to_context": "selected_product_id" },
+  "next_node_id": "confirmar" }
+```
+
+`save_to_context` es opcional y por defecto es `selected_product_id`, que es
+justo la clave que deja resolver `{{selected_product_name}}` y
+`{{selected_product_price}}` en los nodos siguientes.
+
+La validación del tap va contra el catálogo **vivo** del tenant, no contra lo
+que se renderizó: un producto que se agotó entre el envío y el tap ya no
+matchea y cae al `default`.
+
+### Espera
+
+Un carrusel de `quick_reply` (literal o dinámico) **detiene** el flow
+esperando el tap. Uno de `cta_url` no: esos botones abren el navegador y no
+generan mensaje entrante, así que parar ahí dejaría la conversación colgada.
+
+### Fuente única por ahora
+
+`cards_source` solo acepta `catalog_items` porque es la única tabla con
+columna de imagen. El catálogo real de los tenants piloto vive en
+`pos_products`, que todavía no tiene una — hasta entonces, un carrusel
+dinámico en esos tenants resuelve a 0 cards y toma el `default`. Ver la
+ADVERTENCIA de catálogo dual en `SupabaseTenantConfigService`.

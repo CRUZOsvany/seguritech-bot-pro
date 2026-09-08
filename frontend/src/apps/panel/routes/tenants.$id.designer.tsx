@@ -1182,10 +1182,85 @@ function NodeInspectorForm({
       );
 
     case 'send_media_carousel': {
-      const { body, cards } = node.content;
+      const { body, dynamic_cards: dynamicCards } = node.content;
+      // `cards` y `dynamic_cards` son mutuamente excluyentes (lo exige el
+      // schema al publicar). El inspector edita uno u otro, nunca los dos.
+      const cards = node.content.cards ?? [];
       // Detectar tipo de botón predominante para mostrar en UI
       const activeBtnType =
         cards[0]?.buttons[0]?.type === 'cta_url' ? 'cta_url' : 'quick_reply';
+
+      const modeSwitch = (
+        <div className="flex flex-col gap-1">
+          <Label className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide">
+            Origen de las cards
+          </Label>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              className={`flex-1 rounded border px-2 py-1 text-[10px] ${
+                dynamicCards ? 'text-muted-foreground' : 'border-primary text-primary'
+              }`}
+              onClick={() => onUpdate({ dynamic_cards: undefined, cards })}
+            >
+              A mano
+            </button>
+            <button
+              type="button"
+              className={`flex-1 rounded border px-2 py-1 text-[10px] ${
+                dynamicCards ? 'border-primary text-primary' : 'text-muted-foreground'
+              }`}
+              onClick={() =>
+                onUpdate({
+                  cards: undefined,
+                  dynamic_cards: dynamicCards ?? {
+                    cards_source: 'catalog_items',
+                    button_title: 'Ver detalle',
+                  },
+                })
+              }
+            >
+              Desde catálogo
+            </button>
+          </div>
+        </div>
+      );
+
+      if (dynamicCards) {
+        return (
+          <>
+            <InspField label="Texto introductorio">
+              <Textarea
+                rows={2}
+                value={body}
+                onChange={(e) => onUpdate({ body: e.target.value })}
+              />
+            </InspField>
+
+            {modeSwitch}
+
+            <InspField label="Texto del botón de cada card">
+              <Input
+                value={dynamicCards.button_title}
+                maxLength={20}
+                placeholder="Ver detalle"
+                onChange={(e) =>
+                  onUpdate({
+                    dynamic_cards: { ...dynamicCards, button_title: e.target.value },
+                  })
+                }
+              />
+            </InspField>
+
+            <p className="rounded border border-dashed p-2 text-[10px] text-muted-foreground">
+              Las cards se arman solas con los productos disponibles del catálogo (hasta 10).
+              Cada producto necesita imagen; los que no la tengan usan la imagen de respaldo
+              del negocio, y si no hay ninguna quedan fuera. Enruta el nodo con una transición
+              <span className="font-medium"> cualquier card</span>.
+            </p>
+          </>
+        );
+      }
 
       return (
         <>
@@ -1196,6 +1271,8 @@ function NodeInspectorForm({
               onChange={(e) => onUpdate({ body: e.target.value })}
             />
           </InspField>
+
+          {modeSwitch}
 
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">

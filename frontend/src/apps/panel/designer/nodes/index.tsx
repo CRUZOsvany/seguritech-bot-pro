@@ -130,7 +130,9 @@ export function SendMediaCarouselNode({ data }: NodeProps<DesignerRFNode>) {
     <NodeShell data={data}>
       <p className="line-clamp-2">{node.content.body || <Empty />}</p>
       <p className="mt-1 text-[10px] text-muted-foreground">
-        {node.content.cards.length} card(s)
+        {node.content.dynamic_cards
+          ? 'cards desde catálogo'
+          : `${node.content.cards?.length ?? 0} card(s)`}
       </p>
     </NodeShell>
   );
