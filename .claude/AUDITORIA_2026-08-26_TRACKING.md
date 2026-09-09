@@ -46,7 +46,7 @@ Mientras tanto, `018_tenant_knowledge_base.sql` (tabla real `tenant_knowledge_ch
 | ID | Título | Estado | Nota |
 |---|---|---|---|
 | A-01 | Meta Business Verification | ⬜ | Externo, calendario, no técnico |
-| A-02 | VPS Hetzner sin provisionar | ⬜ | |
+| A-02 | VPS Hetzner sin provisionar | ⬜ | **La realidad divergió del plan:** no hay VPS Hetzner, pero el bot ya corre en Docker en un servidor Ubuntu de la LAN (`adminangel@192.168.1.250`). El 2026-09-06 se arregló el `docker-compose.yml` para que ese camino funcione de verdad (`env_file: ./backend/.env`; antes ignoraba `backend/.env` y omitía `ADMIN_JWT_SECRET`, que `validateConfig()` exige en prod → crash-loop). Runbook actualizado con el Anexo A. Hetzner sigue pendiente como destino de producción con dominio público |
 | A-03 | Migraciones 012-020 en Cloud | ✅ | 001-020 confirmadas aplicadas. **019 aplicada por Cris el 2026-09-01, verificada por lectura read-only — ver A-03-bis** |
 | A-04 | Inventario real sin cargar | ⬜ | Bloqueado por DEC-10 |
 | A-05 | Sin observabilidad | ⬜ | Bloqueado por DEC-14 |

@@ -4,21 +4,26 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     ports:
+      # 0.0.0.0 a propósito, por ahora: el panel se abre desde otras máquinas de
+      # la LAN (http://192.168.1.250:3001). Advertencia: `ufw` NO protege este
+      # puerto — la cadena DOCKER de iptables se evalúa antes que las reglas de
+      # ufw, así que cerrar el 3001 en ufw no lo cierra. Cuando haya nginx o
+      # cloudflared enfrente, cambiar a "127.0.0.1:3001:3001".
       - "3001:3001"
+    # Toda la configuración —incluidos los secretos— sale de backend/.env, el
+    # mismo archivo que documenta el runbook (§6). Se usa env_file y no una
+    # lista de ${VAR} a propósito: con la lista, cada variable nueva había que
+    # acordarse de agregarla aquí, y el olvido de ADMIN_JWT_SECRET (que
+    # validateConfig() exige en producción) dejaba el contenedor en crash-loop
+    # con un error que apunta al .env equivocado.
+    env_file:
+      - ./backend/.env
     environment:
+      # Lo no negociable del contenedor, fijado aquí para que gane sobre el
+      # env_file: el arranque siempre es de producción, y el puerto tiene que
+      # coincidir con el mapeo de arriba y con el healthcheck de abajo.
       - NODE_ENV=production
-      - LOG_LEVEL=info
       - WEBHOOK_PORT=3001
-      - META_API_URL=https://graph.facebook.com/v21.0
-      - META_VERIFY_TOKEN=${META_VERIFY_TOKEN}
-      - META_APP_SECRET=${META_APP_SECRET}
-      - META_TOKEN_ENCRYPTION_KEY=${META_TOKEN_ENCRYPTION_KEY}
-      - BOT_NAME=SegurITech Bot Pro
-      - SUPABASE_URL=${SUPABASE_URL}
-      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-http://localhost:3001}
-      - BACKEND_API_KEY=${BACKEND_API_KEY}
-      - CLOUDFLARE_ALLOWED_DOMAIN=${CLOUDFLARE_ALLOWED_DOMAIN}
     networks:
       - seguritech-network
     healthcheck:

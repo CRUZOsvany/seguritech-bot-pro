@@ -38,7 +38,7 @@ seguritech-bot-pro/
 │   ├── supabase/migrations/            # 001 → 020
 │   └── package.json
 ├── frontend/                           # Vite + React 19 + TanStack + Tailwind 4
-├── docker-compose.yml                  # solo servicio `backend`
+├── docker-compose.yml                  # servicio `backend`; lee backend/.env vía env_file
 ├── package.json                        # workspaces: ['backend', 'frontend']
 └── README.md
 ```

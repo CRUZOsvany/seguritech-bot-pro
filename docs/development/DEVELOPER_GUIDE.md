@@ -43,12 +43,16 @@ npm install
 npm install --workspace backend
 npm install --workspace frontend
 
-# 4. Copiar archivo .env
-cp .env.example .env
-# Editar .env con tus credenciales Supabase y Meta
+# 4. Copiar archivo .env (vive en backend/, no en la raíz)
+cp backend/.env.example backend/.env
+# Editar backend/.env con tus credenciales Supabase y Meta
 
-# 5. (Opcional) Iniciar Supabase local
-docker-compose up -d
+# 5. (Opcional) Levantar el backend en contenedor, igual que en el servidor.
+#    Ojo: el compose fija NODE_ENV=production y lee backend/.env vía env_file,
+#    así que exige el .env COMPLETO de producción. Para desarrollo del día a
+#    día usa `npm run dev`, no esto. Supabase NO corre aquí: es un proyecto
+#    externo en la nube, este compose solo tiene el servicio `backend`.
+docker compose up -d --build
 
 # 6. Verificar setup
 npm run type-check  # Sin errores de tipos
