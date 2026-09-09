@@ -86,6 +86,11 @@ export function WhatsAppSimulator({
   const [outOfHours, setOutOfHours] = useState(false);
   const [simulatedTime, setSimulatedTime] = useState('22:00');
 
+  // Fase 3 (fidelidad del simulador): "saltar" el TTL de sesión de un
+  // turno sin esperar 2h reales. Se consume una sola vez (se resetea a
+  // false después de mandarse) para no forzar el gate en cada mensaje.
+  const [skipSessionTtl, setSkipSessionTtl] = useState(false);
+
   // Estado efímero de la conversación. Lo encadenamos entre turnos para que el
   // simulador avance sin escribir en BD (modo persist=false). Vive en un ref
   // —no en useState— para no quedar obsoleto dentro del closure async de send.
@@ -104,7 +109,9 @@ export function WhatsAppSimulator({
         flowId: source === 'draft' ? flowId : undefined,
         versionId: source === 'version' ? versionId : undefined,
         simulateAt: outOfHours ? buildSimulateAtIso(simulatedTime) : undefined,
+        simulatedElapsedMinutes: skipSessionTtl ? 180 : undefined,
       });
+      if (skipSessionTtl) setSkipSessionTtl(false);
       stateRef.current = { currentNodeId: res.nextNodeId, context: res.context };
       setTurns((t) => [...t, ...res.outputs.map((o) => ({ from: 'bot' as const, output: o }))]);
     } catch (e) {
@@ -233,6 +240,18 @@ export function WhatsAppSimulator({
         />
       </div>
 
+      <div className="flex items-center justify-center gap-2 text-[11px] text-muted-foreground">
+        <Button
+          size="sm"
+          variant="ghost"
+          className="h-6 px-2 text-[11px]"
+          onClick={() => setSkipSessionTtl(true)}
+          disabled={busy || turns.length === 0}
+        >
+          ⏳ Saltar 2h de inactividad
+        </Button>
+      </div>
+
       <div className="flex justify-center">
         <Button size="sm" variant="ghost" onClick={reset} disabled={busy}>
           <RotateCcw className="mr-1 h-3 w-3" /> Reiniciar conversación
@@ -342,9 +361,16 @@ function SimulatorBubble({
 
     case 'escape_to_human':
       return (
-        <div className={bubble}>
-          <p>{o.userResponse}</p>
-          <p className="mt-1 text-[10px] text-amber-600">🔔 Se alertó al dueño del negocio.</p>
+        <div className="flex flex-col gap-1.5">
+          <div className={bubble}>
+            <p>{o.userResponse}</p>
+          </div>
+          <div className="max-w-[85%] self-start rounded-lg border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs text-amber-900">
+            <p className="mb-1 flex items-center gap-1 font-semibold text-amber-700">
+              🔔 Alerta interna → dueño del negocio
+            </p>
+            <p className="whitespace-pre-wrap">{o.ownerAlert}</p>
+          </div>
         </div>
       );
 

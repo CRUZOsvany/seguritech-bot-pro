@@ -199,6 +199,15 @@ export interface WaitInputNode extends FlowNodeBase {
   content: {
     prompt?: string;
     save_to_context?: FlowVariableKey | string;
+    /**
+     * Validación mínima antes de aceptar la respuesta del cliente
+     * (depuración motor+simulador, Fase 4 — cierra C-04 del tracker de
+     * auditoría, alcance acotado a 'numeric'). Ausente = sin validación,
+     * comportamiento de siempre.
+     */
+    validation?: 'numeric';
+    /** Texto a mostrar cuando `validation` falla. Si se omite, se usa un mensaje genérico. */
+    validation_error?: string;
   };
 }
 
