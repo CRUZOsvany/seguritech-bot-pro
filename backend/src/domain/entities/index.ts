@@ -73,6 +73,13 @@ export interface CatalogItem {
   price: number;
   category: string;
   available: boolean;
+  /**
+   * URL https de la foto del producto (`catalog_items.imagen_url`, existe en
+   * la tabla desde la migración 001 pero nunca se había mapeado). La consume
+   * CarouselCardResolver: Meta exige header image/video en CADA card de un
+   * send_media_carousel, así que un producto sin foto no puede ser card.
+   */
+  imageUrl?: string;
 }
 
 /**
@@ -90,6 +97,13 @@ export interface TenantConfig {
   notUnderstoodMessage: string;
   orderConfirmationMessage: string;
   catalog: CatalogItem[];
+  /**
+   * Imagen de respaldo del negocio (`bot_configurations.imagen_fallback_url`,
+   * migración 021) para las cards de carrusel cuyo producto no tiene foto
+   * propia. Sin ella, esos productos quedan fuera del carrusel — Meta no
+   * acepta una card sin header media.
+   */
+  fallbackImageUrl?: string;
   /** WhatsApp del dueño (owner_data.whatsapp_dueno) para avisos de leads. Opcional. */
   ownerPhone?: string;
   serviceDirectory: ServiceDirectoryEntry[];

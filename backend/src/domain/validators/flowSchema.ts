@@ -44,6 +44,10 @@ const TransitionConditionSchema = z.discriminatedUnion('type', [
     save_to_context: z.string().min(1).optional(),
   }),
   z.object({
+    type: z.literal('card_any'),
+    save_to_context: z.string().min(1).optional(),
+  }),
+  z.object({
     type: z.literal('keyword'),
     values: z.array(z.string().min(1)).min(1),
   }),
@@ -313,12 +317,18 @@ const MediaCarouselCardSchema = z.object({
   buttons: z.array(MediaCarouselButtonSchema).min(1).max(2),
 });
 
+const DynamicCarouselCardsSchema = z.object({
+  cards_source: z.enum(['catalog_items']),
+  button_title: z.string().min(1).max(20),
+});
+
 const SendMediaCarouselNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('send_media_carousel'),
   content: z.object({
     body: z.string().min(1).max(1024),
-    cards: z.array(MediaCarouselCardSchema).min(1).max(10),
+    cards: z.array(MediaCarouselCardSchema).min(1).max(10).optional(),
+    dynamic_cards: DynamicCarouselCardsSchema.optional(),
   }),
   transitions: z.array(TransitionSchema),
 });
@@ -394,12 +404,51 @@ export const FlowNodeSchema = z
     EndNodeSchema,
     SendWhatsappFlowNodeSchema,
   ])
-  // Regla cross-card del carrusel: todas las cards deben usar el mismo tipo
-  // de botón (todo quick_reply o todo cta_url).
   .superRefine((node, ctx) => {
     if (node.type !== 'send_media_carousel') return;
-    const cards = node.content.cards;
-    if (cards.length === 0) return;
+
+    const { cards, dynamic_cards: dynamicCards } = node.content;
+
+    // Un carrusel declara cards literales O dynamic_cards, nunca ambas ni
+    // ninguna. Sin este candado, un nodo con las dos enviaría solo las
+    // dinámicas (renderNode les da prioridad) y las literales serían texto
+    // muerto en el JSON que nadie ve fallar.
+    if (!cards && !dynamicCards) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message:
+          'El carrusel debe declarar `cards` (literales) o `dynamic_cards` (desde catálogo).',
+      });
+      return;
+    }
+    if (cards && dynamicCards) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['content'],
+        message:
+          '`cards` y `dynamic_cards` son mutuamente excluyentes: elige cards literales o catálogo.',
+      });
+      return;
+    }
+
+    // Un carrusel dinámico genera sus ids en runtime desde el catálogo, así
+    // que una transición `button` no puede nombrar ninguno: es inalcanzable.
+    // El routing correcto ahí es `card_any` + save_to_context.
+    if (dynamicCards) {
+      const conBoton = node.transitions.some((t) => t.condition.type === 'button');
+      if (conBoton) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['transitions'],
+          message:
+            'Un carrusel dinámico no admite transiciones `button`: sus ids salen del catálogo en runtime. Usa `card_any` con save_to_context.',
+        });
+      }
+      return;
+    }
+
+    if (!cards || cards.length === 0) return;
     const firstButtonType = cards[0]?.buttons[0]?.type;
     if (!firstButtonType) return;
     cards.forEach((card, i) => {
