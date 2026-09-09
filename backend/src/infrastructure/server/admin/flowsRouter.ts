@@ -32,7 +32,8 @@ export function createFlowsRouter(params: {
     }
   });
 
-  // GET /api/admin/tenants/:id/flows/:flowId/draft — draft actual (o null)
+  // GET /api/admin/tenants/:id/flows/:flowId/draft — lo editable: el draft
+  // si existe, si no una copia de lo publicado (ver getEditableFlow).
   // P7: la respuesta incluye `draftUpdatedAt` además de `draft` — campo extra,
   // no rompe al Designer (useDraft solo lee `res.draft`). El Guion lo usa
   // para saber qué timestamp tenía cargado antes de guardar (concurrencia
@@ -44,11 +45,18 @@ export function createFlowsRouter(params: {
       const tenantId = String(req.params.id);
       const flowId = String(req.params.flowId);
       try {
-        const [draft, meta] = await Promise.all([
-          botFlowRepository.getDraft(flowId, tenantId),
+        const [editable, meta] = await Promise.all([
+          botFlowRepository.getEditableFlow(flowId, tenantId),
           botFlowRepository.getDraftMeta(flowId, tenantId),
         ]);
-        res.json({ draft, draftUpdatedAt: meta?.draftUpdatedAt ?? null });
+        // `source` dice si lo que va en `draft` es un borrador de verdad o una
+        // copia de lo publicado (ver getEditableFlow). El Designer lo usa para
+        // avisarlo; los clientes viejos que solo leen `draft` no se rompen.
+        res.json({
+          draft: editable?.flow ?? null,
+          draftUpdatedAt: meta?.draftUpdatedAt ?? null,
+          source: editable?.source ?? null,
+        });
       } catch (err) {
         logger.error({ err, flowId }, 'GET draft failed');
         res.status(500).json({ error: 'Error obteniendo draft' });

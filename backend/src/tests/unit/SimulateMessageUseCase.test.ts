@@ -57,7 +57,7 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
       deactivateForTenant: jest.fn(),
       listTemplates: jest.fn(),
       listFlowsByTenant: jest.fn(),
-      getDraft: jest.fn(),
+      getEditableFlow: jest.fn(),
       saveDraft: jest.fn(),
       publishDraft: jest.fn(),
       listVersions: jest.fn(),
@@ -117,12 +117,12 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
   });
 
   it('source=draft con draft válido simula el draft', async () => {
-    botFlowRepository.getDraft.mockResolvedValue(validFlow);
+    botFlowRepository.getEditableFlow.mockResolvedValue({ flow: validFlow, source: 'draft' });
 
     const r = await useCase.execute({ ...base, source: 'draft', flowId: 'f1' });
 
     expect(r.error).toBeUndefined();
-    expect(botFlowRepository.getDraft).toHaveBeenCalledWith('f1', 't1');
+    expect(botFlowRepository.getEditableFlow).toHaveBeenCalledWith('f1', 't1');
     expect(botFlowRepository.findActiveByTenant).not.toHaveBeenCalled();
     expect(flowInterpreter.execute).toHaveBeenCalledWith(
       expect.objectContaining({ flow: validFlow }),
@@ -130,7 +130,7 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
   });
 
   it('source=draft con draft inválido devuelve error sin reventar', async () => {
-    botFlowRepository.getDraft.mockResolvedValue(invalidDraft);
+    botFlowRepository.getEditableFlow.mockResolvedValue({ flow: invalidDraft, source: 'draft' });
 
     const r = await useCase.execute({ ...base, source: 'draft', flowId: 'f1' });
 
@@ -142,16 +142,35 @@ describe('SimulateMessageUseCase — selección de fuente (A1)', () => {
     const r = await useCase.execute({ ...base, source: 'draft' });
 
     expect(r.error).toMatch(/requiere flowId/);
-    expect(botFlowRepository.getDraft).not.toHaveBeenCalled();
+    expect(botFlowRepository.getEditableFlow).not.toHaveBeenCalled();
     expect(flowInterpreter.execute).not.toHaveBeenCalled();
   });
 
-  it('source=draft sin draft persistido devuelve error', async () => {
-    botFlowRepository.getDraft.mockResolvedValue(null);
+  // CAMBIO DELIBERADO (hallazgo #1 de AUDITORIA_DUPLICACION_PANEL.md): antes
+  // esto era un error, "no tiene draft para simular". Como publishDraft nulea
+  // draft_json, ese error saltaba justo después de publicar bien — imposible
+  // simular lo que se veía en el canvas. Ahora "draft" significa "lo que el
+  // operador está editando", que sin borrador guardado es lo publicado.
+  it('source=draft sin draft persistido simula lo publicado, no falla', async () => {
+    botFlowRepository.getEditableFlow.mockResolvedValue({
+      flow: validFlow,
+      source: 'published',
+    });
 
     const r = await useCase.execute({ ...base, source: 'draft', flowId: 'f1' });
 
-    expect(r.error).toMatch(/no tiene draft/);
+    expect(r.error).toBeUndefined();
+    expect(flowInterpreter.execute).toHaveBeenCalledWith(
+      expect.objectContaining({ flow: validFlow }),
+    );
+  });
+
+  it('source=draft con un flow que no existe sí devuelve error', async () => {
+    botFlowRepository.getEditableFlow.mockResolvedValue(null);
+
+    const r = await useCase.execute({ ...base, source: 'draft', flowId: 'f1' });
+
+    expect(r.error).toMatch(/no existe/);
     expect(flowInterpreter.execute).not.toHaveBeenCalled();
   });
 

@@ -9,6 +9,7 @@ import {
   rollbackToVersion,
   type FlowSummary,
   type FlowVersion,
+  type EditableFlow,
 } from '@/shared/api/flows';
 
 /** Lista de flows del tenant (resuelve el flowId del designer). */
@@ -22,9 +23,12 @@ export function useFlows(tenantId: string) {
   });
 }
 
-/** Draft crudo de un flow (unknown: el backend no lo valida). */
+/**
+ * Lo editable de un flow: el draft si existe, si no una copia de lo publicado.
+ * El backend no lo valida (de ahí `unknown` en `draft`).
+ */
 export function useDraft(tenantId: string, flowId: string | null) {
-  return useQuery<unknown>({
+  return useQuery<EditableFlow>({
     queryKey: ['flow-draft', tenantId, flowId],
     queryFn: () => getDraft(tenantId, flowId as string),
     refetchOnWindowFocus: false,

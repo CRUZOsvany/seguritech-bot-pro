@@ -68,16 +68,30 @@ export interface BotFlowRepository {
   }>>;
 
   /**
-   * Devuelve el draft_json crudo de un flow (puede estar incompleto/ inválido),
-   * o null si no hay draft. NO valida contra FlowSchema.
+   * El flow que el operador está EDITANDO: el `draft_json` si existe y, si no,
+   * una copia de lo que está publicado y corriendo (`json_definition`).
+   * `null` solo si el flow no existe para ese tenant.
+   *
+   * El fallback es el arreglo del hallazgo #1 de AUDITORIA_DUPLICACION_PANEL.md:
+   * `publishDraft` nulea `draft_json` al publicar, así que sin esto el Designer
+   * quedaba en blanco justo DESPUÉS de publicar bien, y el simulador respondía
+   * "no tiene draft para simular". Abrir el editor no crea un draft: la fila
+   * sigue con `draft_json = null` hasta que alguien guarde.
+   *
+   * `source` dice cuál de los dos se devolvió, para que la interfaz pueda
+   * advertir que se está viendo una copia de lo publicado.
+   *
+   * NO valida contra FlowSchema: el draft puede estar incompleto o inválido.
    */
-  getDraft(flowId: string, tenantId: string): Promise<unknown | null>;
+  getEditableFlow(
+    flowId: string,
+    tenantId: string,
+  ): Promise<{ flow: unknown; source: 'draft' | 'published' } | null>;
 
   /**
    * Solo el timestamp de `draft_updated_at`, sin el contenido (P7). Separado
-   * de `getDraft()` a propósito: `getDraft()` lo usa también
-   * `SimulateMessageUseCase` (source='draft'), que espera el flow crudo, no
-   * un wrapper — no se le puede cambiar el shape sin romper ese caller.
+   * de `getEditableFlow()` a propósito: ésta solo necesita el timestamp, sin
+   * traerse el JSON entero del flow.
    * `null` si el flow no existe; `{ draftUpdatedAt: null }` si existe pero
    * nunca tuvo un draft guardado.
    */
