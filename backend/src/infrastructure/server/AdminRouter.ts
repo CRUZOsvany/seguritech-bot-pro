@@ -22,6 +22,7 @@ import { createTenantsRouter } from './admin/tenantsRouter';
 import { createServicesRouter } from './admin/servicesRouter';
 import { createMetaRouter } from './admin/metaRouter';
 import { createFlowsRouter } from './admin/flowsRouter';
+import { createBlocksRouter } from './admin/blocksRouter';
 import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
 import { createPosCatalogRouter } from './admin/posCatalogRouter';
 import { createServiceDirectoryRouter } from './admin/serviceDirectoryRouter';
@@ -104,6 +105,11 @@ export function createAdminRouter(params: {
   // el orden de montaje no altera el matching.
   router.use(
     createFlowsRouter({ botFlowRepository, audit, logger }),
+  );
+  // Bloques compuestos (F1-a): expandir y ensamblar. No persiste nada — el
+  // Designer carga el resultado en el canvas y guarda por la ruta de siempre.
+  router.use(
+    createBlocksRouter({ logger }),
   );
   router.use(
     createServicesRouter({ tenantServiceRepository, audit, logger }),
