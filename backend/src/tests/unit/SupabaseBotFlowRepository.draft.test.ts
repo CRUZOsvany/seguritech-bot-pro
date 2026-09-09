@@ -151,3 +151,66 @@ describe('SupabaseBotFlowRepository — saveDraft (concurrencia optimista, P7)',
     ).rejects.toThrow('boom');
   });
 });
+
+/**
+ * Hallazgo #1 de .claude/AUDITORIA_DUPLICACION_PANEL.md.
+ *
+ * `publishDraft` termina en `setActiveFlow({ clearDraft: true })`, que nulea
+ * `draft_json`. Con el `getDraft` anterior — que devolvia `draft_json ?? null`
+ * — el Designer cargaba EMPTY_FLOW y pintaba "El flujo no tiene nodos en el
+ * draft" JUSTO DESPUES de publicar bien. Publicar era la accion que dejaba el
+ * editor en blanco, sin forma de volver a llenarlo desde la interfaz.
+ */
+describe('SupabaseBotFlowRepository - getEditableFlow (resiembra del draft)', () => {
+  const DRAFT = { version: '1.0', start_node_id: 'a', nodes: [{ id: 'a' }] };
+  const PUBLICADO = { version: '1.0', start_node_id: 'z', nodes: [{ id: 'z' }] };
+
+  it('devuelve el draft cuando existe', async () => {
+    const { client } = makeSupabase([
+      { data: { draft_json: DRAFT, json_definition: PUBLICADO } },
+    ]);
+    const repo = new SupabaseBotFlowRepository(client, silentLogger);
+
+    expect(await repo.getEditableFlow(FLOW_ID, TENANT_ID)).toEqual({
+      flow: DRAFT,
+      source: 'draft',
+    });
+  });
+
+  it('sin draft devuelve lo publicado, no null', async () => {
+    const { client } = makeSupabase([
+      { data: { draft_json: null, json_definition: PUBLICADO } },
+    ]);
+    const repo = new SupabaseBotFlowRepository(client, silentLogger);
+
+    expect(await repo.getEditableFlow(FLOW_ID, TENANT_ID)).toEqual({
+      flow: PUBLICADO,
+      source: 'published',
+    });
+  });
+
+  it('null solo si el flow no existe para el tenant', async () => {
+    const { client } = makeSupabase([{ data: null }]);
+    const repo = new SupabaseBotFlowRepository(client, silentLogger);
+
+    expect(await repo.getEditableFlow(FLOW_ID, TENANT_ID)).toBeNull();
+  });
+
+  it('filtra por tenant_id ademas de por id (aislamiento multi-tenant)', async () => {
+    const { client, calls } = makeSupabase([
+      { data: { draft_json: null, json_definition: PUBLICADO } },
+    ]);
+    const repo = new SupabaseBotFlowRepository(client, silentLogger);
+
+    await repo.getEditableFlow(FLOW_ID, TENANT_ID);
+
+    expect(calls).toContainEqual({ method: 'eq', args: ['tenant_id', TENANT_ID] });
+  });
+
+  it('propaga el error de Supabase como Error', async () => {
+    const { client } = makeSupabase([{ error: { message: 'boom' } }]);
+    const repo = new SupabaseBotFlowRepository(client, silentLogger);
+
+    await expect(repo.getEditableFlow(FLOW_ID, TENANT_ID)).rejects.toThrow('boom');
+  });
+});

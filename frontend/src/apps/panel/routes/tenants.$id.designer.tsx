@@ -116,7 +116,7 @@ function DesignerPage() {
   // Cargar el draft al canvas cuando llega (o flow vacío si no hay draft).
   useEffect(() => {
     if (!flowId || !draftQ.isSuccess) return;
-    const raw = draftQ.data;
+    const raw = draftQ.data.draft;
     loadFromBotFlow(isBotFlowish(raw) ? raw : EMPTY_FLOW, flowId);
   }, [flowId, draftQ.isSuccess, draftQ.data, loadFromBotFlow]);
 
@@ -206,6 +206,9 @@ function DesignerCanvas({
   const save = useSaveDraft(tenantId);
   const publish = usePublish(tenantId);
   const loadFromBotFlow = useDesignerStore((s) => s.loadFromBotFlow);
+  // Misma queryKey que en DesignerPage: TanStack la sirve de cache, no
+  // dispara un fetch extra. Solo se necesita el source para el aviso.
+  const draftQ = useDraft(tenantId, flowId);
 
   const sessionQ = useSession();
   const isSuperAdmin = sessionQ.data?.role === 'super_admin';
@@ -433,6 +436,14 @@ function DesignerCanvas({
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {draftQ.data?.source === 'published' && (
+          <Alert>
+            <AlertDescription className="text-xs">
+              Estás viendo una copia de la versión publicada. Todavía no hay
+              borrador: se creará en cuanto guardes.
+            </AlertDescription>
+          </Alert>
+        )}
         {save.error instanceof ApiError && (
           <Alert variant="destructive">
             <AlertDescription>Error al guardar: {save.error.message}</AlertDescription>
