@@ -10,6 +10,8 @@ import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { Message, User, UserState } from '@/domain/entities';
 import type { BotFlow } from '@/domain/entities/flow';
 import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchema';
+import { enrichOwnerAlert } from '@/domain/services/OwnerAlertFormatter';
+import { SESSION_EXPIRED_NOTICE, isSessionExpired } from '@/domain/services/SessionTtlPolicy';
 
 /**
  * Fuente del flow a simular:
@@ -52,6 +54,14 @@ export interface SimulateInput {
    * comportamiento que siempre (el simulador no respeta horarios).
    */
   simulateAt?: string;
+  /**
+   * Fase 3 (fidelidad del simulador): minutos a "avanzar" desde el turno
+   * anterior antes de procesar este mensaje, para probar el gate de
+   * expiración de sesión (DEC-07) sin esperar 2h de verdad. Ausente ⇒ sin
+   * gate, mismo comportamiento que siempre. Solo tiene efecto si el usuario
+   * estaba a media captura (currentNodeId definido y != 'end').
+   */
+  simulatedElapsedMinutes?: number;
 }
 
 export interface SimulateResult {
@@ -177,6 +187,36 @@ export class SimulateMessageUseCase {
       }
     }
 
+    // 3.6 (Fase 3, fidelidad del simulador): gate de expiración de sesión
+    // (DEC-07), reusando la misma política que BotController aplica a
+    // mensajes reales. Solo se activa si el operador manda
+    // `simulatedElapsedMinutes`; sin eso, comportamiento idéntico al de
+    // siempre. En modo persist=true, si el operador no mandó ese campo,
+    // también se respeta el TTL real vía `user.lastInboundAt` — igual que
+    // en producción.
+    let effectiveUser = user;
+    let sessionExpiredNoticeShown = false;
+    const midFlow = !!user.currentNodeId && user.currentNodeId !== 'end';
+    if (midFlow) {
+      const now = input.simulateAt ? new Date(input.simulateAt) : new Date();
+      const hours = {
+        horarioSemana: tenantConfig.horarioSemana,
+        horarioSabado: tenantConfig.horarioSabado,
+        abreDomingo: tenantConfig.abreDomingo,
+      };
+      let expired = false;
+      if (input.simulatedElapsedMinutes !== undefined) {
+        const from = new Date(now.getTime() - input.simulatedElapsedMinutes * 60_000);
+        expired = isSessionExpired(this.businessHoursService, hours, from, now);
+      } else if (persist && user.lastInboundAt) {
+        expired = isSessionExpired(this.businessHoursService, hours, user.lastInboundAt, now);
+      }
+      if (expired) {
+        effectiveUser = { ...user, currentNodeId: undefined, context: {} };
+        sessionExpiredNoticeShown = true;
+      }
+    }
+
     // 4. Construir Message
     const message: Message = {
       id: this.generateId(),
@@ -189,27 +229,43 @@ export class SimulateMessageUseCase {
     // 5. Ejecutar flow
     const result = await this.flowInterpreter.execute({
       flow,
-      user,
+      user: effectiveUser,
       message,
       tenantConfig,
     });
 
     // 6. Persistir si corresponde
     if (persist) {
-      const mergedContext = { ...(user.context ?? {}), ...result.contextUpdates };
+      const mergedContext = { ...(effectiveUser.context ?? {}), ...result.contextUpdates };
       await this.userRepository.update({
-        ...user,
+        ...effectiveUser,
         currentNodeId: result.nextNodeId,
         context: mergedContext,
         updatedAt: new Date(),
       });
     }
 
+    // Fase 2 (fidelidad del simulador): la alerta que ve el operador debe
+    // ser la MISMA que recibiría el dueño de verdad, no el
+    // owner_alert_template crudo del flow.
+    const enrichedOutputs: InterpreterOutput[] = result.outputs.map((o) =>
+      o.kind === 'escape_to_human'
+        ? { ...o, ownerAlert: enrichOwnerAlert(o.ownerAlert, phoneNumber) }
+        : o,
+    );
+
+    // Fase 3: mismo orden de dos mensajes que BotController — primero el
+    // aviso de "empezamos de nuevo", luego lo que haya respondido el flow
+    // ya reiniciado.
+    const finalOutputs: InterpreterOutput[] = sessionExpiredNoticeShown
+      ? [{ kind: 'text', text: SESSION_EXPIRED_NOTICE }, ...enrichedOutputs]
+      : enrichedOutputs;
+
     return {
-      outputs: result.outputs,
+      outputs: finalOutputs,
       nextNodeId: result.nextNodeId,
       context: {
-        ...(user.context ?? {}),
+        ...(effectiveUser.context ?? {}),
         ...result.contextUpdates,
       },
       flowEnded: result.flowEnded,
