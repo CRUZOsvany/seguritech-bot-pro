@@ -1,5 +1,10 @@
 # Plan de Solución — Hallazgos Pendientes (Documento 1 de 2)
 
+> **[CERRADO — reemplazado]**
+> Plan derivado de la auditoría del 2026-08-20. Los bloques 0, 1 y 3 están resueltos; el bloque 2 (cumplimiento Meta) quedó implementado en las migraciones 019 y 020; los bloques 4 y 5 viven ahora en `SEGURITECH_ROADMAP_OPERATIVO.md`. Se conserva por el detalle del razonamiento, no como lista de trabajo. Sus referencias internas a `SEGURITECH_ESTADO_ACTUAL.md §0-ter` apuntan a una sección que ya no existe: el estado vivo está en ese archivo, pero con otra estructura. Consolidación documental del 2026-09-08.
+
+---
+
 > **Producto:** ChatBot (SegurITech) — V1 sin IA. ChatBot Pro (con IA/Secretaria Digital) queda pausado para una fase futura — ver nota de pausa en `.claude/SEGURITECH_AI_SECRETARIA_PLAN.md`.
 >
 > Consolida todo lo encontrado en la auditoría del 2026-08-20: 3 ramas sin integrar, contradicciones de documentación, y los gaps de cumplimiento Meta. Cada bloque está pensado para convertirse en un prompt de Claude Code independiente, en el orden en que aparece.

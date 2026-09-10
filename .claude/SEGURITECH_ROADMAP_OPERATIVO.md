@@ -1,246 +1,267 @@
-# SegurITech — Roadmap Operativo y Checklist Maestro
+# SegurITech Bot Pro — ROADMAP
 
-> **Qué es esto.** El plano de ejecución de aquí en adelante. El `SEGURITECH_PROYECTO_MAESTRO.md` dice QUÉ es el proyecto y POR QUÉ; este documento dice QUÉ HACER y EN QUÉ ORDEN para no olvidar nada.
+> **Qué es este documento.** Qué hacer y en qué orden. El `MAESTRO` dice qué es el proyecto y por qué; el `ESTADO` dice cómo está hoy; este dice hacia dónde se camina.
 >
-> **Versión:** 1.0 — Junio 2026
-> **Cómo usar:** se trabaja de arriba hacia abajo. No se salta de P0 a P2 por antojo. Al cerrar un camino completo, se actualiza la sección correspondiente del `SEGURITECH_PROYECTO_MAESTRO.md` y la bitácora.
-> **Convención:** `[ ]` pendiente, `[x]` confirmado hecho en el código actual, `[~]` parcial / verificar.
+> **Convención:** `[ ]` pendiente · `[~]` parcial o por verificar · `[x]` cerrado y verificado.
+> **Cómo se usa:** de arriba hacia abajo. No se salta de fase por antojo. Al cerrar una fase completa se corre el ritual de §7.5 del MAESTRO.
+>
+> **Numeración:** este proyecto usa **Fases**. Los "Sprints" del MAESTRO v2.0 quedan como alias histórico y no se usan más para planear.
+>
+> **Versión:** 2.0 (consolidación 2026-09-08) · Reemplaza al ROADMAP_OPERATIVO v1.0
 
 ---
 
-## Mapa de prioridades (el porqué del orden)
-
-El orden NO es por gusto, es por dependencias y por riesgo:
+## Por qué este orden
 
 ```
-P0  DESBLOQUEAR INGRESO      → sin esto no hay un solo peso. Lo más urgente.
-P1  QUE NO SE CAIGA          → antes de que viva data real de un cliente.
-P2  PROFUNDIZAR PRODUCTO     → solo con clientes pagando que lo justifiquen.
-P3  ESCALA Y DIFERIDOS       → no antes de tiempo. Disciplina.
+FASE 1    PRIMER CLIENTE QUE PAGA      sin esto no hay un solo peso
+FASE 1.5  QUE NO SE CAIGA              antes de meter a un tercero
+FASE 2    PROFUNDIZAR EL BOT           con clientes que lo justifiquen
+FASE 3    POS                          después del bot, no en paralelo (DEC-09)
+FASE 4    DIFERIDOS                    cada uno exige ADR antes de entrar
 
-|| LÍNEA PARALELA: cámaras (negocio físico, no compite por las mismas horas de código)
-|| TRANSVERSAL: git, entorno, infra-as-you-go (corre todo el tiempo)
+|| PARALELO   SECURITECH cámaras — negocio físico, no compite por horas de código
+|| TRANSVERSAL proceso, higiene, infra — corre todo el tiempo
 ```
 
-**Dependencia crítica que define el calendario:** la verificación de Meta es el cuello de botella (1–2 semanas, fuera de tu control). TODO lo demás de P0 se hace en paralelo MIENTRAS Meta verifica. Si no arrancas Meta hoy, todo P0 se atrasa esas 2 semanas al final.
+**El cuello de botella define el calendario.** La verificación de Meta está fuera de control del equipo. Todo lo demás de la Fase 1 se hace **mientras** Meta verifica, no después.
 
 ```
-Meta verification (Camino A) ──┐
-Infra prod (Camino B) ─────────┼──> Onboarding 1er cliente (Camino E) ──> INGRESO
-Supabase Cloud (Camino C) ─────┤
-Hardening crítico (Camino D) ──┘
+Meta (1A) ─────────┐
+Producción (1B) ───┼──> Onboarding tenant cero (1D) ──> INGRESO
+Datos (1C) ────────┘
 ```
 
 ---
 
-## P0 — DESBLOQUEAR EL PRIMER CLIENTE QUE PAGA
+## FASE 1 — Primer cliente que paga
 
-Objetivo único: una papelería (o SECURITECH como tenant cero) recibiendo y respondiendo en su WhatsApp **oficial**, en producción, de forma estable.
+**Objetivo único:** un negocio real recibiendo y respondiendo en su WhatsApp oficial, en producción, de forma estable.
 
-### Camino A — Verificación Meta (EL CUELLO DE BOTELLA — ARRANCA HOY)
-- [x] Crear/confirmar Meta Business Account del negocio
-- [x] Iniciar verificación de negocio (documentos fiscales del negocio que será tenant cero) — **confirmado por el owner directamente 2026-08-20: "ya está en curso".** No verificado desde código (no es verificable desde el repo); si necesitas la fecha exacta o el estado en el dashboard de Meta, es dato externo, no de este documento.
-- [ ] Crear App en Meta for Developers, producto WhatsApp — sub-paso NO confirmado individualmente, no asumir hecho solo porque la verificación general arrancó
-- [ ] Generar System User con **token permanente** (no token temporal de 24h) — sin confirmar
-- [ ] Dar de alta el número de WhatsApp Business y verificarlo — sin confirmar
-- [ ] Enviar el **primer template** a aprobación (uno de saludo/aviso simple) — sin confirmar
-- [ ] Anotar `phone_number_id`, `waba_id`, `app_secret` para `tenant_meta_credentials` — sin confirmar
-- [ ] **Mientras Meta revisa, no te bloquees: avanza B, C, D en paralelo**
+**Estado del código:** cerrado. El backend está probado (344 tests), el frontend y el Designer existen, la base está completa y aplicada. **Lo que falta en esta fase no es código.**
 
-### Camino B — Infraestructura de producción
-- [ ] Provisionar VPS Hetzner CX22 (Ashburn)
-- [ ] Hardening base del VPS: usuario no-root, SSH por llave, `ufw` (solo 22/80/443), `fail2ban`
-- [ ] Instalar Node LTS 20 + PM2 + nginx (reverse proxy a `127.0.0.1:3001`)
-- [ ] Comprar/configurar dominio + DNS en Cloudflare
-- [ ] Certificado TLS (Cloudflare proxied o certbot detrás de nginx)
-- [ ] Cloudflare Access (Zero Trust) con whitelist de emails del equipo sobre el panel admin
-- [ ] Webhook público de Meta apuntando al dominio (`/webhook`), HTTPS válido
-- [ ] Generar TODOS los secretos en el VPS con `openssl` (nunca con LLM):
-  - [ ] `ADMIN_JWT_SECRET` (`openssl rand -hex 64`)
-  - [ ] `META_TOKEN_ENCRYPTION_KEY` (`openssl rand -hex 32` — **NO ROTAR jamás después**)
-  - [ ] `META_VERIFY_TOKEN` (`openssl rand -hex 32`)
-  - [ ] `BACKEND_API_KEY` (`openssl rand -hex 32`)
-- [ ] `NODE_ENV=production` y validar que `config/env.ts` rechaza secretos débiles
-- [ ] Deploy con PM2 + `pm2 startup` + `pm2 save` (autostart al reboot)
-- [ ] Build del `frontend/` servido como estático por el mismo Express (una URL, una cookie, cero CORS)
+### 1A — Meta (el cuello de botella)
 
-### Camino C — Supabase Cloud + datos
-- [~] Aplicar migrations en orden en el SQL Editor de Cloud — en repo existen **001–015** (todas, verificado 2026-06-03). Falta confirmar cuáles corrieron en Cloud (memoria: mig015 ya aplicada)
-- [ ] Confirmar que **todas** las migrations corrieron sin error (las `CREATE POLICY` no son idempotentes — ojo)
-- [ ] Seed del primer `super_admin` (hash bcrypt generado con el script, nunca password en claro)
-- [ ] Verificar RLS activo como defensa en profundidad
-- [ ] Smoke test: `select count(*) from admin_users where role='super_admin'` devuelve 1
-- [ ] Login real contra prod devuelve cookie `seguritech_session` y `/api/admin/tenants` responde
+- [x] Meta Business Account creada
+- [x] Verificación de negocio iniciada (en curso desde 2026-08-20)
+- [ ] App en Meta for Developers con producto WhatsApp — **sin confirmar uno por uno**
+- [ ] System User con **token permanente**, no el temporal de 24 h
+- [ ] Número de WhatsApp Business dado de alta y verificado
+- [ ] Primer template enviado a aprobación
+- [ ] Anotar `phone_number_id`, `waba_id`, `app_secret` para `tenant_meta_credentials`
+- [ ] Levantar túnel `cloudflared` para probar end-to-end **mientras** Meta verifica
 
-### Camino D — Hardening crítico de código
-- [x] `tenant_services` como única fuente de verdad (mergeado)
-- [x] FSM de servicio con transiciones válidas forzadas (409 en inválida)
-- [x] API de flows draft/publish/rollback (mergeado)
-- [x] AdminRouter modularizado en sub-routers (mergeado)
-- [x] `tenants.status='paused'` bloquea el webhook — `webhookStatusGating.test.ts` verde 2/2 (verificado 2026-06-03)
-- [x] **Matar `HandleMessageUseCase` legacy** (ADR-012) — la lógica ya estaba: `BotController` responde "⚙️ en mantenimiento" para tenants sin flow, sin fallback FSM. Borrado el código muerto (use-case + test) en rama `chore/adr-012-remove-legacy-handlemessage` (commit 18e2a43), **PR pendiente de merge** (2026-06-03)
-- [x] Gatear `ReadlineAdapter` a `if (config.isDevelopment)` — ya hecho (`Bootstrap.ts:260`)
-- [~] CI verde: type-check exit 0, lint 0 errores (89 warnings preexistentes), suite verde. Falta confirmar el workflow .github contra front+carpetas muertas
-- [x] Limpiar `.env.example` raíz — moot, **no existe** `.env.example` en la raíz (verificado 2026-06-03)
-- [x] Borrar fósiles: `backend/bin/www` — moot, **ya no existe** (verificado 2026-06-03)
-- [~] **Auditoría de seguridad 2026-08-20** (IDOR cross-tenant en `/simulate`, webhook sin firma HMAC aceptado en producción, `BACKEND_API_KEY` débil) — 3 fixes reales, verificados en código y con 163/163 tests en verde, pero viven en la rama `security/audit-hardening-2026-08-20` **sin mergear a `main`**. No marcar `[x]` hasta que el PR esté mergeado — ver `.claude/SEGURITECH_ESTADO_ACTUAL.md` §0-ter.
+> Los sub-pasos marcados sin confirmar no están hechos solo porque el trámite general arrancó. Se confirman uno por uno contra el Business Manager, no contra este documento.
 
-### Camino E — Onboarding del primer cliente real
-- [ ] Elegir tenant cero (recomendado: **SECURITECH cámaras como tu propio tenant** — pruebas en carne propia sin arriesgar a un tercero; ya tienes `securitech-flow.json`)
-- [ ] Crear tenant en el panel, asignar servicio `whatsapp_bot`
-- [ ] Cargar credenciales Meta del Camino A (interactivo, nunca en prompt)
-- [ ] Asignar molde / publicar el flow, validar en el simulador embebido
-- [ ] Transición FSM: `draft → sandbox → live`
-- [ ] Prueba end-to-end real desde un celular externo contra el número oficial
-- [ ] Verificar que el aviso al dueño llega (ese camino ya funciona en código)
-- [ ] **MÉTRICA DE ÉXITO P0:** mensaje real entra, bot responde correcto, dueño notificado, todo en prod
+### 1B — Destino de producción
+
+**Decisión pendiente antes de tocar nada aquí:** ¿el piloto sale en el servidor Ubuntu de la LAN donde ya corre en Docker, o se espera al VPS con dominio público? Un webhook de Meta necesita HTTPS público, así que la LAN sola no basta para tráfico real — pero un túnel sí podría cubrir el piloto. Decidirlo cambia el resto de esta sección.
+
+- [x] Servicio corriendo en Docker en servidor Ubuntu de la LAN
+- [x] `docker-compose.yml` leyendo `backend/.env` vía `env_file` (arreglado 2026-09-06)
+- [ ] Provisionar VPS Hetzner CX22
+- [ ] Hardening: usuario no-root, SSH por llave, `ufw` (22/80/443), `fail2ban`
+- [ ] Node LTS 20 + PM2 + nginx como reverse proxy a `127.0.0.1:3001`
+- [ ] Dominio + DNS en Cloudflare + TLS
+- [ ] Cloudflare Access Zero Trust sobre el panel, whitelist de emails del equipo
+- [ ] Generar **todos** los secretos en el servidor con `openssl` (regla 13)
+- [ ] `NODE_ENV=production` y confirmar que `validateConfig()` rechaza secretos débiles
+- [ ] PM2 con `pm2 startup` + `pm2 save`
+- [ ] Webhook de Meta apuntando al dominio con HTTPS válido
+
+Guía ejecutable: `docs/deployment/RUNBOOK_PRODUCCION.md`.
+
+### 1C — Datos y catálogo
+
+- [~] Migraciones 001–020 aplicadas en Supabase Cloud — última confirmación real el 2026-09-01; reverificar por lectura REST
+- [x] Seed del primer `super_admin`
+- [ ] **Enlazar el CLI de Supabase** (`npx supabase login` → `link --project-ref …`). Mientras no exista, cada migración mergeada puede quedar sin aplicar — ya pasó dos veces
+- [ ] **Cargar el inventario real**: mínimo 150 SKUs (DEC-10). Hoy solo hay import por CSV, sin CRUD producto a producto
+- [ ] Smoke test contra producción: login devuelve cookie, `/api/admin/tenants` responde 200, sin cookie responde 401
+
+### 1D — Onboarding del tenant cero
+
+- [ ] Elegir tenant cero. Recomendado: **SECURITECH cámaras como tenant propio** — se prueba en carne propia sin arriesgar a un tercero, y ya existe `securitech-flow.json`
+- [ ] Crear el tenant, activar el servicio `whatsapp_bot`
+- [ ] Cargar credenciales Meta de 1A (interactivo, nunca en un prompt)
+- [ ] Publicar el flow y validarlo en el simulador embebido
+- [ ] FSM: `draft → sandbox → live`
+- [ ] Prueba end-to-end desde un celular externo contra el número oficial
+- [ ] Confirmar que el aviso al dueño llega
+
+### Criterio de salida de la Fase 1
+
+Un mensaje real entra desde un celular ajeno, el bot responde correctamente, el dueño recibe su aviso, y todo ocurre en producción. Si falta cualquiera de las cuatro, la fase sigue abierta.
 
 ---
 
-## P1 — QUE NO SE CAIGA Y QUE PUEDAS DORMIR
+## FASE 1.5 — Que no se caiga
 
-No metas un cliente que paga (un tercero) sin cerrar esto. Es la diferencia entre un susto y una catástrofe de reputación en un mercado de referidos.
+No se mete un tercero que paga sin cerrar esto. Es la diferencia entre un susto y una catástrofe de reputación en un mercado de referidos.
 
-### Camino F — Observabilidad
-- [ ] Sentry (free tier) capturando errores del backend
-- [ ] UptimeRobot pingueando el dominio + un endpoint `/health`
-- [ ] Confirmar logs Pino estructurados (JSON) en prod, rotación con PM2 logrotate
-- [ ] Alerta (email/WhatsApp a ti) cuando el bot deje de responder
+### Observabilidad (DEC-14 ya decidida)
 
-### Camino G — Backups verificados
-- [ ] Cron `pg_dump` diario a Backblaze B2 (Supabase Free NO tiene backups automáticos)
-- [ ] Cifrar el dump antes de subir
-- [ ] **PROBAR una restauración real** a una DB limpia (un backup no probado no es un backup)
-- [ ] Documentar el procedimiento de restore en el runbook (Camino J)
+- [ ] Sentry capturando errores del backend
+- [ ] UptimeRobot sobre el dominio y `/health`
+- [ ] Logs Pino en JSON en producción con rotación vía PM2 logrotate
+- [ ] Alerta al equipo cuando el bot deje de responder
 
-### Camino H — Test cases como gate de publicación (ADR-013) ← el "diseñar mejor los bots"
+### Backups
+
+- [ ] Cron de `pg_dump` diario a Backblaze B2 — Supabase Free no trae backups automáticos
+- [ ] Cifrar el dump antes de subirlo
+- [ ] **Probar una restauración real** a una base limpia. Un backup no probado no es un backup
+- [ ] Documentar el restore en el runbook
+
+### Runbook de incidentes
+
+- [ ] "Qué hacer si el bot deja de responder": revisar PM2/Docker, webhook, token de Meta, Supabase
+- [ ] Procedimiento de restore
+- [ ] Procedimiento de rollback de flow (la API ya existe)
+- [ ] Quién atiende y en qué horario
+
+### Test cases como gate de publicación (ADR-013)
+
+Es lo que convierte "diseñar mejor los bots" en algo verificable, y da más valor por menos trabajo que casi cualquier feature nueva.
+
 - [ ] Tabla `bot_flow_test_cases`
-- [ ] UI mínima en el panel para crear casos (`inputs[] → expected last_node + outputs contains`)
+- [ ] UI mínima en el Designer: `inputs[] → expected last_node + outputs contains`
 - [ ] Runner contra `SimulateMessageUseCase`
-- [ ] **Gate:** no se puede activar una versión de flow si hay un caso en rojo
-- [ ] Escribir 3–5 casos para el flow de cámaras como primer ejemplo
-- [ ] (Opcional) `bot_flow_variables` para autocomplete de `{{variables}}`
+- [ ] **Gate:** no se publica una versión con un caso en rojo
+- [ ] 3–5 casos para el flow del tenant cero como primer ejemplo
 
-### Camino I — Saldar deuda técnica conocida
-- [ ] `send_list` como interactive list nativo de Meta (hoy se serializa como texto plano)
-- [ ] Resolver N+1 query en `GET /api/admin/tenants`
-- [x] Mover `InMemoryUserRepository` a `tests/utils/` — ya está ahí (`backend/src/tests/utils/InMemoryUserRepository.ts`, verificado 2026-06-03)
-- [ ] Depurar `docs/` (>30 .md de distintas épocas → solo lo vivo)
-- [ ] Aclarar/borrar `backend/supabase/seed.sql` si es legacy
+### Cumplimiento Meta antes de escalar
 
-### Camino J — Runbook de soporte / incidentes
-- [ ] Documento corto: "qué hacer si el bot deja de responder" (revisar PM2, webhook, token Meta, Supabase)
-- [ ] Procedimiento de restore de backup (del Camino G)
-- [ ] Procedimiento de rollback de flow (ya tienes la API)
-- [ ] Contacto/escalación: quién atiende y en qué horario (meta del doc: <2 tickets/cliente/mes)
+- [x] Ventana de servicio de 24 h (`bot_users.last_inbound_at`)
+- [x] Opt-out real (`bot_users.opted_out_at`)
+- [ ] Monitoreo del quality rating vía webhook de `account_update`
+- [ ] Marcar leído y "escribiendo" (bloqueado por 1A)
+- [ ] Delay de 600–1200 ms entre mensajes (DEC-08 decidida, sin implementar)
 
 ---
 
-## P2 — PROFUNDIZAR PRODUCTO
+## FASE 2 — Profundizar el bot
 
-Solo cuando P0+P1 estén cerrados y tengas al menos el tenant cero estable. Idealmente con 1–3 clientes reales.
+Solo con Fase 1 y 1.5 cerradas. Idealmente con 1–3 clientes reales.
 
-### Camino K — Moldes por industria
-- [x] Papelería (`papeleria.config.ts`)
-- [ ] Graduar `securitech-flow.json` (cámaras) de JSON suelto → molde reutilizable
+### Exprimir el motor que ya existe
+
+El flow más maduro usa 6 de los 14 tipos de nodo. Esto es ganancia disponible sin escribir motor nuevo.
+
+- [ ] Auditar cada flow vivo contra los 14 tipos y decidir dónde aportan carrusel, ubicación, CTA URL, reacciones y WhatsApp Flows nativos
+- [ ] Carrito multi-producto (DEC-02): juntar varios artículos en **una** alerta estructurada al dueño. Con DEC-01=A el bot sigue escalando siempre, así que el valor está en la calidad del aviso, no en cerrar la venta
+- [ ] Validación en `wait_input` (C-04)
+- [ ] Extracción de cantidades (C-05)
+- [ ] Desambiguación cuando hay varios matches (B-02)
+- [ ] Escape words configurables por tenant en vez de hardcodeadas (C-08)
+- [ ] Branching por contexto (C-02)
+
+### Panel y catálogo
+
+- [ ] CRUD de catálogo producto a producto (E-03). Hoy solo hay import CSV, y eso obliga a que un desarrollador intervenga en cada ajuste
+- [ ] Tests del frontend (E-01, alcance DEC-11): ValidationPanel, serialización, hooks de TanStack Query. Hoy no hay ni runner instalado
+- [ ] Completar el espejo de tipos en `designer/flow-types.ts` — le faltan `TransitionCondition` de `service_directory_match`, `catalog_found` y `catalog_not_found`
+- [ ] Audit log en `/simulate` con `persist:true` (D-03)
+
+### Moldes por industria
+
+Cada flow bueno hecho a mano se gradúa a molde. Es lo que baja el onboarding de horas a minutos — la métrica más crítica del negocio.
+
+- [x] Papelería (`papeleria.config.ts` + flow)
+- [x] Cerrajería (flow, sembrado a dos tenants reales)
+- [ ] Graduar `securitech-flow.json` (cámaras) de JSON suelto a molde reutilizable
 - [ ] Ferretería
-- [ ] Cerrajería
 - [ ] Pizzería
-- [ ] **Principio:** cada flow bueno hecho a mano se gradúa a molde. Baja el onboarding de horas a minutos (tu métrica más crítica)
-
-### Camino L — Bot Designer visual (React Flow) — **SOLO tras 3–5 clientes pagando**
-> Tu propio doc lo dice: "Resiste meter esto hasta tener 5 clientes pagando." El gate de test cases (Camino H) da más valor con menos trabajo. NO construyas el canvas antes.
-- [ ] Sprint 7: React Flow, 7 nodos custom, inspector con validación Zod en vivo
-- [ ] Sprint 8: simulador embebido split-screen + versionado + diff visual
-- [ ] (Test cases ya hechos en Camino H sirven aquí como gate)
-
-### Camino M — POS (segunda fase de entrega — puede correr en paralelo por otra persona)
-- [x] Bootstrap backend POS (12 tablas `pos_*`, auth PIN, endpoints catálogo)
-- [ ] F2-1 Endpoints admin CRUD (catálogo / categorías / cajeros)
-- [ ] F2-2 Endpoint sync de ventas idempotente por `client_uuid` + corte X/Z (ADR-010)
-- [ ] F2-3 Frontend: config admin del POS
-- [ ] F2-4 PWA cajero online (layout 3 zonas, búsqueda nombre/SKU/barcode, cobro efectivo/transfer/terminal)
-- [ ] F2-5 Offline-first (service worker + Dexie + sync queue + conflict resolution)
-- [ ] F2-6 Print agent (workspace `print-agent/` ESC/POS + cajón + instalador `pkg`)
-- [ ] F2-7 Corte de caja en UI + reportes esenciales
-
-### Camino N — Canal Messenger (tercer canal)
-- [ ] Confirmar columna `channel` en `bot_flows` (flujos separados por canal)
-- [ ] Adapter Messenger (el `FlowInterpreter` ya es agnóstico de canal — solo el adapter cambia)
-- [ ] Verificación Meta del canal Messenger
-- [ ] Molde/flow Messenger del tenant cero
 
 ---
 
-## P3 — ESCALA Y DIFERIDOS
+## FASE 3 — POS
 
-No antes de tiempo. Disciplina: cada uno requiere ADR explícito antes de meterlo.
+Diferido explícitamente hasta después del primer cliente pagando solo con el bot (DEC-09). Puede correr en paralelo si lo lleva otra persona.
 
-### Camino O — CFDI 4.0 (V2 del POS)
-- [ ] Integración con Facturama (PAC externo, NUNCA implementación propia — ADR-011)
-- [ ] Botón "Facturar ticket" → PAC devuelve PDF+XML → envío por WhatsApp/email
-
-### Camino P — Integración bot ↔ POS
-- [ ] Consulta de inventario/precio por WhatsApp leyendo el catálogo del POS
-
-### Camino Q — Analytics del MSP
-- [ ] Dashboard: clientes activos, MRR, mensajes/mes, churn, tickets/cliente
-
-### Camino R — Más
-- [ ] Lector cámara `@zxing` para tablets sin lector USB
-- [ ] Cobro integrado (Clip / Mercado Pago)
-- [ ] Multi-caja, multi-sucursal, lealtad, promociones complejas (todo diferido)
+- [x] Bootstrap backend: 12 tablas `pos_*`, auth por PIN, endpoints de lectura, import CSV
+- [ ] Endpoints admin de escritura: catálogo, categorías, cajeros
+- [ ] Sync de ventas idempotente por `pos_sales.client_id` + corte X/Z (ADR-010)
+- [ ] Config del POS en el panel admin
+- [ ] PWA del cajero online: tres zonas, búsqueda por nombre/SKU/código de barras, cobro efectivo/transferencia/terminal
+- [ ] Offline real: service worker + Dexie + cola de sincronización + resolución de conflictos
+- [ ] Print agent: workspace propio, ESC/POS, cajón de dinero, instalador con `pkg`
+- [ ] Corte de caja en UI + reportes esenciales
 
 ---
 
-## LÍNEA PARALELA — SECURITECH Cámaras (negocio físico)
+## FASE 4 — Diferidos
 
-Independiente del software. No compite por las mismas horas de desarrollo; corre en su propio carril.
+Nada de esto entra sin ADR explícito.
 
-### Camino S — Cotizaciones
-- [ ] Plantilla de cotización 1–2 páginas, lenguaje de beneficio (no specs técnicos)
-- [ ] Lógica de precio: costo cámara + instalación → markup 30–50% → precio cliente
-- [ ] Banco de fotos de instalaciones reales para credibilidad
-
-### Camino T — Modelo financiero corregido
-- [ ] Costos fijos reales (no subestimados)
-- [ ] Punto de equilibrio mezclado entre los 3 planes
-- [ ] Proyección de crecimiento realista
-- [ ] Régimen fiscal correcto para persona física nueva (RESICO probablemente — confirmar con contador)
-- [ ] Hojas de inversión inicial y flujo de caja
+- [ ] **CFDI 4.0** vía Facturama (ADR-011). Botón "facturar ticket" → PAC devuelve PDF y XML → se manda por WhatsApp o email
+- [ ] **IA / ChatBot Pro** — plan aprobado y pausado (ADR-015). Se retoma cuando el motor determinista esté exprimido y Meta cerrado
+- [ ] **Integración bot ↔ POS**: consulta de inventario y precio por WhatsApp
+- [ ] **Canal Messenger**: `bot_flows.channel` ya existe y el `FlowInterpreter` es agnóstico de canal; solo cambia el adapter
+- [ ] **Analytics del MSP**: clientes activos, MRR, mensajes/mes, churn, tickets por cliente
+- [ ] Lector de cámara con `@zxing` · cobro integrado Clip / Mercado Pago · multi-caja · lealtad · promociones complejas
 
 ---
 
-## TRANSVERSAL — proceso continuo (no es una fase)
+## PARALELO — SECURITECH cámaras
 
-### Git / proceso
-- [x] `main` protegida: PR obligatorio + CI verde (`test (20.x)`) + sin force push — VERIFICADO 2026-06-03 (push directo rechazado con GH013). Falta: exigir 1 approval explícito.
-- [ ] 1 tarea = 1 rama corta (`feat/`, `fix/`, `chore/`) = 1 PR pequeño
+Negocio físico. No compite por las mismas horas de desarrollo.
+
+- [ ] Plantilla de cotización de 1–2 páginas en lenguaje de beneficio, no de specs
+- [ ] Lógica de precio: costo + instalación → markup 30–50%
+- [ ] Banco de fotos de instalaciones reales
+- [ ] Costos fijos reales y punto de equilibrio entre los planes
+- [ ] Régimen fiscal correcto para persona física (probablemente RESICO — confirmar con contador)
+
+---
+
+## TRANSVERSAL — proceso continuo
+
+### Primero: devolver a `main` lo que nunca llegó (2026-09-09)
+
+Esto va antes que cualquier otra cosa de esta sección. Ver `ESTADO` §7 para el detalle de cómo pasó.
+
+- [ ] Mergear el PR **#80** (`fix/compose-env-file` → `main`): devuelve #75, #76 y #77 —carrusel con bucle cerrado, cards dinámicas, migración 021, siembra del Designer, auditoría de duplicación— más el arreglo de `FlowInterpreter` que la base equivocada destapó
+- [ ] **Aplicar y verificar la migración 021 el mismo día** que entre el #80 (regla 8). Hoy no está en Cloud ni en `main`
+- [ ] Mergear el PR **#78** (catálogo de reglas del motor). Va antes que el #79: el código de bloques lo cita
+- [ ] Mergear el PR **#79** (bloques compuestos, F1-a)
+- [ ] Borrar `fix/compose-env-file` al mergear. Ahora sí: dejarla viva después del #74 es lo que causó todo esto
+- [ ] Mergear la consolidación documental **al final**: su `CLAUDE.md` enlaza `REGLAS_FLOW.md` y `BLOQUES_COMPUESTOS.md`, que llegan con el #78 y el #79
+
+### Higiene inmediata (una tarde de trabajo, alto retorno)
+
+- [ ] Podar **7 ramas locales** y **21 remotas** ya mergeadas
+- [ ] Resolver las ramas remotas vivas: PR o borrar. `docs/runbook-referencias-pendientes` (PR **#55**, abierto desde el 2026-08-21) está 49 commits atrás — rebasar o cerrar y rehacer
+- [ ] Borrar `feature/sprint-6-new-tenant` (abandonada por decisión) y `test/local-validacion`
+- [ ] Convertir `backend/.env` a finales de línea LF
+
+### Proceso
+
+- [x] `main` protegida: PR obligatorio, CI en verde, sin force push
+- [x] Conventional commits
+- [ ] **Escribir la regla que faltaba: todo PR se abre contra `main`.** Si de verdad hace falta apilar sobre otra rama, se anota el porqué en la descripción y se reapunta a `main` en cuanto la base se mergee. Sin esta regla el CI queda verde validando el merge equivocado, que es exactamente lo que pasó con #75…#79
+- [ ] Exigir 1 approval explícito en `main`
 - [ ] GitHub Projects: `Backlog → To Do → In Progress → In Review → Done`
-- [ ] Cada Issue: objetivo + archivos que toca + criterios de aceptación + el prompt usado
-- [x] Conventional commits (ya en uso)
+- [ ] Borrar la rama en cada merge, sin excepción (§7.2 del MAESTRO)
 
 ### Entorno
-- [x] Migración a Linux — **YA estás en Fedora 41** (el doc maestro dice "Windows→Linux planned": ACTUALÍZALO, ya pasó)
-- [ ] Validar que tu entorno Fedora espeja el VPS Ubuntu (versión Node, postgres client, etc.)
-- [ ] `npm install` SOLO desde la raíz del monorepo (regla de oro)
-- [ ] Nunca `supabase db reset` contra Cloud
 
-### Crecimiento de infra
-- [ ] Supabase Free → Pro cuando: empieces a tener data de clientes reales o te acerques a límites (timing TBD; Pro = backups + más recursos)
+- [ ] Validar que el entorno de desarrollo espeja el servidor (versión de Node, cliente de Postgres)
+- [ ] Instalar `psql` y enlazar el CLI de Supabase
+- [ ] Supabase Free → Pro cuando haya datos de clientes reales (Pro trae backups)
 
 ---
 
-## Regla para "no olvidar nada"
+## Orden de ataque sugerido
 
-Al cerrar **cada camino completo**:
-1. Marca los `[x]` aquí.
-2. Actualiza la sección correspondiente del `SEGURITECH_PROYECTO_MAESTRO.md`.
-3. Anota en la bitácora del doc maestro qué cambió y por qué.
-4. Si revertiste una decisión, no la borres: táchala y anota la razón.
-
-**Orden de ataque sugerido para esta semana:** Camino A (HOY, en paralelo) → Camino B + C → Camino D → Camino E. Eso es el ingreso. P1 inmediatamente después, antes del primer cliente que NO seas tú.
+1. **Devolver a `main` el trabajo huérfano** (#80 → #78 → #79) y aplicar la migración 021. Es lo único que hoy hace que `main` no sea lo que el equipo cree que es.
+2. **Higiene transversal** — una tarde, desatasca todo lo demás.
+3. **Decidir 1B**: LAN con túnel o VPS con dominio. Bloquea el resto de la fase.
+4. **1A en paralelo, todos los días** — es lo único que no acelera con más horas de código.
+5. **1C**: enlazar el CLI y cargar el inventario real.
+6. **1D**: tenant cero end-to-end.
+7. **Fase 1.5 completa** antes de que el primer cliente sea alguien que no seas tú.
 
 ---
 
-**FIN DEL ROADMAP OPERATIVO**
+**FIN DEL ROADMAP**

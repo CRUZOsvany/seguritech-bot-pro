@@ -1,5 +1,10 @@
 # Contratos reales de `/api/admin/*` — descubiertos por prueba y error
 
+> **[REFERENCIA VIGENTE]**
+> Contratos reales de `/api/admin/*`. Se consulta antes de integrar contra un endpoint admin. Si contradice al router, gana el router.
+
+---
+
 > **Por qué existe este documento.** Durante el stress test del tenant demo
 > "Papelería DEMO" (2026-08-25, `.claude/PROMPT_DEMO_PAPELERIA_STRESS_TEST.md`)
 > varios prompts anteriores asumieron shapes de request/response que **no
