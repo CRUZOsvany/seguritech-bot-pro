@@ -47,7 +47,7 @@ los límites de Meta.
 | **R-F11** | Ningún nodo inalcanzable desde el inicio | ✅ `unreachable_node` | ❌ | **warning** | `graphValidator.ts:157-165` |
 | **R-F12** | Un nodo no-`end` alcanzable tiene salidas | ✅ `node_no_transitions` | ❌ | **warning** | `graphValidator.ts:179-189` |
 | **R-F13** | Sin ciclos sin salida en el grafo | ✅ `cycle_detected` | ❌ | **warning** | `graphValidator.ts:192-236` |
-| **R-F14** | Sin dos transiciones con la misma condición en un nodo | ✅ `duplicate_condition` | ❌ | **warning** | `graphValidator.ts:93-135` |
+| **R-F14** | Sin dos transiciones con la misma condición en un nodo | ✅ `duplicate_condition` | ❌ | **warning** | `graphValidator.ts:93-135`; `card_any` es clave propia de deduplicación en `graphValidator.ts:114-115` |
 
 ---
 
@@ -83,11 +83,21 @@ los límites de Meta.
 | Regla | Qué exige | L1 | L2 | Severidad |
 |---|---|---|---|---|
 | **R-F31** | Un nodo con `config_bound` tiene texto **exclusivamente** los placeholders declarados: sin variables de más, sin faltar ninguna, sin texto literal suelto | ✅ `config_bound_mismatch` | ✅ | error |
+| **R-F35** | Un `send_media_carousel` declara `cards` (literales) **o** `dynamic_cards` (desde catálogo), exactamente una de las dos: ni ninguna ni ambas | ❌ | ✅ | error |
+| **R-F36** | Un carrusel dinámico no admite transiciones `button`: sus ids salen del catálogo en runtime, así que la transición sería inalcanzable. El routing correcto es `card_any` + `save_to_context` | ❌ | ✅ | error |
 
 Es la **única regla implementada dos veces con la misma semántica**, en dos
 lenguajes. `graphValidator.ts:242-272` y `FlowSchema.superRefine` hacen el
 mismo regex y el mismo cálculo de `missing`/`extra`/`hasLiteralText`. Es el
 candidato número uno para el paquete compartido.
+
+**R-F35 y R-F36** llegaron con el carrusel (PR #75) y son L2 puras: el canvas
+no las ve. Evidencia: `flowSchema.ts:415-437` la exclusividad,
+`flowSchema.ts:442-453` la transición inalcanzable. La segunda es interesante
+porque no es un límite de Meta ni una regla de forma — es una regla de
+**alcanzabilidad**, la primera que comprueba el backend y no el frontend,
+cuando la alcanzabilidad era justo el territorio donde solo mandaba L1
+(R-F07, R-F11).
 
 ---
 
@@ -129,7 +139,7 @@ R-F09, R-F10) y solo se enteran al publicar, después del round-trip.
 |---|---|---|---|
 | Estructura | 4 (todas warning) | 5 | 4 |
 | Límites Meta | 0 | 16 | 0 |
-| Contenido | 0 | 0 | 1 (duplicada) |
+| Contenido | 0 | 2 (carrusel, R-F35/R-F36) | 1 (duplicada) |
 
 ---
 
@@ -166,14 +176,25 @@ catálogo. Con el mapa a la vista:
 
 ---
 
-## Pendiente de reconciliar
+## Reconciliado con el carrusel (PR #75)
 
-El PR #75 (carrusel) añade la condición `card_any` y las reglas de
-`dynamic_cards` al backend, y toca el espejo del frontend. Cuando se mergee,
-este catálogo gana:
+Este catálogo nació con el PR #75 sin mergear y dejó sus reglas anotadas como
+pendientes en vez de documentar código que no estaba en `main`. Ya están
+incorporadas, verificadas contra el código:
 
-- una regla de exclusividad `cards` / `dynamic_cards`,
-- una regla de transición `button` inalcanzable en carrusel dinámico,
-- `card_any` en la clave de deduplicación de R-F14.
+- **R-F35** — exclusividad `cards` / `dynamic_cards` (`flowSchema.ts:415-437`).
+- **R-F36** — transición `button` inalcanzable en carrusel dinámico
+  (`flowSchema.ts:442-453`).
+- **`card_any`** como clave propia en la deduplicación de R-F14
+  (`graphValidator.ts:114-115`).
 
-No se anticipan aquí para no documentar código sin mergear.
+Quedan **36 reglas** catalogadas.
+
+> **De dónde salió ese retraso.** El #75, junto con el #76 y el #77, se abrió
+> con base `fix/compose-env-file` en vez de `main`, y su trabajo no llegó a
+> `main` pese a figurar como mergeado; lo devuelve el PR #80. El episodio dejó
+> una lección que le toca de lleno a este catálogo: el #75 le añadió un sexto
+> parámetro al constructor de `FlowInterpreter` y dos tests que vivían solo en
+> `main` dejaron de compilar — **sin un solo conflicto de git**. Las reglas de
+> aquí las comprueban cuatro capas, pero que las capas estén de acuerdo entre
+> sí no sirve de nada si las ramas no lo están.
