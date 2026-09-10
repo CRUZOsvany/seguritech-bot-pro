@@ -506,7 +506,18 @@ export function createTenantsRouter(params: {
   // POST /api/admin/simulate
   // ============================================================
   router.post('/simulate', async (req: Request, res: Response) => {
-    const { tenantId, phoneNumber, content, persist, source, flowId, versionId, state, simulateAt } = req.body ?? {};
+    const {
+      tenantId,
+      phoneNumber,
+      content,
+      persist,
+      source,
+      flowId,
+      versionId,
+      state,
+      simulateAt,
+      simulatedElapsedMinutes,
+    } = req.body ?? {};
 
     if (typeof tenantId !== 'string' || tenantId.trim() === '') {
       res.status(400).json({ error: 'tenantId requerido (string)' });
@@ -555,6 +566,20 @@ export function createTenantsRouter(params: {
       res.status(400).json({ error: 'simulateAt debe ser una fecha ISO 8601 válida' });
       return;
     }
+    // Fase 3 (depuración motor+simulador): minutos a "avanzar" desde el turno
+    // anterior para probar el gate de expiración de sesión (DEC-07) sin
+    // esperar 2h reales. Opcional; de venir, número finito y no negativo.
+    if (
+      simulatedElapsedMinutes !== undefined &&
+      (typeof simulatedElapsedMinutes !== 'number' ||
+        !Number.isFinite(simulatedElapsedMinutes) ||
+        simulatedElapsedMinutes < 0)
+    ) {
+      res
+        .status(400)
+        .json({ error: 'simulatedElapsedMinutes debe ser un número de minutos >= 0' });
+      return;
+    }
 
     try {
       const result = await simulateMessageUseCase.execute({
@@ -567,6 +592,7 @@ export function createTenantsRouter(params: {
         versionId,
         state: state as { currentNodeId?: string; context?: Record<string, unknown> } | undefined,
         simulateAt,
+        simulatedElapsedMinutes,
       });
 
       if (result.error) {
