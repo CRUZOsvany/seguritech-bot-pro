@@ -252,11 +252,8 @@ describe('POS caja y ventas — HTTP', () => {
     };
 
     const cases: Array<[Record<string, unknown>, number, string]> = [
-      [{ items: [{ productId: lapiz.id, quantity: 11 }], amountPaid: 100 }, 409, 'insufficient_stock'],
       [{ items: [{ productId: randomUUID(), quantity: 1 }] }, 404, 'product_not_found'],
       [{ cashSessionId: randomUUID() }, 404, 'session_not_found'],
-      [{ amountPaid: 4 }, 400, 'insufficient_payment'],
-      [{ paymentMethod: 'card', amountPaid: 6 }, 400, 'invalid_payment'],
     ];
     for (const [over, status, code] of cases) {
       const res = await request(app)
@@ -265,6 +262,29 @@ describe('POS caja y ventas — HTTP', () => {
         .send({ ...base, clientId: randomUUID(), ...over });
       expect({ status: res.status, code: res.body.code }).toEqual({ status, code });
     }
+  });
+
+  it('stock insuficiente o pago que no cuadra → 201 con needsReview, no un rechazo', async () => {
+    const { app, store, cookie, lapiz } = buildApp();
+    const c = cookie(CASHIER_1, TENANT_A);
+    const session = await openSession(app, c);
+
+    const res = await request(app)
+      .post('/api/pos/sales')
+      .set('Cookie', c)
+      .send({
+        clientId: randomUUID(),
+        cashSessionId: session.id,
+        items: [{ productId: lapiz.id, quantity: 11 }],
+        paymentMethod: 'card',
+        amountPaid: 50,
+      });
+
+    expect(res.status).toBe(201);
+    expect(res.body.sale).toMatchObject({ needsReview: true, total: 55, changeGiven: 0 });
+    expect(res.body.sale.reviewReason).toContain('Stock insuficiente');
+    expect(res.body.sale.reviewReason).toContain('Cobro con tarjeta distinto');
+    expect(store.products.get(lapiz.id)!.stockQty).toBe(-1);
   });
 
   it('valida el body de venta con Zod (400), incluido "mixed" que v1 no acepta', async () => {

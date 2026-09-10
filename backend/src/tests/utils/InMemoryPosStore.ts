@@ -134,6 +134,8 @@ export class InMemoryPosStore {
           createdAt: new Date(),
           clientId: r.clientId,
           syncedAt: new Date(),
+          needsReview: r.needsReview,
+          reviewReason: r.reviewReason,
           items: r.lines.map((l) => ({ ...l, id: randomUUID(), saleId: id })),
         };
         store.sales.set(id, sale);

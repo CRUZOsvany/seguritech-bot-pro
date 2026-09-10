@@ -1,11 +1,15 @@
 /**
  * Venta del POS (encabezado + líneas).
  *
- * Mapeo BD: pos_sales + pos_sale_items (migración 011).
+ * Mapeo BD: pos_sales + pos_sale_items (migración 011; needs_review/review_reason en 022).
  * Multi-tenant: tenantId siempre presente. RLS en BD + WHERE en repositorio.
  *
  * Offline-first: `clientId` lo genera la PWA del cajero antes de tocar la red.
  * UNIQUE(tenant_id, client_id) hace idempotente el reintento de sincronización.
+ *
+ * `needsReview`: la venta se registró con stock insuficiente. El servidor no
+ * rechaza por stock — la venta ya ocurrió físicamente —, la marca para que
+ * alguien revise el inventario.
  *
  * Stock e inventario NO se tocan desde código: insertar en pos_sale_items
  * dispara `pos_decrement_stock_on_sale_item` y `pos_log_inventory_on_sale_item`.
@@ -51,6 +55,8 @@ export interface PosSale {
   createdAt: Date;
   clientId: string;
   syncedAt: Date | null;
+  needsReview: boolean;
+  reviewReason: string | null;
   items: PosSaleItem[];
 }
 
@@ -103,5 +109,8 @@ export interface ResolvedPosSale {
   paymentMethod: PosPaymentMethod;
   amountPaid: number;
   changeGiven: number;
+  /** true si algún producto con trackStock no tenía stock suficiente al registrar. */
+  needsReview: boolean;
+  reviewReason: string | null;
   lines: ResolvedPosSaleLine[];
 }

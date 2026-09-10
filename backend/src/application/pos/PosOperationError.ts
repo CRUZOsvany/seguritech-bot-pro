@@ -8,8 +8,11 @@
  * code mapping en PosRouter:
  *   'session_not_found' | 'product_not_found'                     → 404
  *   'session_not_owned'                                           → 403
- *   'session_closed' | 'session_already_open' | 'insufficient_stock' → 409
- *   'empty_cart' | 'insufficient_payment' | 'invalid_payment'     → 400
+ *   'session_closed' | 'session_already_open'                     → 409
+ *   'empty_cart'                                                  → 400
+ *
+ * Stock insuficiente, producto desactivado o pago que no cuadra NO son
+ * errores: la venta se registra con needs_review (ver RegisterSaleUseCase).
  */
 export type PosOperationErrorCode =
   | 'session_not_found'
@@ -17,10 +20,7 @@ export type PosOperationErrorCode =
   | 'session_closed'
   | 'session_already_open'
   | 'product_not_found'
-  | 'insufficient_stock'
-  | 'empty_cart'
-  | 'insufficient_payment'
-  | 'invalid_payment';
+  | 'empty_cart';
 
 export class PosOperationError extends Error {
   public readonly code: PosOperationErrorCode;

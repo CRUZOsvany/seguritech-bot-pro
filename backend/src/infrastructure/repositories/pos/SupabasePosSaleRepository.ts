@@ -55,6 +55,8 @@ export class SupabasePosSaleRepository implements PosSaleRepository {
         change_given: sale.changeGiven,
         client_id: sale.clientId,
         synced_at: new Date().toISOString(),
+        needs_review: sale.needsReview,
+        review_reason: sale.reviewReason,
       })
       .select('*')
       .single();
@@ -187,6 +189,8 @@ function mapSale(row: Record<string, unknown>): PosSale {
     createdAt: new Date(row.created_at as string),
     clientId: row.client_id as string,
     syncedAt: row.synced_at ? new Date(row.synced_at as string) : null,
+    needsReview: row.needs_review === true,
+    reviewReason: (row.review_reason as string | null) ?? null,
     items: items.map(mapItem),
   };
 }

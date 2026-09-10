@@ -93,25 +93,17 @@ describe('RegisterSaleUseCase', () => {
     expect(result.changeGiven).toBe(26);
   });
 
-  it('agrupa líneas del mismo producto y valida stock sobre la cantidad total', async () => {
+  it('una venta normal no queda marcada para revisión', async () => {
+    const { useCase, sale } = await setup();
+    const { sale: result } = await useCase.execute({ tenantId: TENANT, cashierId: CASHIER, input: sale() });
+    expect(result.needsReview).toBe(false);
+    expect(result.reviewReason).toBeNull();
+  });
+
+  it('agrupa líneas del mismo producto y compara stock contra la cantidad total', async () => {
     const { useCase, sale, lapiz } = await setup();
 
-    await expectCode(
-      useCase.execute({
-        tenantId: TENANT,
-        cashierId: CASHIER,
-        input: sale({
-          items: [
-            { productId: lapiz.id, quantity: 6 },
-            { productId: lapiz.id, quantity: 6 },
-          ],
-          amountPaid: 100,
-        }),
-      }),
-      'insufficient_stock',
-    );
-
-    const ok = await useCase.execute({
+    const { sale: result } = await useCase.execute({
       tenantId: TENANT,
       cashierId: CASHIER,
       input: sale({
@@ -122,8 +114,45 @@ describe('RegisterSaleUseCase', () => {
         amountPaid: 50,
       }),
     });
-    expect(ok.sale.items).toHaveLength(1);
-    expect(ok.sale.items[0].quantity).toBe(10);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0].quantity).toBe(10);
+    expect(result.needsReview).toBe(false);
+  });
+
+  it('con stock insuficiente registra la venta, deja el stock negativo y la marca para revisión', async () => {
+    const { store, useCase, sale, lapiz } = await setup();
+
+    const { sale: result, created } = await useCase.execute({
+      tenantId: TENANT,
+      cashierId: CASHIER,
+      input: sale({
+        items: [
+          { productId: lapiz.id, quantity: 6 },
+          { productId: lapiz.id, quantity: 6 },
+        ],
+        amountPaid: 60,
+      }),
+    });
+
+    expect(created).toBe(true);
+    expect(result.total).toBe(60);
+    expect(result.needsReview).toBe(true);
+    expect(result.reviewReason).toBe('Stock insuficiente: Lápiz Mirado (vendido 12, había 10)');
+    expect(store.products.get(lapiz.id)!.stockQty).toBe(-2);
+  });
+
+  it('un producto desactivado después de bajar el catálogo se vende y se marca', async () => {
+    const { store, useCase, sale } = await setup();
+    const viejo = store.addProduct(fakePosProduct({ sku: 'OLD', name: 'Goma vieja', isActive: false, unitPrice: 3 }));
+
+    const { sale: result } = await useCase.execute({
+      tenantId: TENANT,
+      cashierId: CASHIER,
+      input: sale({ items: [{ productId: viejo.id, quantity: 1 }], amountPaid: 3 }),
+    });
+
+    expect(result.needsReview).toBe(true);
+    expect(result.reviewReason).toBe('Producto desactivado: Goma vieja');
   });
 
   it('no valida stock de servicios (track_stock=false)', async () => {
@@ -167,12 +196,11 @@ describe('RegisterSaleUseCase', () => {
     );
   });
 
-  it('rechaza producto inexistente, inactivo o de otro tenant', async () => {
+  it('rechaza producto inexistente o de otro tenant (no se puede registrar)', async () => {
     const { store, useCase, sale } = await setup();
-    const inactivo = store.addProduct(fakePosProduct({ sku: 'OLD', isActive: false }));
     const ajeno = store.addProduct(fakePosProduct({ sku: 'AJ', tenantId: OTHER_TENANT }));
 
-    for (const productId of [randomUUID(), inactivo.id, ajeno.id]) {
+    for (const productId of [randomUUID(), ajeno.id]) {
       await expectCode(
         useCase.execute({
           tenantId: TENANT,
@@ -219,30 +247,63 @@ describe('RegisterSaleUseCase', () => {
     );
   });
 
-  it('en efectivo exige que el pago cubra el total', async () => {
+  it('efectivo menor al total del servidor (el precio cambió) se registra sin cambio y se marca', async () => {
     const { useCase, sale } = await setup();
-    await expectCode(
-      useCase.execute({ tenantId: TENANT, cashierId: CASHIER, input: sale({ amountPaid: 9.99 }) }),
-      'insufficient_payment',
+    const { sale: result } = await useCase.execute({
+      tenantId: TENANT,
+      cashierId: CASHIER,
+      input: sale({ amountPaid: 9.99 }),
+    });
+
+    expect(result.amountPaid).toBe(9.99);
+    expect(result.changeGiven).toBe(0);
+    expect(result.needsReview).toBe(true);
+    expect(result.reviewReason).toBe(
+      'Pago en efectivo menor al total del servidor (pagó $9.99, total $10.00)',
     );
   });
 
-  it('con tarjeta o transferencia exige pago exacto y no da cambio', async () => {
+  it('tarjeta o transferencia nunca dan cambio; un cobro distinto al total se marca', async () => {
     const { useCase, sale } = await setup();
-    await expectCode(
-      useCase.execute({
-        tenantId: TENANT,
-        cashierId: CASHIER,
-        input: sale({ paymentMethod: 'card', amountPaid: 20 }),
-      }),
-      'invalid_payment',
-    );
-    const { sale: result } = await useCase.execute({
+
+    const exact = await useCase.execute({
       tenantId: TENANT,
       cashierId: CASHIER,
       input: sale({ paymentMethod: 'transfer', amountPaid: 10 }),
     });
-    expect(result.changeGiven).toBe(0);
+    expect(exact.sale.changeGiven).toBe(0);
+    expect(exact.sale.needsReview).toBe(false);
+
+    const off = await useCase.execute({
+      tenantId: TENANT,
+      cashierId: CASHIER,
+      input: sale({ paymentMethod: 'card', amountPaid: 8 }),
+    });
+    expect(off.sale.changeGiven).toBe(0);
+    expect(off.sale.reviewReason).toBe(
+      'Cobro con tarjeta distinto al total del servidor (cobró $8.00, total $10.00)',
+    );
+  });
+
+  it('junta todos los motivos de revisión de una misma venta', async () => {
+    const { store, useCase, sale, lapiz } = await setup();
+    const viejo = store.addProduct(fakePosProduct({ sku: 'OLD', name: 'Goma vieja', isActive: false, unitPrice: 3 }));
+
+    const { sale: result } = await useCase.execute({
+      tenantId: TENANT,
+      cashierId: CASHIER,
+      input: sale({
+        items: [
+          { productId: lapiz.id, quantity: 11 },
+          { productId: viejo.id, quantity: 1 },
+        ],
+        amountPaid: 50,
+      }),
+    });
+
+    expect(result.reviewReason).toBe(
+      'Stock insuficiente: Lápiz Mirado (vendido 11, había 10) · Producto desactivado: Goma vieja · Pago en efectivo menor al total del servidor (pagó $50.00, total $58.00)',
+    );
   });
 
   it('redondea a centavos', async () => {

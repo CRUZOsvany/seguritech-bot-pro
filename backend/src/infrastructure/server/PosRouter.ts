@@ -360,10 +360,7 @@ const POS_ERROR_STATUS: Record<PosOperationErrorCode, number> = {
   session_not_owned: 403,
   session_closed: 409,
   session_already_open: 409,
-  insufficient_stock: 409,
   empty_cart: 400,
-  insufficient_payment: 400,
-  invalid_payment: 400,
 };
 
 /** PosOperationError → 4xx con `code` para que la PWA decida; el resto → 500. */

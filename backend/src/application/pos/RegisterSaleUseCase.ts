@@ -22,9 +22,17 @@ import { PosOperationError, roundMoney } from './PosOperationError';
  * ticketNumber: contador secuencial dentro de la sesión de caja (001, 002…).
  * Lo asigna el servidor porque el contrato de POST /sales no lo trae.
  *
+ * La venta ya ocurrió cuando llega aquí (la PWA registra local primero y
+ * sincroniza después), así que lo que delata un catálogo desactualizado en la
+ * laptop NO se rechaza — se registra y se marca `needsReview` con el motivo:
+ *   - stock insuficiente (el trigger deja stock_qty negativo)
+ *   - producto desactivado después de que la laptop bajó el catálogo
+ *   - pago que no cuadra con el total del servidor (el precio cambió)
+ * Solo se rechaza lo que no se puede registrar: sin caja válida, carrito
+ * vacío o un producto que no existe en el tenant.
+ *
  * Idempotente por clientId: un reintento de sincronización devuelve la venta
- * ya registrada ANTES de validar stock — si no, el reintento de la venta del
- * último artículo fallaría por el stock que ella misma descontó.
+ * ya registrada sin volver a resolverla.
  *
  * No toca stock ni pos_inventory_movements: los triggers de pos_sale_items
  * (migración 011) lo hacen al insertar las líneas.
@@ -68,28 +76,29 @@ export class RegisterSaleUseCase {
       throw new PosOperationError('session_closed', 'La caja está cerrada; ábrela para vender');
     }
 
-    const lines = await this.resolveLines(tenantId, input);
+    const reviewReasons: string[] = [];
+    const lines = await this.resolveLines(tenantId, input, reviewReasons);
 
     const subtotal = roundMoney(lines.reduce((acc, l) => acc + l.subtotal, 0));
     const taxTotal = roundMoney(lines.reduce((acc, l) => acc + l.taxAmount, 0));
     const total = roundMoney(subtotal + taxTotal);
+    const amountPaid = roundMoney(input.amountPaid);
 
     if (input.paymentMethod === 'cash') {
-      if (input.amountPaid < total) {
-        throw new PosOperationError('insufficient_payment', 'El pago no cubre el total', {
-          total,
-          amountPaid: input.amountPaid,
-        });
+      if (amountPaid < total) {
+        reviewReasons.push(
+          `Pago en efectivo menor al total del servidor (pagó ${money(amountPaid)}, total ${money(total)})`,
+        );
       }
-    } else if (roundMoney(input.amountPaid) !== total) {
-      // Tarjeta/transferencia no dan cambio: si amount_paid ≠ total, el cambio
-      // saldría del cajón y el arqueo no cuadraría.
-      throw new PosOperationError('invalid_payment', 'Con tarjeta o transferencia el pago debe ser exacto', {
-        total,
-        amountPaid: input.amountPaid,
-      });
+    } else if (amountPaid !== total) {
+      // Tarjeta/transferencia no dan cambio: una diferencia solo puede venir
+      // de un precio distinto al que tenía la laptop.
+      reviewReasons.push(
+        `Cobro con ${input.paymentMethod === 'card' ? 'tarjeta' : 'transferencia'} distinto al total del servidor (cobró ${money(amountPaid)}, total ${money(total)})`,
+      );
     }
-    const changeGiven = roundMoney(input.amountPaid - total);
+    const changeGiven =
+      input.paymentMethod === 'cash' ? roundMoney(Math.max(0, amountPaid - total)) : 0;
 
     const count = await this.sales.countByCashSession(tenantId, input.cashSessionId);
     const ticketNumber = String(count + 1).padStart(3, '0');
@@ -103,8 +112,10 @@ export class RegisterSaleUseCase {
       discountTotal: 0,
       total,
       paymentMethod: input.paymentMethod,
-      amountPaid: input.amountPaid,
+      amountPaid,
       changeGiven,
+      needsReview: reviewReasons.length > 0,
+      reviewReason: reviewReasons.length > 0 ? reviewReasons.join(' · ') : null,
       lines,
     });
     return { sale, created: true };
@@ -112,10 +123,14 @@ export class RegisterSaleUseCase {
 
   /**
    * Agrupa por producto (escanear dos veces el mismo = una línea con qty 2) y
-   * resuelve cada uno contra el catálogo real. Valida stock sobre la cantidad
-   * agregada, no por línea suelta.
+   * resuelve cada uno contra el catálogo real. El stock se compara contra la
+   * cantidad agregada, no por línea suelta.
    */
-  private async resolveLines(tenantId: string, input: NewPosSale): Promise<ResolvedPosSaleLine[]> {
+  private async resolveLines(
+    tenantId: string,
+    input: NewPosSale,
+    reviewReasons: string[],
+  ): Promise<ResolvedPosSaleLine[]> {
     const qtyByProduct = new Map<string, number>();
     for (const item of input.items) {
       qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.quantity);
@@ -124,15 +139,16 @@ export class RegisterSaleUseCase {
     const lines: ResolvedPosSaleLine[] = [];
     for (const [productId, quantity] of qtyByProduct) {
       const product = await this.products.findById(tenantId, productId);
-      if (!product || !product.isActive) {
+      if (!product) {
         throw new PosOperationError('product_not_found', 'Producto no encontrado', { productId });
       }
+      if (!product.isActive) {
+        reviewReasons.push(`Producto desactivado: ${product.name}`);
+      }
       if (product.trackStock && product.stockQty < quantity) {
-        throw new PosOperationError('insufficient_stock', `Stock insuficiente de ${product.name}`, {
-          productId,
-          requested: quantity,
-          available: product.stockQty,
-        });
+        reviewReasons.push(
+          `Stock insuficiente: ${product.name} (vendido ${quantity}, había ${product.stockQty})`,
+        );
       }
 
       const lineSubtotal = roundMoney(product.unitPrice * quantity);
@@ -149,4 +165,8 @@ export class RegisterSaleUseCase {
     }
     return lines;
   }
+}
+
+function money(n: number): string {
+  return `$${n.toFixed(2)}`;
 }

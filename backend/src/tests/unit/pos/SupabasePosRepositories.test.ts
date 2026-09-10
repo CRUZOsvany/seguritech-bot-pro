@@ -63,6 +63,8 @@ const resolvedSale: ResolvedPosSale = {
   paymentMethod: 'cash',
   amountPaid: 20,
   changeGiven: 10,
+  needsReview: false,
+  reviewReason: null,
   lines: [
     {
       productId: 'p1',
@@ -126,7 +128,13 @@ describe('SupabasePosSaleRepository.create', () => {
 
     const inserts = calls.filter((c) => c.action === 'insert');
     expect(inserts.map((c) => c.table)).toEqual(['pos_sales', 'pos_sale_items']);
-    expect(inserts[0].payload).toMatchObject({ tenant_id: TENANT, cashier_id: CASHIER, client_id: 'client-1' });
+    expect(inserts[0].payload).toMatchObject({
+      tenant_id: TENANT,
+      cashier_id: CASHIER,
+      client_id: 'client-1',
+      needs_review: false,
+      review_reason: null,
+    });
     expect(inserts[1].payload).toEqual([
       expect.objectContaining({ sale_id: 'sale-1', product_id: 'p1', product_name: 'Lápiz', product_sku: 'LAP-001' }),
     ]);
@@ -134,6 +142,16 @@ describe('SupabasePosSaleRepository.create', () => {
     expect(calls.some((c) => c.table === 'pos_products' || c.table === 'pos_inventory_movements')).toBe(false);
     expect(sale.total).toBe(10);
     expect(sale.items).toEqual([expect.objectContaining({ quantity: 2, unitPrice: 5 })]);
+  });
+
+  it('mapea needs_review / review_reason de la fila', async () => {
+    const { client } = mockSupabase(() => ({
+      data: headerRow({ needs_review: true, review_reason: 'Stock insuficiente: Lápiz', pos_sale_items: [itemRow] }),
+    }));
+
+    const sale = await new SupabasePosSaleRepository(client, logger).findByClientId(TENANT, 'client-1');
+
+    expect(sale).toMatchObject({ needsReview: true, reviewReason: 'Stock insuficiente: Lápiz' });
   });
 
   it('venta ya completa con el mismo client_id → la devuelve sin insertar nada', async () => {
