@@ -407,6 +407,8 @@ export async function simulate(
     versionId?: string;
     /** ISO 8601 — hora a la que se simula el mensaje, para probar el gate de horario de atención (Fase 4). */
     simulateAt?: string;
+    /** Minutos a "avanzar" desde el turno anterior, para probar el gate de expiración de sesión DEC-07 (Fase 3, depuración motor+simulador). */
+    simulatedElapsedMinutes?: number;
   },
 ): Promise<SimulateResult> {
   return apiFetch<SimulateResult>('POST', '/api/admin/simulate', {
@@ -419,6 +421,9 @@ export async function simulate(
     ...(options?.flowId ? { flowId: options.flowId } : {}),
     ...(options?.versionId ? { versionId: options.versionId } : {}),
     ...(options?.simulateAt ? { simulateAt: options.simulateAt } : {}),
+    ...(options?.simulatedElapsedMinutes !== undefined
+      ? { simulatedElapsedMinutes: options.simulatedElapsedMinutes }
+      : {}),
   });
 }
 

@@ -223,6 +223,11 @@ const WaitInputNodeSchema = z.object({
   content: z.object({
     prompt: z.string().optional(),
     save_to_context: z.string().optional(),
+    validation: z.literal('numeric').optional(),
+    validation_error: z
+      .string()
+      .max(4096, 'Meta: text body ≤ 4096 chars (recomendado ≤ 1024)')
+      .optional(),
   }),
   transitions: z.array(TransitionSchema),
 });

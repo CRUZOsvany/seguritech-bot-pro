@@ -129,28 +129,68 @@ export class FlowInterpreter {
     const { flow, user, message, tenantConfig } = params;
     const contextUpdates: Record<string, unknown> = {};
 
-    // Caso 1: palabra de escape global → reset al start del flow
-    if (this.isEscapeWord(message.content)) {
-      this.logger.debug(
-        { tenantId: user.tenantId, content: message.content },
-        'Escape word detectado',
-      );
-      const cleared: Record<string, unknown> = {};
-      for (const k of Object.keys(user.context ?? {})) cleared[k] = null;
-      Object.assign(contextUpdates, cleared);
+    // Nodo actual, resuelto una sola vez (antes se recalculaba en Caso 2;
+    // ahora también lo necesita Caso 1 para el fix de precedencia de abajo).
+    const currentNode = flow.nodes.find((n) => n.id === user.currentNodeId);
 
-      return this.advanceFrom({
-        flow,
-        startNodeId: flow.start_node_id,
-        user: { ...user, context: {} },
-        message,
-        tenantConfig,
-        contextUpdates,
-      });
+    // Caso 1: palabra de escape global → reset al start del flow.
+    //
+    // FIX (depuración motor+simulador, Fase 1): antes esto corría SIEMPRE
+    // antes que las transiciones propias del nodo, sin excepción. Un
+    // cliente en `pedido_confirma` que escribía "cancelar" (pensando que
+    // corregía la cantidad) perdía TODO el contexto del pedido y volvía al
+    // menú principal, en vez de caer en la transición local
+    // `{keyword: ['no','corregir','cambiar','esta mal']} → pedido_cantidad`
+    // que sí preserva `selected_product_id`. Igual de grave: la transición
+    // `{keyword: ['salir',...]} → despedida` de `bienvenida` era código
+    // muerto para la palabra exacta "salir", porque el escape global la
+    // interceptaba antes de que el nodo la evaluara.
+    //
+    // Regla nueva: el escape global solo aplica si el nodo actual NO tiene
+    // una transición propia (que no sea 'default') para ese mensaje. Si el
+    // nodo sí sabe qué hacer con él, gana la intención local — el escape
+    // global vuelve a ser lo que siempre debió ser: un fallback para cuando
+    // nada más matchea, no un atajo que se adelanta a todo.
+    if (this.isEscapeWord(message.content)) {
+      const localTransition = currentNode
+        ? this.evaluateTransitions(currentNode, message, tenantConfig, {})
+        : null;
+      // Fix del hallazgo #1 (ejecución Fase 1): catalog_not_found es TRUE
+      // por ausencia de cómputo, no porque una búsqueda real haya
+      // fallado — el pre-chequeo no corre CatalogSearchService. Sin esta
+      // exclusión, cualquier palabra de escape en un nodo search_catalog
+      // queda absorbida como "búsqueda sin resultado" en vez de resetear.
+      const nodeHandlesItLocally =
+        !!localTransition &&
+        localTransition.condition.type !== 'default' &&
+        localTransition.condition.type !== 'catalog_not_found';
+
+      if (!nodeHandlesItLocally) {
+        this.logger.debug(
+          { tenantId: user.tenantId, content: message.content },
+          'Escape word detectado (sin transición local que lo maneje mejor)',
+        );
+        const cleared: Record<string, unknown> = {};
+        for (const k of Object.keys(user.context ?? {})) cleared[k] = null;
+        Object.assign(contextUpdates, cleared);
+
+        return this.advanceFrom({
+          flow,
+          startNodeId: flow.start_node_id,
+          user: { ...user, context: {} },
+          message,
+          tenantConfig,
+          contextUpdates,
+        });
+      }
+      this.logger.debug(
+        { tenantId: user.tenantId, nodeId: currentNode?.id, content: message.content },
+        'Escape word detectado, pero el nodo actual lo maneja localmente — se respeta',
+      );
+      // Sin return: sigue de largo a Caso 2/3 con el flujo normal.
     }
 
     // Caso 2: usuario nuevo, sin currentNodeId, o nodo desconocido → start
-    const currentNode = flow.nodes.find((n) => n.id === user.currentNodeId);
     if (!user.currentNodeId || !currentNode || user.currentNodeId === 'end') {
       return this.advanceFrom({
         flow,
@@ -173,6 +213,34 @@ export class FlowInterpreter {
         message.content.trim(),
         tenantConfig.catalogSynonyms,
       );
+    }
+
+    // Validación de wait_input (depuración motor+simulador, Fase 4 — cierra
+    // C-04 del tracker de auditoría). Alcance deliberadamente chico: solo
+    // valida cuando el flow declara `content.validation`. Sin match, el
+    // nodo se re-renderiza (mismo patrón que "ninguna transición matchea"
+    // de más abajo) con `validation_error`, y el flow NO avanza ni guarda
+    // nada en el contexto — el intento inválido se descarta por completo.
+    if (currentNode.type === 'wait_input' && currentNode.content.validation === 'numeric') {
+      const isValidNumber = /^\d+([.,]\d+)?$/.test(message.content.trim());
+      if (!isValidNumber) {
+        const errorNode: FlowNode = {
+          ...currentNode,
+          content: {
+            ...currentNode.content,
+            prompt:
+              currentNode.content.validation_error ??
+              'No logré entender la cantidad 🤔. Escríbela solo con el número, por ejemplo: *3*',
+          },
+        };
+        const outputs = await this.renderNode(errorNode, { flow, user, message, tenantConfig });
+        return {
+          outputs,
+          nextNodeId: currentNode.id,
+          contextUpdates,
+          flowEnded: false,
+        };
+      }
     }
 
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.
