@@ -6,7 +6,7 @@
 > **Regla de oro:** si este documento contradice al código de `main`, gana el código. Si contradice al MAESTRO en materia de ESTADO, gana este.
 > **Regla de escritura:** nada se marca como hecho sin evidencia. Lo no verificable desde el entorno de trabajo se marca `[sin verificar]` con la razón, no se asume.
 >
-> **Corte:** 2026-09-09 · **Versión:** 2.1 (consolidación + integración)
+> **Corte:** 2026-09-09 · **Versión:** 2.2 (post-merge)
 
 ---
 
@@ -25,8 +25,7 @@ Todo lo de esta tabla se corrió realmente en la máquina de desarrollo, no se c
 | Runtime | `node -v` / `npm -v` | Node **24.19.0**, npm 11.17.0 |
 | Type-check backend | `npm run type-check --workspace backend` | **Limpio** (exit 0) |
 | Type-check frontend | `npm run type-check --workspace frontend` | **Limpio** (exit 0) |
-| Tests backend en `main` | `npm test --workspace backend` | **51 suites · 364/364 · 0 skipped** |
-| Tests backend con todo lo pendiente integrado | ídem, sobre el merge real de los PRs #80, #78 y #79 | **58 suites · 456/456** |
+| Tests backend | `npm test --workspace backend` | **58 suites · 456/456 · 0 skipped** |
 | Lint backend | `npm run lint --workspace backend` | **0 errores**, 100 warnings (no-console en tests, preexistentes) |
 | Lint frontend | `npm run lint --workspace frontend` | **0 errores**, 39 warnings (react-refresh en shadcn/ui, preexistentes) |
 | Tests frontend | — | **No existen.** `frontend/package.json` no tiene script `test` ni runner instalado. Ver deuda E-01 |
@@ -34,17 +33,15 @@ Todo lo de esta tabla se corrió realmente en la máquina de desarrollo, no se c
 
 > **Corrección respecto al corte del 2026-09-08.** Ese corte anotó 344 tests y Node 22.23.2. Los dos números ya no eran ciertos al escribirse: el 344 era del commit `290bc2d`, y `main` ya llevaba los PRs #73 y #74 encima. El número de tests de este proyecto se mueve rápido — la lección no es corregirlo otra vez, es no copiarlo nunca de un corte anterior.
 
-### 2.1. La fila que importa: por qué hay dos números
+### 2.1. Los 456 no salieron gratis
 
-Las dos filas de tests no se contradicen, miden estados distintos. **`main` no tiene todo el trabajo que este proyecto cree tener mergeado.** Ver §7: tres PRs marcados como MERGED en GitHub nunca llegaron a `main`.
-
-Y la integración de los tres pendientes **no salía verde sola**. Salía roja, con un fallo que ninguna rama por separado podía ver:
+Hasta el merge de esta fecha `main` tenía 364, y el resto vivía en tres PRs que figuraban como mergeados sin estarlo (§7). Su integración **no salía verde sola**. Salía roja, con un fallo que ninguna rama por separado podía ver:
 
 ```
 TS2554: Expected 6 arguments, but got 5.
 ```
 
-El PR #75 le añadió un sexto parámetro al constructor de `FlowInterpreter` (`CarouselCardResolver`) y actualizó todos los call sites que veía. No veía dos, porque los trajo el PR #73 y el #75 se ramificó de una base que no lo tenía. Git mergea sin un solo conflicto —son archivos distintos— y TypeScript revienta. Arreglado en `8b63c64`, dentro del PR #80.
+El PR #75 le añadió un sexto parámetro al constructor de `FlowInterpreter` (`CarouselCardResolver`) y actualizó todos los call sites que veía. No veía dos, porque los trajo el PR #73 y el #75 se ramificó de una base que no lo tenía. Git mergea sin un solo conflicto —son archivos distintos— y TypeScript revienta. Arreglado en `8b63c64`, dentro del PR #80. Los 456 de arriba son el resultado, corrido sobre `main` ya mergeada.
 
 ---
 
@@ -64,7 +61,7 @@ Arquitectura hexagonal intacta: `domain/` no importa de `infrastructure/`.
 
 `send_text` · `send_buttons` · `send_list` · `send_media` · `send_cta_url` · `send_location_request` · `send_media_carousel` · `send_reaction` · `wait_input` · `search_catalog` · `escape_to_human` · `request_call_permission` · `end` · `send_whatsapp_flow`
 
-Y **10 condiciones de transición** en `main`: `button` · `list_item` · `list_item_any` · `keyword` · `service_directory_match` · `catalog_found` · `catalog_not_found` · `call_permission_granted` · `call_permission_denied` · `default`. El PR #80 suma la **undécima**, `card_any`, que es como se rutea un carrusel dinámico: sus ids salen del catálogo en runtime, así que una transición `button` ahí sería inalcanzable por construcción.
+Y **11 condiciones de transición**: `button` · `list_item` · `list_item_any` · `card_any` · `keyword` · `service_directory_match` · `catalog_found` · `catalog_not_found` · `call_permission_granted` · `call_permission_denied` · `default`. La última en llegar fue `card_any`, que es como se rutea un carrusel dinámico: sus ids salen del catálogo en runtime, así que una transición `button` ahí sería inalcanzable por construcción.
 
 **El dato que importa para el negocio:** entre los tres flows del repo (`cerrajeria`, `papeleria`, `securitech`) se usan **7 de los 14** tipos; el flow más maduro, cerrajería, usa 6. Los 7 restantes —`send_media`, `send_cta_url`, `send_location_request`, `send_media_carousel`, `send_reaction`, `request_call_permission`, `send_whatsapp_flow`— no aparecen en ningún flow del repo. Ahí hay valor disponible sin escribir una línea de motor nuevo — solo diseñar mejor el JSON.
 
@@ -85,7 +82,9 @@ Workspace `frontend/` con **Vite 8 + React 19.2 + TypeScript + TanStack Router/Q
 
 ## 5. Base de datos
 
-**20 migraciones** en `main` (`001` … `020_tenant_service_directory.sql`) + 2 seeds (`seed_admin_user`, `seed_pos_papeleria_pilot`). El PR #80 trae la **021** (`021_carousel_fallback_image.sql`, columna `imagen_fallback_url`): **no está aplicada en Cloud y no está en `main`** — al mergear cae de lleno en la regla 8, se aplica y se verifica el mismo día.
+**21 migraciones** (`001` … `021_carousel_fallback_image.sql`) + 2 seeds (`seed_admin_user`, `seed_pos_papeleria_pilot`).
+
+> ⚠️ **La 021 está en `main` desde hoy y NO está aplicada en Cloud.** Agrega `imagen_fallback_url` a `bot_configurations`. Es una deuda con reloj: la regla 8 pide aplicarla y verificarla el mismo día. Mientras no se aplique, `TenantConfig.fallbackImageUrl` llega siempre `undefined` y al carrusel dinámico solo entran los productos que ya tienen `imagen_url` propia.
 
 Estado de aplicación en Supabase Cloud: **001–020 aplicadas.** Última confirmación real: la 020 se aplicó a mano el 2026-08-25 y la 019 el 2026-09-01, ambas verificadas por lectura REST en su momento.
 
@@ -138,16 +137,18 @@ Son ~2 200 líneas. Y el daño no fue solo el retraso: produjo el fallo de compi
 
 **Por qué no lo cachó el CI.** El CI es un gate real y corre sobre el merge del PR. Pero un PR contra la base equivocada hace que el CI valide exactamente el merge equivocado, con toda la ceremonia intacta. El gate estaba verde y midiendo lo que no era.
 
-### 7.2. Cómo se está devolviendo
+### 7.2. Devuelto — cerrado el 2026-09-09
 
-| Acción | Estado |
-|---|---|
-| PR **#80** `fix/compose-env-file` → `main`: devuelve #75/#76/#77 + el arreglo de `FlowInterpreter` | Abierto, verificado 56 suites · 417/417 |
-| PR **#78** (catálogo de reglas) reapuntado a `main` | Abierto, `MERGEABLE` |
-| PR **#79** (bloques compuestos, F1-a) reapuntado a `main` | Abierto, `MERGEABLE` |
-| Los tres integrados a la vez | Verificado: **58 suites · 456/456**, type-check y lint limpios |
+| PR | Qué devolvió | Estado |
+|---|---|---|
+| **#80** `fix/compose-env-file` → `main` | #75/#76/#77 + el arreglo de `FlowInterpreter` | Mergeado, rama borrada |
+| **#78** reapuntado a `main` | Catálogo de reglas del motor, reconciliado con el carrusel (36 reglas) | Mergeado, rama borrada |
+| **#79** reapuntado a `main` | Bloques compuestos, F1-a | Mergeado, rama borrada |
+| **#81** | La consolidación documental | Mergeado, rama borrada |
 
-**Orden de merge:** #80 primero (trae el motor y el arreglo), luego #78 (el catálogo de reglas que cita el código de bloques), luego #79.
+Mergeados en ese orden, con CI verde en los cuatro. Verificado sobre `main` ya mergeada: **58 suites · 456/456**, type-check limpio en los dos workspaces.
+
+**Un detalle que costó descubrir:** reapuntar la base de un PR **no dispara un run de CI**. El #78 y el #79 se quedaron sin checks y por tanto sin poder mergear, hasta que se les mergeó `main` encima para que el gate corriera de verdad. Vale la pena recordarlo la próxima vez que haya que reapuntar algo.
 
 ### 7.3. La regla que faltaba
 
@@ -155,7 +156,7 @@ Ninguna de las 16 reglas del MAESTRO decía **contra qué rama se abre un PR**, 
 
 ### 7.4. Ramas sin podar
 
-Sigue pendiente y sigue creciendo: **7 locales** y **21 remotas** ya mergeadas a `main`, más `feature/sprint-6-new-tenant` (abandonada por decisión, 145 archivos atrasada) y `test/local-validacion`. `docs/runbook-referencias-pendientes` (PR **#55**, abierto desde el 2026-08-21) está 49 commits atrás: rebasar o cerrar y rehacer.
+Sigue pendiente y sigue creciendo: **7 locales** y **21 remotas** ya mergeadas a `main`, más `feature/sprint-6-new-tenant` (abandonada por decisión, 145 archivos atrasada) y `test/local-validacion`. `docs/runbook-referencias-pendientes` (PR **#55**, abierto desde el 2026-08-21) está 67 commits atrás y GitHub ya lo marca `CONFLICTING`. Son dos menciones desactualizadas de `RUNBOOK_PRODUCCION.md`: rehacer el cambio sobre `main` sale más barato que rebasarlo.
 
 ---
 

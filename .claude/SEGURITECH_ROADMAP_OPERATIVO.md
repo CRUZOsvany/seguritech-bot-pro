@@ -221,12 +221,12 @@ Negocio físico. No compite por las mismas horas de desarrollo.
 
 Esto va antes que cualquier otra cosa de esta sección. Ver `ESTADO` §7 para el detalle de cómo pasó.
 
-- [ ] Mergear el PR **#80** (`fix/compose-env-file` → `main`): devuelve #75, #76 y #77 —carrusel con bucle cerrado, cards dinámicas, migración 021, siembra del Designer, auditoría de duplicación— más el arreglo de `FlowInterpreter` que la base equivocada destapó
-- [ ] **Aplicar y verificar la migración 021 el mismo día** que entre el #80 (regla 8). Hoy no está en Cloud ni en `main`
-- [ ] Mergear el PR **#78** (catálogo de reglas del motor). Va antes que el #79: el código de bloques lo cita
-- [ ] Mergear el PR **#79** (bloques compuestos, F1-a)
-- [ ] Borrar `fix/compose-env-file` al mergear. Ahora sí: dejarla viva después del #74 es lo que causó todo esto
-- [ ] Mergear la consolidación documental **al final**: su `CLAUDE.md` enlaza `REGLAS_FLOW.md` y `BLOQUES_COMPUESTOS.md`, que llegan con el #78 y el #79
+- [x] Mergear el PR **#80** (`fix/compose-env-file` → `main`): devolvió #75, #76 y #77 —carrusel con bucle cerrado, cards dinámicas, migración 021, siembra del Designer, auditoría de duplicación— más el arreglo de `FlowInterpreter` que la base equivocada destapó
+- [x] Mergear el PR **#78** (catálogo de reglas del motor), antes que el #79 porque el código de bloques lo cita
+- [x] Mergear el PR **#79** (bloques compuestos, F1-a)
+- [x] Mergear la consolidación documental al final
+- [x] Borrar `fix/compose-env-file`, `docs/reglas-flow` y `feat/bloques-compuestos` al mergear
+- [ ] **Aplicar y verificar la migración 021** (regla 8). Está en `main` desde el 2026-09-09 y **no está en Cloud**. Es lo único de este bloque que sigue abierto, y no se cierra desde el repo
 
 ### Higiene inmediata (una tarde de trabajo, alto retorno)
 
