@@ -1,5 +1,11 @@
 # Auditoría 2026-08-26 — Documento de seguimiento
 
+> **[REFERENCIA HISTÓRICA — no es documento vivo]**
+> Registro de la auditoría del 2026-08-26 y de las decisiones DEC-01 … DEC-14. Se conserva porque el porqué de cada decisión no está escrito en ningún otro lado.
+> **Los pendientes ya no se siguen aquí.** Migraron a `SEGURITECH_ESTADO_ACTUAL.md` §8 (deuda abierta) y §9 (decididas sin implementar). Consolidación documental del 2026-09-08.
+
+---
+
 > **Qué es esto.** Registro vivo de la auditoría completa recibida el 2026-08-26 (commit auditado `7014757`), con estado de avance por hallazgo. El texto completo de la auditoría original está en la sección 2, sin editar. Esta sección 0 y la tabla de la sección 1 son las que se actualizan en cada sesión de trabajo.
 >
 > **Regla:** igual que el resto de `.claude/*.md` — si esto contradice al código de `main`, el código gana. Verificar antes de asumir "pendiente" sigue vigente.

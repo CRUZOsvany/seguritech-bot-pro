@@ -77,3 +77,10 @@ _check_zip/
 # CLI en esta máquina, no migraciones reales (esas viven en backend/supabase/)
 supabase/.branches/
 supabase/.temp/
+
+# Tooling de agentes, local a cada máquina. `.mcp.json` apunta a un MCP en
+# 127.0.0.1 del IDE de quien lo generó, y `.agents/` es un paquete de skills
+# descargado con su lockfile: nada de esto describe al proyecto.
+.agents/
+.mcp.json
+skills-lock.json

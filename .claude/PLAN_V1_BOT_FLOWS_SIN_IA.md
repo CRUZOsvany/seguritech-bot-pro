@@ -1,5 +1,10 @@
 # ChatBot — V1 sin IA (Documento 2 de 2)
 
+> **[DOCUMENTO DE DISEÑO — vigente como referencia, no como estado]**
+> Describe cómo debe comportarse el motor de flows por giro. Lo que aquí aparezca como "por construir" puede estar ya construido: verificar contra `SEGURITECH_ESTADO_ACTUAL.md` y contra el código antes de tomarlo como pendiente. Su "companion" `PLAN_SOLUCION_HALLAZGOS_PENDIENTES.md` está cerrado: no lo tomes como lista de trabajo. Consolidación documental del 2026-09-08.
+
+---
+
 > **Nombre del producto:** ChatBot (SegurITech). La versión futura con IA se llamará **ChatBot Pro** — pausada, no forma parte de este documento. Ver nota de pausa en `.claude/SEGURITECH_AI_SECRETARIA_PLAN.md`.
 >
 > **Prioridad confirmada:** papelería primero. Es el negocio real que ya existe para desarrollar ahora — cerrajería y ferretería siguen en el documento como diseño general del motor, pero el orden de ejecución arranca en papelería.

@@ -1,5 +1,11 @@
 # PROMPT PARA CLAUDE CODE — Bot Demo "Papelería DEMO Stress Test"
 
+> **[REFERENCIA HISTÓRICA — prompt de un ejercicio ya ejecutado]**
+> Prompt del stress test del tenant "Papelería DEMO" (2026-08-25). Las cifras que contiene (conteo de tests, estado de migraciones) son de esa fecha y ya están superadas — el estado vivo está en `SEGURITECH_ESTADO_ACTUAL.md`.
+
+---
+
+
 > **Compañero de este prompt:** `papeleria_demo_inventario_completo.csv` (110 filas, en la raíz del repo o donde lo copies). Sin ese archivo, la Fase 3 no se puede ejecutar.
 >
 > **Verificado contra el repo real (rama `main`, commit `7bbe514`, 24-ago-2026) antes de escribir este prompt:** existencia y contrato exacto de `POST /api/admin/tenants`, `PUT/POST .../flows/:flowId/draft|publish`, `POST .../pos/products/import`, `POST/PATCH .../services`, `POST /api/admin/simulate`; contenido exacto de `parsePosCatalogCsv.ts`, `CatalogSearchService.ts`, `ServiceDirectoryMatcher.ts`, `FlowInterpreter.ts`, `TenantConfig` (sin campo `giro` ni `catalogSynonyms` — se agrega en la Fase 5); `SupabasePosProductRepository.search()` busca solo `name`/`sku`/`barcode`, NO `category` ni `description`; `281/281` tests pasando, `tsc --noEmit` limpio; `backend/scripts/papeleria-flow.json` (20 nodos) válido contra `validateFlow()` real. No repito esta auditoría en el prompt — donde algo no está 100% confirmado, lo digo explícitamente y doy instrucciones de verificación en vivo.

@@ -1,5 +1,10 @@
 # SegurITech Bot Pro — Plan de Implementación: Secretaria Digital Semi-Autónoma
 
+> **[PLAN PAUSADO — ver ADR-015 en `SEGURITECH_PROYECTO_MAESTRO.md`]**
+> No se avanza en este plan hasta que el motor determinista esté exprimido y el cumplimiento de Meta cerrado. Los guardrails de este documento son obligatorios cuando se retome.
+
+---
+
 > **Propósito.** Documento operativo para que Claude Code (u otro agente de codificación) desarrolle esta evolución sin inventar arquitectura, sin alucinar interfaces que no existen, y sin duplicar lo que el proyecto ya resuelve.
 >
 > **Fuente de verdad.** El código de `main` manda sobre este documento. Cada referencia de "ya existe" en este plan fue verificada línea por línea contra el repo real antes de escribirse. Si algo cambió desde entonces, gana el código — pero antes de asumir que cambió, ábrelo y confírmalo.

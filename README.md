@@ -8,6 +8,20 @@ Plataforma de chatbots WhatsApp multi-tenant para negocios locales. Modelo **MSP
 
 ---
 
+## Documentación
+
+Empieza por [`CLAUDE.md`](CLAUDE.md) — el punto de entrada al proyecto. Después, tres documentos de control, uno por pregunta:
+
+| Documento | Responde |
+|---|---|
+| [`.claude/SEGURITECH_PROYECTO_MAESTRO.md`](.claude/SEGURITECH_PROYECTO_MAESTRO.md) | Qué es, por qué está así, ADRs, reglas y flujo de trabajo |
+| [`.claude/SEGURITECH_ESTADO_ACTUAL.md`](.claude/SEGURITECH_ESTADO_ACTUAL.md) | Cómo está hoy, verificado. Deuda y decisiones abiertas |
+| [`.claude/SEGURITECH_ROADMAP_OPERATIVO.md`](.claude/SEGURITECH_ROADMAP_OPERATIVO.md) | Qué sigue y en qué orden |
+
+Documentación técnica complementaria en [`docs/INDEX.md`](docs/INDEX.md). Si dos documentos se contradicen, gana el código de `main`.
+
+---
+
 ## Arquitectura
 
 **Monorepo backend + frontend.** El backend Express sirve el panel admin HTML estático, el simulador y la SPA React del workspace `frontend/` desde `backend/public/`.
@@ -51,7 +65,7 @@ seguritech-bot-pro/
 - **Pino** logging estructurado
 - **Zod** validación de env vars, inputs HTTP, schemas de flow
 - **AES-256-GCM** cifrado de tokens Meta vía `TokenCrypto`
-- **Meta WhatsApp Cloud API v21** integración multi-tenant
+- **Meta WhatsApp Cloud API v23** integración multi-tenant
 - **Jest** unit + integration tests
 - **Vite + React 19 + TanStack Router/Query + shadcn/ui + Tailwind 4** para el panel en `frontend/`
 

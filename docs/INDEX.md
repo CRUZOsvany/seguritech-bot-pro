@@ -1,7 +1,12 @@
 # SegurITech Bot Pro — Índice de documentación
 
-> Fuente principal: [`../SEGURITECH_PROYECTO_MAESTRO.md`](../SEGURITECH_PROYECTO_MAESTRO.md)
-> Este índice cubre solo documentación técnica complementaria.
+> **Documentos de control** (viven en `.claude/`, fuera de este índice):
+> [`SEGURITECH_PROYECTO_MAESTRO.md`](../.claude/SEGURITECH_PROYECTO_MAESTRO.md) — qué es y por qué ·
+> [`SEGURITECH_ESTADO_ACTUAL.md`](../.claude/SEGURITECH_ESTADO_ACTUAL.md) — cómo está hoy ·
+> [`SEGURITECH_ROADMAP_OPERATIVO.md`](../.claude/SEGURITECH_ROADMAP_OPERATIVO.md) — qué sigue.
+> Punto de entrada del repo: [`CLAUDE.md`](../CLAUDE.md).
+>
+> Este índice cubre solo la documentación técnica complementaria.
 
 ## Arquitectura
 - [Arquitectura del sistema](architecture/ARCHITECTURE.md)
@@ -13,7 +18,7 @@
 - [Guía del desarrollador](development/DEVELOPER_GUIDE.md)
 - [Referencia del equipo](development/REFERENCIA_EQUIPO.md)
 
-## Módulo POS (Sprint 5.1a)
+## Módulo POS
 - [Visión general](pos/README.md)
 - [API POS](pos/api.md)
 - [Schema POS](pos/schema.md)
