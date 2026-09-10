@@ -10,6 +10,7 @@ import type { User, Message, TenantConfig } from '@/domain/entities';
 import type { PosProduct } from '@/domain/entities/pos/Product';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { CarouselCardResolver } from '@/domain/services/CarouselCardResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { fuzzyIncludes } from '@/domain/services/textMatch';
@@ -90,10 +91,13 @@ export interface InterpreterResult {
 
 const ESCAPE_WORDS = ['menu', 'salir', 'cancelar', 'inicio'] as const;
 
-// Nodos que esperan input del usuario (paran el avance del intérprete).
+// Nodos que SIEMPRE esperan input del usuario (paran el avance del intérprete).
 // request_call_permission espera la respuesta de permiso (granted/denied).
-// Los demás v23.0 (cta_url, carousel, reaction, location_request, whatsapp_flow)
-// NO paran: el usuario puede responder más tarde o no responder.
+// Los demás v23.0 (cta_url, reaction, location_request, whatsapp_flow) NO
+// paran: el usuario puede responder más tarde o no responder.
+//
+// send_media_carousel NO está aquí porque su espera es condicional — depende
+// del tipo de botón de sus cards. Ver isWaitNode().
 const WAIT_NODE_TYPES = new Set([
   'send_buttons',
   'send_list',
@@ -110,6 +114,7 @@ export class FlowInterpreter {
   constructor(
     private readonly variableResolver: VariableResolver,
     private readonly dynamicSectionResolver: DynamicSectionResolver,
+    private readonly carouselCardResolver: CarouselCardResolver,
     private readonly serviceDirectoryMatcher: ServiceDirectoryMatcher,
     private readonly catalogSearchService: CatalogSearchService,
     private readonly logger: pino.Logger,
@@ -256,6 +261,21 @@ export class FlowInterpreter {
       if (itemId) contextUpdates[transition.condition.save_to_context] = itemId;
     }
 
+    // save_to_context para card_any. Igual que catalog_found, el default es
+    // 'selected_product_id': en un carrusel dinámico el id del botón ES el id
+    // del producto, así que {{selected_product_name}} y
+    // {{selected_product_price}} resuelven sin que el flow declare nada.
+    if (
+      transition &&
+      transition.condition.type === 'card_any'
+    ) {
+      const cardId = this.extractCardButtonId(currentNode, message, tenantConfig);
+      if (cardId) {
+        const key = transition.condition.save_to_context ?? 'selected_product_id';
+        contextUpdates[key] = cardId;
+      }
+    }
+
     // save_to_context para service_directory_match
     if (
       transition &&
@@ -390,9 +410,35 @@ export class FlowInterpreter {
         }
       }
 
+      // Carrusel dinámico sin cards: catálogo vacío, o ningún producto con
+      // foto y sin imagen de respaldo del tenant. Meta exige 1-10 cards, así
+      // que enviarlo sería un 400 — se desvía al default igual que un
+      // send_list que resuelve a 0 items.
+      if (
+        node.type === 'send_media_carousel' &&
+        rendered.length === 1 &&
+        rendered[0].kind === 'media_carousel' &&
+        rendered[0].cards.length === 0
+      ) {
+        const def = node.transitions.find((t) => t.condition.type === 'default');
+        if (!def) {
+          this.logger.error(
+            { tenantId: user.tenantId, nodeId: node.id },
+            'Carrusel vacío sin transición default — abortando',
+          );
+          return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: false };
+        }
+        this.logger.warn(
+          { tenantId: user.tenantId, nodeId: node.id },
+          'Carrusel resolvió a 0 cards, transicionando al default',
+        );
+        currentId = def.next_node_id;
+        continue;
+      }
+
       outputs.push(...rendered);
 
-      if (WAIT_NODE_TYPES.has(node.type)) {
+      if (this.isWaitNode(node)) {
         return {
           outputs,
           nextNodeId: node.id,
@@ -494,6 +540,7 @@ export class FlowInterpreter {
     case 'service_directory_match':
       return 70;
     case 'list_item_any':
+    case 'card_any':
       return 60;
     case 'keyword':
       return 50;
@@ -553,6 +600,29 @@ export class FlowInterpreter {
       return (extra?.catalogMatch ?? null) === null;
 
     case 'button': {
+      // send_media_carousel enruta sus quick_reply por la MISMA condición
+      // `button` que send_buttons — es lo que promete el docstring de
+      // SendMediaCarouselNode en entities/flow.ts. Antes este case cortaba
+      // en seco con `node.type !== 'send_buttons'`, así que una transición
+      // declarada sobre un carrusel no podía matchear nunca.
+      if (node.type === 'send_media_carousel') {
+        // Sin atajo por `content === condition.value`: el valor tiene que
+        // resolver a un quick_reply REAL de alguna card. Un cta_url no
+        // produce mensaje entrante, así que una transición que apunte a su
+        // display_text es inalcanzable y debe reportarse como tal en vez de
+        // matchear por coincidencia de texto.
+        // En un carrusel dinámico los ids los genera el resolver desde el
+        // catálogo, así que no hay nada que un `button` del JSON pueda
+        // nombrar: ese caso se enruta con `card_any`.
+        for (const card of node.content.cards ?? []) {
+          for (const b of card.buttons) {
+            if (b.type !== 'quick_reply') continue;
+            if (b.id !== condition.value) continue;
+            return content === b.id || lower === b.title.toLowerCase();
+          }
+        }
+        return false;
+      }
       if (node.type !== 'send_buttons') return false;
       if (content === condition.value) return true;
       const btn = node.content.buttons.find((b) => b.id === condition.value);
@@ -586,12 +656,60 @@ export class FlowInterpreter {
       return false;
     }
 
+    case 'card_any': {
+      if (node.type !== 'send_media_carousel') return false;
+      return this.extractCardButtonId(node, message, tenantConfig) !== null;
+    }
+
     case 'call_permission_granted':
       return message.content === '__CALL_PERMISSION_GRANTED__';
 
     case 'call_permission_denied':
       return message.content === '__CALL_PERMISSION_DENIED__';
     }
+  }
+
+  /**
+   * Id del quick_reply que el cliente tocó en un carrusel, o null si el
+   * mensaje no corresponde a ninguna card.
+   *
+   * En un carrusel dinámico ese id ES el id del producto de catálogo
+   * (CarouselCardResolver lo genera así), que es justo lo que `card_any`
+   * guarda en contexto para que {{selected_product_name}} y
+   * {{selected_product_price}} resuelvan después.
+   *
+   * A diferencia de extractListItemId, aquí NO se devuelve el content crudo
+   * como último recurso: un carrusel tiene como mucho 10 cards conocidas y
+   * devolver texto libre metería basura en `selected_product_id`.
+   */
+  private extractCardButtonId(
+    node: FlowNode,
+    message: Message,
+    tenantConfig: TenantConfig,
+  ): string | null {
+    if (node.type !== 'send_media_carousel') return null;
+    const content = message.content.trim();
+    const lower = content.toLowerCase();
+
+    // Cards dinámicas: el id del botón ES el id del producto, y el title es
+    // el mismo `button_title` en las diez — no distingue una card de otra,
+    // así que solo sirve el id. Se valida contra el catálogo vivo del tenant
+    // en vez de recordar lo que se renderizó: el intérprete no guarda estado
+    // entre mensajes (es un singleton compartido por todos los tenants) y el
+    // catálogo pudo cambiar entre el envío y el tap.
+    if (node.content.dynamic_cards) {
+      const hit = tenantConfig.catalog.find((c) => c.available && c.id === content);
+      return hit ? hit.id : null;
+    }
+
+    for (const card of node.content.cards ?? []) {
+      for (const b of card.buttons) {
+        if (b.type !== 'quick_reply') continue;
+        if (content === b.id) return b.id;
+        if (lower === b.title.toLowerCase()) return b.id;
+      }
+    }
+    return null;
   }
 
   private extractListItemId(node: FlowNode, message: Message): string | null {
@@ -766,8 +884,14 @@ export class FlowInterpreter {
 
     case 'send_media_carousel': {
       const body = await resolveText(node.content.body);
+      // Un carrusel declara cards literales O dynamic_cards, nunca ambas
+      // (el schema lo exige al publicar). Las dinámicas se hidratan desde el
+      // catálogo del tenant y ya vienen con sus límites Meta aplicados.
+      const sourceCards = node.content.dynamic_cards
+        ? this.carouselCardResolver.resolve(node.content.dynamic_cards, p.tenantConfig)
+        : (node.content.cards ?? []);
       const cards = await Promise.all(
-        node.content.cards.map(async (card) => ({
+        sourceCards.map(async (card) => ({
           header: card.header,
           body: await resolveText(card.body),
           buttons: await Promise.all(
@@ -839,6 +963,33 @@ export class FlowInterpreter {
   // ==========================================================================
   // HELPERS
   // ==========================================================================
+
+  /**
+   * ¿Este nodo detiene el avance esperando la respuesta del cliente?
+   *
+   * Para casi todos los tipos es una pertenencia fija a WAIT_NODE_TYPES. El
+   * carrusel es el caso condicional: un carrusel de quick_reply SÍ espera —
+   * el cliente toca una card y esa respuesta debe evaluarse contra las
+   * transiciones de ESTE nodo, así que `currentNodeId` tiene que quedarse
+   * aquí. Uno de cta_url NO espera: esos botones abren el navegador y no
+   * generan mensaje entrante, así que parar dejaría la conversación colgada
+   * en un nodo que nunca puede avanzar.
+   *
+   * El schema ya garantiza que todas las cards usan el mismo tipo de botón
+   * (regla cross-card en FlowNodeSchema.superRefine), por eso basta con
+   * mirar el primer botón de la primera card.
+   */
+  private isWaitNode(node: FlowNode): boolean {
+    if (node.type === 'send_media_carousel') {
+      // Las cards dinámicas SIEMPRE llevan un quick_reply por card
+      // (CarouselCardResolver), así que un carrusel de catálogo siempre
+      // espera el tap. Si resolvió a 0 cards no llegamos hasta aquí:
+      // advanceFrom ya lo desvió al default.
+      if (node.content.dynamic_cards) return true;
+      return node.content.cards?.[0]?.buttons[0]?.type === 'quick_reply';
+    }
+    return WAIT_NODE_TYPES.has(node.type);
+  }
 
   private isEscapeWord(content: string): boolean {
     const trimmed = content.trim().toLowerCase();

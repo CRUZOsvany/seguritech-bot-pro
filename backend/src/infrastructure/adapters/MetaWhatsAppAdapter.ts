@@ -369,7 +369,20 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       if (message.text?.body) {
         content = message.text.body;
       } else if (message.interactive?.button_reply?.title) {
-        content = message.interactive.button_reply.title;
+        // Preferimos el id del reply SALVO que sea uno de los sintéticos que
+        // genera sendButtons (`btn_0`/`btn_1`/`btn_2`): ahí el id del nodo se
+        // descartó al enviar y el único dato con significado es el título.
+        //
+        // Un carrusel sí conserva el id real de su quick_reply
+        // (sendMediaCarousel lo pasa tal cual), y en las cards dinámicas ese
+        // id es el id del producto — sin esta rama todas las cards llegarían
+        // con el MISMO texto (el button_title compartido) y sería imposible
+        // saber cuál tocó el cliente.
+        const replyId = message.interactive.button_reply.id;
+        content =
+          replyId && !/^btn_\d+$/.test(replyId)
+            ? replyId
+            : message.interactive.button_reply.title;
       } else if (message.interactive?.list_reply?.title) {
         content = message.interactive.list_reply.title;
       } else if (message.interactive?.type === 'call_permission_reply') {

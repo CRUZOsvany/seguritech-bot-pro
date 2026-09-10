@@ -57,6 +57,10 @@ export function conditionLabel(condition: TransitionCondition, node: FlowNode): 
       return condition.save_to_context
         ? `cualquier ítem → ${condition.save_to_context}`
         : 'cualquier ítem';
+    case 'card_any':
+      return condition.save_to_context
+        ? `cualquier card → ${condition.save_to_context}`
+        : 'cualquier card';
     case 'keyword':
       return condition.values.join(' / ');
     case 'call_permission_granted':

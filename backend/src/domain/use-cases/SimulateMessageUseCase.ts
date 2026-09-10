@@ -16,8 +16,10 @@ import { SESSION_EXPIRED_NOTICE, isSessionExpired } from '@/domain/services/Sess
 /**
  * Fuente del flow a simular:
  *  - 'active'  (default): el flow publicado y activo del tenant (comportamiento previo).
- *  - 'draft'   : el borrador en edición (requiere flowId). Se valida en vivo;
- *                si es inválido se devuelve `error` sin reventar.
+ *  - 'draft'   : lo que el operador está editando (requiere flowId): el
+ *                borrador si existe y, si no, una copia de lo publicado —
+ *                mismo criterio que el Designer. Se valida en vivo; si es
+ *                inválido se devuelve `error` sin reventar.
  *  - 'version' : una versión histórica publicada (requiere versionId).
  */
 export type SimulateSource = 'active' | 'draft' | 'version';
@@ -122,11 +124,15 @@ export class SimulateMessageUseCase {
     try {
       if (source === 'draft') {
         if (!input.flowId) return mkError("source='draft' requiere flowId");
-        const raw = await this.botFlowRepository.getDraft(input.flowId, tenantId);
-        if (raw == null) {
-          return mkError(`El flow "${input.flowId}" no tiene draft para simular`);
+        // Mismo criterio que el Designer: "draft" es lo que el operador está
+        // editando. Sin draft guardado eso es una copia de lo publicado, no un
+        // error — si aquí fallara, simular lo que se ve en el canvas recién
+        // publicado sería imposible.
+        const editable = await this.botFlowRepository.getEditableFlow(input.flowId, tenantId);
+        if (editable == null) {
+          return mkError(`El flow "${input.flowId}" no existe para este tenant`);
         }
-        flow = validateFlow(raw); // puede lanzar FlowValidationError
+        flow = validateFlow(editable.flow); // puede lanzar FlowValidationError
       } else if (source === 'version') {
         if (!input.versionId) return mkError("source='version' requiere versionId");
         flow = await this.botFlowRepository.getVersionFlow(input.versionId, tenantId);

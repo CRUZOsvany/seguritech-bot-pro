@@ -55,6 +55,19 @@ export type FlowVariableKey =
  */
 export type ItemsSource = 'catalog_items' | 'service_directory';
 
+/**
+ * Fuentes válidas para las cards dinámicas de send_media_carousel.
+ *
+ * Hoy solo 'catalog_items', porque es la única tabla del proyecto con una
+ * columna de imagen (`imagen_url`, migración 001) y Meta exige header
+ * image/video en CADA card. `pos_products` — el catálogo real, con 110+ SKUs
+ * en los tenants piloto — no tiene columna de imagen todavía; cuando la tenga
+ * se agrega aquí como segunda fuente sin tocar el resto del motor.
+ *
+ * Ver la ADVERTENCIA de catálogo dual en SupabaseTenantConfigService.
+ */
+export type CarouselCardsSource = 'catalog_items';
+
 // ============================================================================
 // TRANSICIONES
 // ============================================================================
@@ -62,9 +75,13 @@ export type ItemsSource = 'catalog_items' | 'service_directory';
 /**
  * Tipos de condición de transición.
  *
- * ORDEN DE EVALUACIÓN: el motor evalúa transitions[] en el orden del array.
- * La primera que matchea, gana (first-match-wins). Por convención `default`
- * va al final.
+ * ORDEN DE EVALUACIÓN: el motor NO es first-match-wins. `evaluateTransitions()`
+ * evalúa todas las transiciones del nodo, filtra las que matchean y gana la de
+ * mayor especificidad: button 100 > list_item 90 > call_permission_* 85 >
+ * catalog_found 80 > service_directory_match 70 > list_item_any/card_any 60 >
+ * keyword 50 > catalog_not_found 20 > default 0. El orden del array solo
+ * desempata entre transiciones del MISMO nivel. Ver ADR-016 en
+ * .claude/SEGURITECH_PROYECTO_MAESTRO.md y FlowInterpreter.transitionSpecificity().
  *
  * En nodos send_list mixtos (sección estática + sección dinámica), los
  * `list_item` específicos DEBEN ir antes que `list_item_any`, de lo contrario
@@ -74,6 +91,7 @@ export type TransitionCondition =
   | { type: 'button'; value: string }
   | { type: 'list_item'; value: string }
   | { type: 'list_item_any'; save_to_context?: FlowVariableKey | string }
+  | { type: 'card_any'; save_to_context?: FlowVariableKey | string }
   | { type: 'keyword'; values: string[] }
   | { type: 'service_directory_match'; save_to_context?: FlowVariableKey | string }
   | { type: 'catalog_found'; save_to_context?: FlowVariableKey | string }
@@ -318,11 +336,37 @@ export interface MediaCarouselCard {
   >;
 }
 
+/**
+ * Cards hidratadas en runtime desde el catálogo del tenant, en vez de escritas
+ * a mano en el JSON. Mismo propósito que una `ListSection` de tipo 'dynamic':
+ * el operador edita el catálogo desde el panel y el carrusel se actualiza solo,
+ * sin volver a tocar el flow.
+ *
+ * Todas las cards generadas llevan UN botón quick_reply cuyo `id` es el id del
+ * producto — por eso el routing de un carrusel dinámico se hace con la
+ * condición `card_any` (+ `save_to_context`) y no con `button`: el autor del
+ * flow no puede declarar diez transiciones para un catálogo que cambia solo.
+ */
+export interface DynamicCarouselCards {
+  cards_source: CarouselCardsSource;
+  /**
+   * Texto del botón de cada card generada. Igual para todas — <= 20 chars
+   * (regla Meta). Ej: "Ver detalle", "Lo quiero".
+   */
+  button_title: string;
+}
+
 export interface SendMediaCarouselNode extends FlowNodeBase {
   type: 'send_media_carousel';
   content: {
     body: string;
-    cards: MediaCarouselCard[];
+    /**
+     * Cards literales. Mutuamente excluyente con `dynamic_cards`: el schema
+     * exige exactamente una de las dos al publicar.
+     */
+    cards?: MediaCarouselCard[];
+    /** Cards generadas en runtime desde el catálogo. Ver DynamicCarouselCards. */
+    dynamic_cards?: DynamicCarouselCards;
   };
 }
 

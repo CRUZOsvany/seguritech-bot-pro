@@ -12,10 +12,19 @@
 // backend/src/domain/entities/flow.ts. Ver esa nota para el porqué.
 export type ItemsSource = 'catalog_items' | 'service_directory';
 
+/**
+ * Fuentes de cards dinamicas de send_media_carousel. Espejo de
+ * CarouselCardsSource en backend/src/domain/entities/flow.ts. Solo
+ * 'catalog_items' porque es la unica tabla con columna de imagen, y Meta
+ * exige header image/video en cada card.
+ */
+export type CarouselCardsSource = 'catalog_items';
+
 export type TransitionCondition =
   | { type: 'button'; value: string }
   | { type: 'list_item'; value: string }
   | { type: 'list_item_any'; save_to_context?: string }
+  | { type: 'card_any'; save_to_context?: string }
   | { type: 'keyword'; values: string[] }
   | { type: 'call_permission_granted' }
   | { type: 'call_permission_denied' }
@@ -141,11 +150,25 @@ export interface MediaCarouselCard {
   >;
 }
 
+/**
+ * Cards hidratadas en runtime desde el catalogo del tenant. Todas llevan un
+ * quick_reply cuyo id es el id del producto, por eso el routing de un carrusel
+ * dinamico va con la condicion `card_any` y no con `button`.
+ */
+export interface DynamicCarouselCards {
+  cards_source: CarouselCardsSource;
+  /** Texto del boton de cada card generada, <= 20 chars (regla Meta). */
+  button_title: string;
+}
+
 export interface SendMediaCarouselNode extends FlowNodeBase {
   type: 'send_media_carousel';
   content: {
     body: string;
-    cards: MediaCarouselCard[];
+    /** Cards literales. Mutuamente excluyente con `dynamic_cards`. */
+    cards?: MediaCarouselCard[];
+    /** Cards desde catalogo. Mutuamente excluyente con `cards`. */
+    dynamic_cards?: DynamicCarouselCards;
   };
 }
 

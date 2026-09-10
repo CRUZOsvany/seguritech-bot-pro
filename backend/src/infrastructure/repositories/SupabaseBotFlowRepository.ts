@@ -206,20 +206,32 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
     }));
   }
 
-  async getDraft(flowId: string, tenantId: string): Promise<unknown | null> {
+  async getEditableFlow(
+    flowId: string,
+    tenantId: string,
+  ): Promise<{ flow: unknown; source: 'draft' | 'published' } | null> {
     const { data, error } = await this.supabase
       .from('bot_flows')
-      .select('draft_json')
+      .select('draft_json, json_definition')
       .eq('id', flowId)
       .eq('tenant_id', tenantId)
       .maybeSingle();
 
     if (error) {
-      this.logger.error({ error, flowId, tenantId }, 'getDraft failed');
-      throw new Error(`getDraft failed: ${error.message}`);
+      this.logger.error({ error, flowId, tenantId }, 'getEditableFlow failed');
+      throw new Error(`getEditableFlow failed: ${error.message}`);
     }
     if (!data) return null;
-    return data.draft_json ?? null;
+
+    if (data.draft_json != null) {
+      return { flow: data.draft_json, source: 'draft' };
+    }
+
+    // Sin draft ⇒ se siembra de lo publicado. `json_definition` es NOT NULL
+    // en el esquema (002_bot_flows_engine.sql:64), así que si la fila existe
+    // siempre hay algo que devolver — no hace falta un tercer fallback al
+    // molde.
+    return { flow: data.json_definition, source: 'published' };
   }
 
   async getDraftMeta(

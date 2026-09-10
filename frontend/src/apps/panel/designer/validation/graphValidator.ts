@@ -111,6 +111,9 @@ export function validateGraph(flow: BotFlow): ValidationResult {
         case 'list_item_any':
           key = 'list_item_any';
           break;
+        case 'card_any':
+          key = 'card_any';
+          break;
         case 'call_permission_granted':
           key = 'call_permission_granted';
           break;

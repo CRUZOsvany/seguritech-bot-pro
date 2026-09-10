@@ -13,6 +13,7 @@ import type { PosProductRepository } from '@/domain/ports/pos/PosProductReposito
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { CarouselCardResolver } from '@/domain/services/CarouselCardResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
@@ -48,12 +49,14 @@ export class ApplicationContainer {
   ) {
     const variableResolver = new VariableResolver(supabase, posProductRepository, logger);
     const dynamicSectionResolver = new DynamicSectionResolver(logger);
+    const carouselCardResolver = new CarouselCardResolver(logger);
     const serviceDirectoryMatcher = new ServiceDirectoryMatcher();
     const catalogSearchService = new CatalogSearchService(posProductRepository);
     const businessHoursService = new BusinessHoursService();
     const flowInterpreter = new FlowInterpreter(
       variableResolver,
       dynamicSectionResolver,
+      carouselCardResolver,
       serviceDirectoryMatcher,
       catalogSearchService,
       logger,

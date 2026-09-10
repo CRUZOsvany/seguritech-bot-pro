@@ -11,6 +11,7 @@ import type { PosProduct } from '@/domain/entities/pos/Product';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { CarouselCardResolver } from '@/domain/services/CarouselCardResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import type { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import pino from 'pino';
@@ -90,6 +91,7 @@ function makeInterpreter(matchResult: PosProduct | null): {
   const interpreter = new FlowInterpreter(
     mockVR,
     mockDSR,
+    new CarouselCardResolver(logger),
     serviceDirectoryMatcher,
     catalogSearchService,
     logger,

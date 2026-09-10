@@ -28,15 +28,23 @@ export async function listFlows(tenantId: string): Promise<FlowSummary[]> {
   return res.flows;
 }
 
-export async function getDraft(
-  tenantId: string,
-  flowId: string,
-): Promise<unknown | null> {
-  const res = await apiFetch<{ draft: unknown | null }>(
+/**
+ * Lo que el operador está editando. `source` distingue un borrador real de una
+ * copia de lo publicado: el backend siembra el editor con `json_definition`
+ * cuando no hay `draft_json` (publicar lo nulea), así que sin este dato la
+ * interfaz no puede saber si hay trabajo sin guardar o no.
+ */
+export type EditableFlow = {
+  draft: unknown | null;
+  source: 'draft' | 'published' | null;
+};
+
+export async function getDraft(tenantId: string, flowId: string): Promise<EditableFlow> {
+  const res = await apiFetch<EditableFlow>(
     'GET',
     `/api/admin/tenants/${tenantId}/flows/${flowId}/draft`,
   );
-  return res.draft;
+  return { draft: res.draft, source: res.source ?? null };
 }
 
 export async function saveDraft(
@@ -60,8 +68,8 @@ export async function saveDraft(
 export async function getDraftWithMeta(
   tenantId: string,
   flowId: string,
-): Promise<{ draft: unknown | null; draftUpdatedAt: string | null }> {
-  return apiFetch<{ draft: unknown | null; draftUpdatedAt: string | null }>(
+): Promise<{ draft: unknown | null; draftUpdatedAt: string | null; source: 'draft' | 'published' | null }> {
+  return apiFetch<{ draft: unknown | null; draftUpdatedAt: string | null; source: 'draft' | 'published' | null }>(
     'GET',
     `/api/admin/tenants/${tenantId}/flows/${flowId}/draft`,
   );

@@ -14,6 +14,7 @@ import type { BotFlow } from '@/domain/entities/flow';
 import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { VariableResolver } from '@/domain/services/VariableResolver';
 import { DynamicSectionResolver } from '@/domain/services/DynamicSectionResolver';
+import { CarouselCardResolver } from '@/domain/services/CarouselCardResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import type { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import pino from 'pino';
@@ -83,7 +84,7 @@ const mockCatalogSearch = {
 } as unknown as CatalogSearchService;
 
 function makeInterpreter(): FlowInterpreter {
-  return new FlowInterpreter(mockVR, mockDSR, serviceDirectoryMatcher, mockCatalogSearch, logger);
+  return new FlowInterpreter(mockVR, mockDSR, new CarouselCardResolver(logger), serviceDirectoryMatcher, mockCatalogSearch, logger);
 }
 
 // ============================================================================
