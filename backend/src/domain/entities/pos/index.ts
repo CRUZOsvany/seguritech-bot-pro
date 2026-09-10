@@ -7,3 +7,5 @@ export * from './Category';
 export * from './PosTenantConfig';
 export * from './PosUser';
 export * from './PosMould';
+export * from './Sale';
+export * from './CashSession';
