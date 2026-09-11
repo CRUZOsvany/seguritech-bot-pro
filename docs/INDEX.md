@@ -31,6 +31,7 @@
 ## Diseño de chatbots (flows)
 - [Cómo diseñar un chatbot de WhatsApp](whatsapp/DISENO_DE_CHATBOTS.md) — discovery, patrones anti-loop/anti-dato-basura, node types, cumplimiento Meta, QA. Caso de estudio: cerrajerías.
 - [Studio — inventario de la Fase 0](studio/INVENTARIO.md) — motor, moldes, Designer y límites de Meta verificados el 2026-09-10, contra la especificación del Studio.
+- [Studio — Fase 1: motor observable](studio/FASE_1_MOTOR_OBSERVABLE.md) — un solo motor para producción y simulador, contrato del endpoint de simulación y catálogo de la traza.
 
 ## Deploy
 - [Runbook de producción](deployment/RUNBOOK_PRODUCCION.md)
