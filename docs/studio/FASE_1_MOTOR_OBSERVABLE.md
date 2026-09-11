@@ -139,8 +139,20 @@ Los eventos usan el vocabulario del webhook de Meta, no uno propio. Para tocar u
 
 ---
 
-## 5. Lo que queda pendiente
+## 5. Cómo verlo
 
-- **El simulador actual del panel sigue en el camino viejo.** `WhatsAppSimulator.tsx` llama a `POST /api/admin/simulate` → `SimulateMessageUseCase`, que sigue siendo la copia paralela de H-2. El endpoint nuevo lo reemplaza. La interfaz se muda en la Fase 3; al hacerlo, se borran `SimulateMessageUseCase` y su ruta.
+**En el panel.** El simulador del Designer y del Guion ya corre sobre el motor nuevo (adelantado de la Fase 3). Cada respuesta del bot trae su "Por qué", y hay controles para adelantar el reloj, empezar a una hora fija (para probar fuera de horario) y mandar audio, imagen o sticker. Abajo del teléfono se ve el estado: paso actual, variables, ventana de 24 h y mensajes enviados.
+
+**En la terminal.** `backend/scripts/studio/simular.mjs` llama al endpoint con una conversación en JSON y la imprime legible, con su "Por qué":
+
+```bash
+node backend/scripts/studio/simular.mjs --tenant <uuid> --conversacion backend/scripts/studio/ejemplo-papeleria.json
+```
+
+Pide correo y contraseña del panel en la terminal, sin guardarlos. `--json` imprime la respuesta cruda, `--fuente active` simula lo que el bot contesta hoy y `--flow <id>` elige otro flow. Necesita el backend corriendo.
+
+## 6. Lo que queda pendiente
+
+- **El endpoint viejo sigue vivo.** `POST /api/admin/simulate` → `SimulateMessageUseCase` (la copia paralela de H-2) ya no lo usa el panel, pero sí la página suelta `backend/public/simulator/index.html` (`/simulator/<uuid>`). Cuando esa página se mude o se retire, se borran los dos.
 - **La paridad se prueba con sesiones en memoria en los dos lados.** No hay base de datos en los tests. La fidelidad del repositorio falso con `bot_users` queda fijada en `simulationFakes.test.ts`, contrastada contra `SupabaseUserRepository` por lectura de código, no contra la base real.
 - **Hora de la alerta al dueño** [no verificado]: `enrichOwnerAlert` formatea la hora con la zona del proceso. Si el contenedor corre en UTC, el dueño ve la hora UTC. No se corrigió porque cambiaría lo que recibe hoy; falta confirmar la zona del contenedor en el servidor.
