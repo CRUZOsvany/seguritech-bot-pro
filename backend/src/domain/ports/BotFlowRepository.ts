@@ -159,6 +159,36 @@ export interface BotFlowRepository {
     versionNumber: number;
     createdBy: string | null;
   }): Promise<{ versionNumber: number }>;
+
+  /**
+   * Publica un flow ya validado, en UNA transacción (publish_flow_version,
+   * migración 023): versión nueva con sus reportes, un solo flow activo por
+   * canal y, si `clearDraft`, borrador limpio. Aplica el guardrail de giro
+   * restringido (DEC-12).
+   *
+   * `expectedDraftUpdatedAt` (al publicar un borrador): si el borrador cambió
+   * desde que se validó, lanza DraftChangedError y no publica nada. Se omite
+   * en los rollbacks.
+   */
+  publishVersion(params: {
+    flowId: string;
+    tenantId: string;
+    flow: BotFlow;
+    createdBy: string | null;
+    note?: string;
+    validationReport?: unknown;
+    testReport?: unknown;
+    clearDraft: boolean;
+    expectedDraftUpdatedAt?: string | null;
+  }): Promise<{ versionNumber: number }>;
+}
+
+/** El borrador cambió entre la validación y la publicación: no se publica lo que nadie revisó. */
+export class DraftChangedError extends Error {
+  constructor() {
+    super('El borrador cambió mientras se revisaba. Vuelve a intentarlo.');
+    this.name = 'DraftChangedError';
+  }
 }
 
 /** Canal de un flow (espejo de bot_flows.channel, mig 013). */

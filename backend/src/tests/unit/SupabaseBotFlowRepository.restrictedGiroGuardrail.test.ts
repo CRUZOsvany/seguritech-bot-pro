@@ -72,6 +72,8 @@ function makeSupabase(steps: Step[]): { client: SupabaseClient } {
 
   const client = {
     from: (_table: string) => ({ select: chain }),
+    // publishVersion publica por la función atómica (migración 023).
+    rpc: () => Promise.resolve(next()),
   } as unknown as SupabaseClient;
 
   return { client };
@@ -104,7 +106,7 @@ describe('SupabaseBotFlowRepository.publishDraft — guardrail de giro restringi
     ).rejects.toMatchObject({ offendingCategories: ['Psicotrópicos'] });
   });
 
-  it('giro no restringido: NO consulta tenants/catalog_items del guardrail (se agota en el 4º step, el insert de versión)', async () => {
+  it('giro no restringido: NO consulta catalog_items del guardrail (se agota en el 3er step, la publicación)', async () => {
     // Solo damos 1 step (read bot_flows) -- si el código intentara leer
     // tenants o catalog_items, el mock tronaría con "No more mock steps"
     // ANTES de llegar al insert. Como flowExposesCatalogItems() es true
@@ -117,9 +119,9 @@ describe('SupabaseBotFlowRepository.publishDraft — guardrail de giro restringi
     ]);
     const repo = new SupabaseBotFlowRepository(client, silentLogger);
 
-    // Después del guardrail (que no lanza), publishDraft sigue a insertar
-    // la versión -- eso SÍ tronaría por falta de steps, y es la señal de
-    // que el guardrail no hizo la 3ª query (catalog_items) de más.
+    // Después del guardrail (que no lanza), publishDraft sigue a publicar
+    // (rpc publish_flow_version) -- eso SÍ tronaría por falta de steps, y es
+    // la señal de que el guardrail no hizo la 3ª query (catalog_items) de más.
     await expect(
       repo.publishDraft({ flowId: FLOW_ID, tenantId: TENANT_ID, createdBy: null }),
     ).rejects.toThrow('No more mock steps');

@@ -365,6 +365,7 @@ export class PerformanceSecurityTest {
       listVersions: async () => [],
       getVersionFlow: async () => null,
       rollback: async () => { throw new Error('not implemented in perf test'); },
+      publishVersion: async () => { throw new Error('not implemented in perf test'); },
     };
     // Stub TenantRepository (no se ejerce el path admin en este script).
     const tenantRepository: TenantRepository = {
