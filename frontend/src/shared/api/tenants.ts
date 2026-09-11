@@ -150,6 +150,8 @@ export interface TenantDetail {
   bot_configuration: BotConfiguration | null;
   meta_credentials: MetaCredentialsInfo | null;
   active_flow: ActiveFlowInfo | null;
+  /** Dueño: destino de las alertas de paso a humano. */
+  owner: { nombre_dueno: string; whatsapp_dueno: string } | null;
   created_at: string;
   updated_at: string;
 }
@@ -263,6 +265,9 @@ export interface UpdateTenantInput {
   horario_semana?: string | null;
   horario_sabado?: string | null;
   abre_domingo?: boolean;
+  /** Si el dueño no existía, hacen falta los dos campos. */
+  owner?: { nombre_dueno?: string; whatsapp_dueno?: string };
+  bot_configuration?: BotConfigPatch;
 }
 
 export async function updateTenant(

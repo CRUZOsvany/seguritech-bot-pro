@@ -1,7 +1,7 @@
 import { createLazyRoute, Link } from '@tanstack/react-router';
 import {
   AlertCircle, Loader2, Workflow, ScrollText, ListTree,
-  MessageCircle, MessageSquare, ShoppingCart,
+  MessageCircle, MessageSquare, ShoppingCart, Wand2,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -101,6 +101,11 @@ function TenantDetailPage() {
           solo se llegaba a través de Servicios → Configurar → sub-tabs. No
           reemplaza esos tabs, solo evita el rodeo. */}
       <div className="flex flex-wrap gap-2">
+        <Button asChild size="sm">
+          <Link to="/tenants/$id/studio" params={{ id: tenant.id }}>
+            <Wand2 className="mr-1 h-3 w-3" /> Studio del bot
+          </Link>
+        </Button>
         <Button asChild size="sm" variant="outline">
           <Link to="/tenants/$id/designer" params={{ id: tenant.id }}>
             <Workflow className="mr-1 h-3 w-3" /> Diseñador y simulador

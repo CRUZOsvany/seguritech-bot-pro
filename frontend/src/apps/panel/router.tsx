@@ -74,6 +74,13 @@ const tenantDesignerRoute = createRoute({
   import('./routes/tenants.$id.designer').then((d) => d.Route),
 );
 
+const tenantStudioRoute = createRoute({
+  getParentRoute: () => authedLayoutRoute,
+  path: '/tenants/$id/studio',
+}).lazy(() =>
+  import('./routes/tenants.$id.studio').then((d) => d.Route),
+);
+
 const tenantMessagesRoute = createRoute({
   getParentRoute: () => authedLayoutRoute,
   path: '/tenants/$id/messages',
@@ -116,6 +123,7 @@ const routeTree = rootRoute.addChildren([
     tenantWhatsappRoute,
     tenantPosRoute,
     tenantDesignerRoute,
+    tenantStudioRoute,
     tenantMessagesRoute,
     tenantGuionRoute,
     tenantServiceDirectoryRoute,
