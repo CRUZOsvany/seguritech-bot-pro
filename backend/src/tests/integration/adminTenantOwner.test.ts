@@ -28,7 +28,7 @@ function buildApp(update: jest.Mock) {
     cloudflareAllowedDomain: '',
     logger,
   });
-  const noop = {} as any;
+  const noop = {} as never;
   const audit = { log: jest.fn() };
   const app = express();
   app.use(express.json());
@@ -51,7 +51,7 @@ function buildApp(update: jest.Mock) {
     importPosProductsUseCase: noop,
     serviceDirectoryRepository: noop,
     tenantConfigPort: { getConfig: jest.fn(), invalidate: jest.fn() },
-    audit: audit as any,
+    audit: audit as never,
     supabase: noop,
     logger,
   }));
