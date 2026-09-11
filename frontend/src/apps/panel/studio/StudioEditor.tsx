@@ -12,6 +12,7 @@ import {
   type StudioMold,
   type TestInput,
   type ValidationReport,
+  type WizardEscape,
   type WhatsAppLimits,
   type WizardSpec,
   type WizardState,
@@ -64,6 +65,7 @@ export function StudioEditor({
   tenant,
   wizard,
   molds,
+  escapeDefaults,
   limits,
   isSuperAdmin,
 }: {
@@ -72,6 +74,7 @@ export function StudioEditor({
   tenant: TenantDetail;
   wizard: WizardState;
   molds: StudioMold[];
+  escapeDefaults: WizardEscape;
   limits: WhatsAppLimits['limits'];
   isSuperAdmin: boolean;
 }) {
@@ -188,7 +191,7 @@ export function StudioEditor({
   /** Antes de simular o correr pruebas se guarda lo pendiente: se prueba lo último editado. */
   const beforeRun = dirty ? () => save() : undefined;
 
-  const stepProps: StepProps = { spec, setSpec, business, setBusiness, limits, canEditStructure: isSuperAdmin, report, goTo: setStep };
+  const stepProps: StepProps = { spec, setSpec, business, setBusiness, limits, canEditStructure: isSuperAdmin, report, goTo: setStep, escapeDefaults };
 
   return (
     <div className="flex flex-col gap-3">

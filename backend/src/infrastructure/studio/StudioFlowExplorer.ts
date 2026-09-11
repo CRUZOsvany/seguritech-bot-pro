@@ -2,6 +2,7 @@ import type pino from 'pino';
 import type { BotFlow, FlowNode } from '@/domain/entities/flow';
 import type { SimulateConversationUseCase, SimulatedTurn } from '@/domain/use-cases/SimulateConversationUseCase';
 import { DEFAULT_TEST_START } from '@/domain/studio/testCases';
+import { resolveEscape } from '@/domain/conversation/escapeWords';
 import { buildMetaPayload } from '@/infrastructure/adapters/meta/metaPayloads';
 import { DEFAULT_SIM_PHONE, eventToStep, type SimEvent } from '@/infrastructure/server/admin/studioSimulation';
 
@@ -54,6 +55,10 @@ export class StudioFlowExplorer {
     const depth = Math.min(Math.max(opts.depth ?? 4, 1), 8);
     const maxRuns = Math.min(Math.max(opts.maxRuns ?? 150, 1), 400);
     const byId = new Map(flow.nodes.map((n) => [n.id, n]));
+    // Palabras de escape (C-08): la primera de cada grupo, en cada paso. La
+    // baja no: corta la conversación y no lleva a ningún paso.
+    const escape = resolveEscape(flow);
+    const escapeWords = [escape.human?.words[0], escape.menu.words[0], escape.restart.words[0]].filter((w): w is string => !!w);
 
     const queue: Array<{ events: SimEvent[]; path: string[] }> = [{ events: [{ type: 'text', text: 'hola' }], path: ['"hola"'] }];
     const expanded = new Set<string>();
@@ -93,7 +98,7 @@ export class StudioFlowExplorer {
       if (!waiting || waiting === 'end' || expanded.has(waiting)) continue;
       expanded.add(waiting);
 
-      for (const c of nextMoves(last, byId.get(waiting))) {
+      for (const c of nextMoves(last, byId.get(waiting), escapeWords)) {
         queue.push({ events: [...item.events, c.event], path: [...item.path, c.label] });
       }
     }
@@ -120,9 +125,9 @@ export class StudioFlowExplorer {
  * Lo que un cliente podría hacer después de este turno: tocar cada botón o
  * fila que el bot acaba de mandar (con el id y título del payload real),
  * escribir la primera palabra de cada salida por palabras clave, contestar
- * libre si el paso pide datos, y escribir algo que nadie espera.
+ * libre si el paso pide datos, las palabras de escape y algo que nadie espera.
  */
-function nextMoves(turn: SimulatedTurn, waitingNode: FlowNode | undefined): Candidate[] {
+function nextMoves(turn: SimulatedTurn, waitingNode: FlowNode | undefined, escapeWords: string[]): Candidate[] {
   const moves: Candidate[] = [];
   const seen = new Set<string>();
   const add = (c: Candidate) => {
@@ -162,6 +167,7 @@ function nextMoves(turn: SimulatedTurn, waitingNode: FlowNode | undefined): Cand
       add({ event: { type: 'text', text: FREE_TEXT }, label: `"${FREE_TEXT}"` });
     }
   }
+  for (const word of escapeWords) add({ event: { type: 'text', text: word }, label: `"${word}"` });
   add({ event: { type: 'text', text: NONSENSE }, label: `"${NONSENSE}"` });
   return moves;
 }

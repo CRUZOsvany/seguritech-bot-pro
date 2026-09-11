@@ -90,10 +90,17 @@ describe('explainTrace', () => {
   });
 
   it('palabra de escape y reinicio', async () => {
-    const [, , escape] = await why('cerrajeria', [say('hola'), say('🚨 Emergencia'), say('menu')]);
+    const [, , escape] = await why('cerrajeria', [say('hola'), say('🚨 Emergencia'), say('cancelar')]);
 
-    expect(escape).toContain('"menu" es palabra de escape: la conversación vuelve al inicio y se borra lo capturado.');
+    expect(escape).toContain('"cancelar" es la palabra para empezar de nuevo: se borra lo capturado.');
     expect(escape).toContain('Empieza de nuevo en «bienvenida».');
+  });
+
+  it('palabras para volver al menú y para hablar con una persona', async () => {
+    const [, , menu, human] = await why('cerrajeria', [say('hola'), say('🚨 Emergencia'), say('menu'), say('Asesor')]);
+
+    expect(menu).toContain('"menu" es la palabra para volver al menú: pasa a «bienvenida» y conserva lo capturado.');
+    expect(human).toContain('"asesor" es la palabra para hablar con una persona: pasa a «hablar_persona».');
   });
 
   it('reloj adelantado, fuera de horario y baja', async () => {

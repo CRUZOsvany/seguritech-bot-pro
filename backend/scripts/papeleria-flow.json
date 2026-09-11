@@ -299,5 +299,11 @@
       "content": {},
       "transitions": []
     }
-  ]
+  ],
+  "escape": {
+    "menu": { "words": ["menu", "inicio", "volver"] },
+    "restart": { "words": ["reiniciar", "empezar de nuevo", "cancelar", "salir"] },
+    "human": { "words": ["asesor", "humano", "persona", "agente", "hablar con alguien"], "node_id": "hablar_directo" },
+    "opt_out": { "words": ["baja", "alto", "stop", "no molestar", "cancelar suscripcion"] }
+  }
 }

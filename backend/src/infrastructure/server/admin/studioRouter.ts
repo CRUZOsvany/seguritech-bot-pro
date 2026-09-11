@@ -11,7 +11,7 @@ import { ctx, errMsg } from './helpers';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole } from '@/infrastructure/auth/AuthMiddleware';
 import { WizardSpecSchema, compileWizard, readWizardSpec } from '@/domain/studio/wizard';
-import { STUDIO_MOLDS } from '@/domain/studio/molds';
+import { STUDIO_MOLDS, defaultWizardEscape } from '@/domain/studio/molds';
 import { TestExpectationSchema, TestOptionsSchema } from '@/domain/studio/testCases';
 import { diffFlows } from '@/domain/studio/diff';
 import { TestCasesUnavailableError, type FlowTestCaseRepository } from '@/domain/ports/FlowTestCaseRepository';
@@ -166,9 +166,10 @@ export function createStudioRouter(params: {
   // Asistente (Fase 3)
   // ==========================================================================
 
-  // GET /studio/molds — moldes del asistente: especificación + textos sugeridos.
+  // GET /studio/molds — moldes del asistente (especificación + textos
+  // sugeridos) y las palabras de escape que propone el Studio (C-08).
   router.get('/studio/molds', (_req: Request, res: Response) => {
-    res.json({ molds: STUDIO_MOLDS });
+    res.json({ molds: STUDIO_MOLDS, escapeDefaults: defaultWizardEscape() });
   });
 
   // POST /tenants/:id/studio/wizard/preview — compila y valida sin guardar.

@@ -90,6 +90,7 @@ describe('asistente del Studio', () => {
       spec: { version: 1 },
       textosSugeridos: { mensaje_bienvenida: expect.any(String) },
     });
+    expect(res.body.escapeDefaults).toMatchObject({ humanWords: expect.arrayContaining(['asesor']), optOutWords: expect.arrayContaining(['baja']) });
   });
 
   it('preview compila y valida sin guardar nada', async () => {

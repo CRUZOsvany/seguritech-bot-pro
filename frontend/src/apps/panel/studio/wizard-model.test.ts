@@ -98,6 +98,9 @@ describe('hallazgos del validador → paso del asistente', () => {
     [{ code: 'V-META-01', nodeId: 'no_entendi_2' }, 'no-entiende'],
     [{ code: 'V-META-01', nodeId: 'despedida' }, 'despedida'],
     [{ code: 'V-CUMP-01' }, 'humano'],
+    [{ code: 'V-META-01', nodeId: 'hablar_persona' }, 'humano'],
+    [{ code: 'V-CUMP-02' }, 'reconocimiento'],
+    [{ code: 'V-EST-07' }, 'reconocimiento'],
     [{ code: 'V-EST-08' }, 'publicar'],
   ])('%j → %s', (issue, step) => {
     expect(stepForIssue({ level: 'error', message: '', ...issue }, spec())).toBe(step);

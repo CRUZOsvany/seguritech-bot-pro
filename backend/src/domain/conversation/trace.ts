@@ -21,8 +21,11 @@ export type DecisionStep =
   | { kind: 'window'; open: true; expiresAt: string }
   /** Una regla previa al flow decidió el turno, o lo dejó pasar. */
   | { kind: 'gate'; gate: GateName; detail?: string }
-  /** Palabra de escape global (menu, salir, cancelar, inicio). */
-  | { kind: 'escape_word'; word: string; handledLocally: boolean }
+  /**
+   * Palabra de escape del flow (C-08): menú, empezar de nuevo o persona. La
+   * baja no pasa por aquí: la resuelve el gate `opt_out` antes del flow.
+   */
+  | { kind: 'escape_word'; word: string; category: 'menu' | 'restart' | 'human'; target: string; handledLocally: boolean }
   /** El flow arranca desde su nodo inicial. */
   | { kind: 'session_start'; startNodeId: string; reason: 'new' | 'ended' | 'unknown_node' | 'escape_word' }
   | { kind: 'catalog_search'; nodeId: string; query: string; productId: string | null }

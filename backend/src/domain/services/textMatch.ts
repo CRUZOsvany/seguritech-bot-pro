@@ -22,6 +22,18 @@ export function normalizeText(input: string): string {
     .trim();
 }
 
+/**
+ * Frase normalizada para comparar por igualdad (§6 de la especificación del
+ * Studio): minúsculas, sin acentos, sin signos ni emojis y sin espacios
+ * repetidos. "¡Asesor!" y "  asesor " son lo mismo; "hablar con asesor" no.
+ */
+export function normalizePhrase(input: string): string {
+  return normalizeText(input)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function levenshtein(a: string, b: string): number {
   const m = a.length;
   const n = b.length;
@@ -53,8 +65,12 @@ export function fuzzyIncludes(text: string, keyword: string, maxDistance = 1): b
   const normKw = normalizeText(keyword);
   if (normKw.length === 0) return false;
 
+  // Cortas: palabra completa. Antes "no" coincidía dentro de "humano" o
+  // "bueno", y "si" dentro de "casi", contra lo que dice el comentario.
+  if (normKw.length <= 3) {
+    return ` ${normalizePhrase(text)} `.includes(` ${normalizePhrase(keyword)} `);
+  }
   if (normText.includes(normKw)) return true;
-  if (normKw.length <= 3) return false;
 
   const words = normText.split(/\s+/);
   const kwWords = normKw.split(/\s+/);

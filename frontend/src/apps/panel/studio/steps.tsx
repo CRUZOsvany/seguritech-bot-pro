@@ -7,6 +7,7 @@ import type {
   ValidationReport,
   WhatsAppLimits,
   WizardCaptureOption,
+  WizardEscape,
   WizardOption,
   WizardSpec,
 } from '@/shared/api/studio';
@@ -35,6 +36,8 @@ export interface StepProps {
   canEditStructure: boolean;
   report: ValidationReport | null;
   goTo: (step: StepKey) => void;
+  /** Palabras de escape que propone el backend a un bot que no las tiene (C-08). */
+  escapeDefaults: WizardEscape;
 }
 
 const MAX_OPTIONS = 10;
@@ -412,15 +415,45 @@ function CaptureEditor({
 // 4. Cómo reconoce
 // ---------------------------------------------------------------------------
 
-export function StepReconocimiento({ spec, setSpec, canEditStructure, report }: StepProps) {
+export function StepReconocimiento({ spec, setSpec, canEditStructure, report, escapeDefaults }: StepProps) {
   const disabled = !canEditStructure;
+  const escape = spec.escape;
+  const setEscape = (patch: Partial<WizardEscape>) => setSpec((s) => (s.escape ? { ...s, escape: { ...s.escape, ...patch } } : s));
   return (
     <>
       <StepIssues report={report} spec={spec} step="reconocimiento" />
       <EngineNote>
         El bot reconoce cada opción por su botón y por su texto exacto. Además, por estas palabras dentro de lo que escribe el cliente.
-        Si dos opciones comparten una palabra, gana la primera y aquí aparece un aviso. Las palabras «menu», «salir», «cancelar» e «inicio» reinician la conversación desde cualquier paso.
+        Si dos opciones comparten una palabra, gana la primera y aquí aparece un aviso.
       </EngineNote>
+      <Section title="Palabras que funcionan en cualquier paso">
+        {escape ? (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Se comparan con el mensaje completo, sin acentos ni signos: «¡Asesor!» cuenta, «quiero un asesor» no (eso lo resuelve cada paso).
+              Si un paso tiene su propia salida para una de estas palabras, gana el paso; la baja no cede nunca.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <KeywordsField label="Hablar con una persona" value={escape.humanWords} disabled={disabled} onChange={(v) => setEscape({ humanWords: v })} hint="Obligatoria: WhatsApp exige una vía directa a una persona. El texto está en «Paso a humano»." />
+              <KeywordsField label="Darse de baja" value={escape.optOutWords} disabled={disabled} onChange={(v) => setEscape({ optOutWords: v })} hint="Obligatoria. El bot confirma una vez y deja de escribirle." />
+              <KeywordsField label="Volver al menú" value={escape.menuWords} disabled={disabled} onChange={(v) => setEscape({ menuWords: v })} hint="Muestra el menú y conserva lo que el cliente ya dijo." />
+              <KeywordsField label="Empezar de nuevo" value={escape.restartWords} disabled={disabled} onChange={(v) => setEscape({ restartWords: v })} hint="Borra lo capturado y vuelve al saludo." />
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-muted-foreground">
+              Este bot usa las palabras de siempre: «menu», «salir», «cancelar» e «inicio» empiezan de nuevo; «baja» y «stop» dan de baja. No tiene
+              una palabra para pedir una persona desde cualquier paso.
+            </p>
+            {canEditStructure && (
+              <Button size="sm" variant="outline" className="self-start" onClick={() => setSpec((s) => ({ ...s, escape: structuredClone(escapeDefaults) }))}>
+                <Plus className="mr-1 h-3.5 w-3.5" /> Usar las palabras recomendadas
+              </Button>
+            )}
+          </>
+        )}
+      </Section>
       {spec.options.map((o) => (
         <Section key={o.id} title={o.title}>
           <KeywordsField label="Palabras clave" value={o.keywords} disabled={disabled} onChange={(v) => setSpec((s) => updateOption(s, o.id, (x) => ({ ...x, keywords: v })))} />
@@ -530,6 +563,19 @@ export function StepHumano({ spec, setSpec, business, limits, canEditStructure, 
         spec.notUnderstood.handoff,
         (h) => setSpec((s) => ({ ...s, notUnderstood: { ...s.notUnderstood, handoff: h } })),
         ['last_message'],
+      )}
+      {spec.escape &&
+        handoffFields(
+          `Cuando pide una persona en cualquier paso («${spec.escape.humanWords[0] ?? '…'}»)`,
+          spec.escape.handoff,
+          (h) => setSpec((s) => (s.escape ? { ...s, escape: { ...s.escape, handoff: h } } : s)),
+          ['last_message'],
+        )}
+      {!spec.escape && (
+        <p className="text-xs text-muted-foreground">
+          Para que el cliente pueda pedir una persona desde cualquier paso, activa las palabras recomendadas en{' '}
+          <button type="button" className="underline" onClick={() => goTo('reconocimiento')}>Reconocimiento</button>.
+        </p>
       )}
       {!spec.options.some((o) => o.kind === 'human') && canEditStructure && (
         <Button size="sm" variant="outline" className="self-start" onClick={() => setSpec((s) => ({ ...s, options: [...s.options, newOption('human', s)] }))}>
