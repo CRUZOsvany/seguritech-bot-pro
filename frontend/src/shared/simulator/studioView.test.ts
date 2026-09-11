@@ -168,11 +168,11 @@ describe('utilidades', () => {
     ]);
   });
 
-  it('sessionVariables omite las vacías', () => {
+  it('sessionVariables omite las vacías y las internas del motor', () => {
     expect(
       sessionVariables({
         currentNodeId: 'x',
-        context: { servicio: 'Engargolado', vacia: '', nula: null, cantidad: 3 },
+        context: { servicio: 'Engargolado', vacia: '', nula: null, cantidad: 3, __capture_attempts: { node: 'x', count: 1 } },
         lastInboundAt: null,
         humanPausedUntil: null,
         optedOut: false,

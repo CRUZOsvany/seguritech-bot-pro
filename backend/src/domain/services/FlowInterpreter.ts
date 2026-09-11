@@ -16,6 +16,7 @@ import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { fuzzyIncludes } from '@/domain/services/textMatch';
 import type { DecisionStep } from '@/domain/conversation/trace';
 import { matchEscape, resolveEscape } from '@/domain/conversation/escapeWords';
+import { CAPTURE_ATTEMPTS_KEY, checkCapture, defaultCaptureError, validatorName } from '@/domain/conversation/captureValidation';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -290,22 +291,48 @@ export class FlowInterpreter {
     // nodo se re-renderiza (mismo patrón que "ninguna transición matchea"
     // de más abajo) con `validation_error`, y el flow NO avanza ni guarda
     // nada en el contexto — el intento inválido se descarta por completo.
-    if (currentNode.type === 'wait_input' && currentNode.content.validation === 'numeric') {
-      const isValidNumber = /^\d+([.,]\d+)?$/.test(message.content.trim());
+    //
+    // C-04: teléfono, correo, número con rango, fecha, hora y texto con
+    // largo; la respuesta se guarda normalizada. Con `max_attempts`, las
+    // respuestas inválidas seguidas se cuentan en la sesión y, al agotarlas,
+    // la conversación sigue en `on_exhausted` (una persona o el menú).
+    let capturedValue: string | undefined;
+    if (currentNode.type === 'wait_input' && currentNode.content.validation) {
+      const { validation, max_attempts: maxAttempts, on_exhausted: onExhausted } = currentNode.content;
+      const check = checkCapture(validation, message.content);
+      const previous = user.context?.[CAPTURE_ATTEMPTS_KEY] as { node?: string; count?: number } | null | undefined;
+      const attempt = (previous?.node === currentNode.id ? (previous.count ?? 0) : 0) + 1;
+      const counted = maxAttempts !== undefined && !!onExhausted && !check.valid;
+      const exhausted = counted && attempt >= maxAttempts;
       trace.push({
         kind: 'validation',
         nodeId: currentNode.id,
-        validator: 'numeric',
-        valid: isValidNumber,
+        validator: validatorName(validation),
+        valid: check.valid,
+        ...(counted ? { attempt, maxAttempts, exhausted, ...(exhausted ? { target: onExhausted } : {}) } : {}),
       });
-      if (!isValidNumber) {
+      if (check.valid) {
+        capturedValue = check.value;
+        if (previous) contextUpdates[CAPTURE_ATTEMPTS_KEY] = null;
+      } else if (exhausted) {
+        contextUpdates[CAPTURE_ATTEMPTS_KEY] = null;
+        return this.advanceFrom({
+          flow,
+          startNodeId: onExhausted!,
+          user,
+          message,
+          tenantConfig,
+          contextUpdates,
+          trace,
+          orderIdFactory,
+        });
+      } else {
+        if (counted) contextUpdates[CAPTURE_ATTEMPTS_KEY] = { node: currentNode.id, count: attempt };
         const errorNode: FlowNode = {
           ...currentNode,
           content: {
             ...currentNode.content,
-            prompt:
-              currentNode.content.validation_error ??
-              'No logré entender la cantidad 🤔. Escríbela solo con el número, por ejemplo: *3*',
+            prompt: currentNode.content.validation_error ?? defaultCaptureError(validation),
           },
         };
         const outputs = await this.renderNode(errorNode, { flow, user, message, tenantConfig });
@@ -331,7 +358,7 @@ export class FlowInterpreter {
 
     // save_to_context para wait_input
     if (currentNode.type === 'wait_input' && currentNode.content.save_to_context) {
-      contextUpdates[currentNode.content.save_to_context] = message.content;
+      contextUpdates[currentNode.content.save_to_context] = capturedValue ?? message.content;
     }
 
     // save_to_context para list_item_any

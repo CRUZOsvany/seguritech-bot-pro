@@ -2,7 +2,10 @@ import type { ReactNode } from 'react';
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/shared/ui/button';
 import { Label } from '@/shared/ui/label';
+import { Input } from '@/shared/ui/input';
 import type {
+  CaptureCheck,
+  CaptureRule,
   ValidationIssue,
   ValidationReport,
   WhatsAppLimits,
@@ -13,8 +16,12 @@ import type {
 } from '@/shared/api/studio';
 import { EngineNote, KeywordsField, Section, TextField, VariableChips } from './fields';
 import {
+  CAPTURE_TYPES,
   STEPS,
   availableVariables,
+  checkForType,
+  optionalNumber,
+  type CaptureTypeChoice,
   isValidHours,
   newOption,
   presentation,
@@ -379,6 +386,7 @@ function CaptureEditor({
 
       <TextField label="Pregunta para pedir los datos" value={option.question} max={limits.text.bodyMax} multiline rows={4} disabled={disabled} onChange={(v) => setCapture((o) => ({ ...o, question: v }))} />
       <TextField label="La respuesta se guarda en" value={option.saveAs} disabled={disabled} onChange={(v) => setCapture((o) => ({ ...o, saveAs: v }))} hint={`Úsala como {{${option.saveAs}}} en la confirmación y en la alerta.`} />
+      <CaptureCheckEditor check={option.check} disabled={disabled} limits={limits} onChange={(check) => setCapture((o) => ({ ...o, check }))} />
 
       <label className="flex items-center gap-2 text-xs">
         <input
@@ -408,6 +416,109 @@ function CaptureEditor({
       )}
       <EngineNote>Al final pasa a una persona. Los textos de ese momento se editan en «Paso a humano».</EngineNote>
     </>
+  );
+}
+
+/**
+ * Qué acepta la pregunta como respuesta (C-04). Lo revisa el motor; aquí solo
+ * se elige. Sin revisión, acepta cualquier texto, como siempre.
+ */
+function CaptureCheckEditor({
+  check,
+  onChange,
+  disabled,
+  limits,
+}: {
+  check: CaptureCheck | undefined;
+  onChange: (check: CaptureCheck | undefined) => void;
+  disabled: boolean;
+  limits: WhatsAppLimits['limits'];
+}) {
+  const rule = check?.rule;
+  const setRule = (patch: Record<string, unknown>) => check && onChange({ ...check, rule: { ...check.rule, ...patch } as CaptureRule });
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-dashed p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <Label className="text-xs">Qué respuesta acepta</Label>
+        <select
+          value={rule?.type ?? 'free'}
+          disabled={disabled}
+          onChange={(e) => onChange(checkForType(check, e.target.value as CaptureTypeChoice))}
+          className="h-8 rounded border border-input bg-background px-1 text-xs"
+        >
+          {CAPTURE_TYPES.map((t) => (
+            <option key={t.value} value={t.value}>{t.label}</option>
+          ))}
+        </select>
+      </div>
+      {rule?.type === 'number' && (
+        <div className="grid items-end gap-2 sm:grid-cols-3">
+          <NumberField label="Mínimo" value={rule.min} disabled={disabled} onChange={(v) => setRule({ min: v })} />
+          <NumberField label="Máximo" value={rule.max} disabled={disabled} onChange={(v) => setRule({ max: v })} />
+          <label className="flex items-center gap-2 pb-2 text-xs">
+            <input type="checkbox" checked={!!rule.integer} disabled={disabled} onChange={(e) => setRule({ integer: e.target.checked || undefined })} />
+            Solo enteros
+          </label>
+        </div>
+      )}
+      {rule?.type === 'text' && (
+        <div className="grid gap-2 sm:grid-cols-2">
+          <NumberField label="Mínimo de caracteres" value={rule.min_length} disabled={disabled} onChange={(v) => setRule({ min_length: v })} />
+          <NumberField label="Máximo de caracteres" value={rule.max_length} disabled={disabled} onChange={(v) => setRule({ max_length: v })} />
+        </div>
+      )}
+      {rule?.type === 'phone_mx' && (
+        <p className="text-[11px] text-muted-foreground">Acepta +52, espacios y guiones; se guarda con los 10 dígitos.</p>
+      )}
+      {check ? (
+        <>
+          <TextField
+            label="Si la respuesta no sirve, el bot dice"
+            value={check.errorText ?? ''}
+            max={limits.text.bodyMax}
+            multiline
+            rows={2}
+            disabled={disabled}
+            onChange={(v) => onChange({ ...check, errorText: v || undefined })}
+            hint="Vacío: un mensaje según el tipo, con un ejemplo."
+          />
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <Label className="text-xs">Intentos antes de rendirse:</Label>
+            <select
+              value={check.maxAttempts}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...check, maxAttempts: Number(e.target.value) })}
+              className="h-8 rounded border border-input bg-background px-1 text-xs"
+            >
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+            <Label className="text-xs">y luego:</Label>
+            <select
+              value={check.onExhausted}
+              disabled={disabled}
+              onChange={(e) => onChange({ ...check, onExhausted: e.target.value as CaptureCheck['onExhausted'] })}
+              className="h-8 rounded border border-input bg-background px-1 text-xs"
+            >
+              <option value="human">pasar a una persona (aviso de «Cuando no entiende»)</option>
+              <option value="menu">volver al menú</option>
+            </select>
+          </div>
+        </>
+      ) : (
+        <p className="text-[11px] text-muted-foreground">Acepta cualquier texto y sigue.</p>
+      )}
+    </div>
+  );
+}
+
+function NumberField({ label, value, onChange, disabled }: { label: string; value: number | undefined; onChange: (v: number | undefined) => void; disabled: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <Label className="text-xs">{label}</Label>
+      <Input type="number" value={value ?? ''} disabled={disabled} onChange={(e) => onChange(optionalNumber(e.target.value))} className="h-8 text-sm" />
+    </div>
   );
 }
 

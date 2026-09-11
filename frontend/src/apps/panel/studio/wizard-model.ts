@@ -1,4 +1,6 @@
 import type {
+  CaptureCheck,
+  CaptureRule,
   ValidationIssue,
   WizardOption,
   WizardSpec,
@@ -90,7 +92,7 @@ export const STEPS = [
 
 export type StepKey = (typeof STEPS)[number]['key'];
 
-const RESERVED = new Set(['bienvenida', 'no_entendi', 'despedida', 'fin', 'farewell']);
+const RESERVED = new Set(['bienvenida', 'no_entendi', 'despedida', 'fin', 'farewell', 'hablar_persona']);
 
 /** Id estable a partir del título: "🚨 Emergencia" → "emergencia". */
 export function slugify(title: string, taken: Iterable<string> = []): string {
@@ -203,6 +205,32 @@ export function stepForIssue(issue: ValidationIssue, spec: WizardSpec): StepKey 
   if (issue.code === 'V-CUMP-01') return 'humano';
   return 'publicar';
 }
+
+/** Tipos de respuesta que el asistente ofrece para una captura (C-04). */
+export const CAPTURE_TYPES = [
+  { value: 'free', label: 'Cualquier texto (no se revisa)' },
+  { value: 'phone_mx', label: 'Teléfono de 10 dígitos' },
+  { value: 'email', label: 'Correo' },
+  { value: 'number', label: 'Número' },
+  { value: 'date', label: 'Fecha' },
+  { value: 'time', label: 'Hora' },
+  { value: 'text', label: 'Texto con largo mínimo o máximo' },
+] as const;
+export type CaptureTypeChoice = (typeof CAPTURE_TYPES)[number]['value'];
+
+/**
+ * La revisión de una captura al elegir un tipo: "free" la quita; cambiar de
+ * tipo conserva el mensaje, los intentos y a dónde sigue, y empieza la regla
+ * de cero (un rango de número no aplica a un texto).
+ */
+export function checkForType(current: CaptureCheck | undefined, type: CaptureTypeChoice): CaptureCheck | undefined {
+  if (type === 'free') return undefined;
+  if (current?.rule.type === type) return current;
+  return { maxAttempts: 3, onExhausted: 'human', ...current, rule: { type } as CaptureRule };
+}
+
+/** "" → sin valor; lo demás, número. Para los campos de rango y largo. */
+export const optionalNumber = (text: string): number | undefined => (text.trim() === '' ? undefined : Number(text));
 
 /** Largo como lo cuenta WhatsApp: por caracteres, no por unidades UTF-16 (un emoji cuenta uno). */
 export const charCount = (text: string) => [...text].length;

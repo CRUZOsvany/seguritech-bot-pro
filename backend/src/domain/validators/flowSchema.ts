@@ -217,17 +217,33 @@ const SendMediaNodeSchema = z.object({
   transitions: z.array(TransitionSchema),
 });
 
+// C-04: qué acepta un wait_input (domain/conversation/captureValidation).
+export const CaptureValidationSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('phone_mx') }),
+  z.object({ type: z.literal('email') }),
+  z.object({ type: z.literal('number'), integer: z.boolean().optional(), min: z.number().optional(), max: z.number().optional() }),
+  z.object({ type: z.literal('date') }),
+  z.object({ type: z.literal('time') }),
+  z.object({
+    type: z.literal('text'),
+    min_length: z.number().int().min(1).max(4096).optional(),
+    max_length: z.number().int().min(1).max(4096).optional(),
+  }),
+]);
+
 const WaitInputNodeSchema = z.object({
   id: z.string().min(1),
   type: z.literal('wait_input'),
   content: z.object({
     prompt: z.string().optional(),
     save_to_context: z.string().optional(),
-    validation: z.literal('numeric').optional(),
+    validation: z.union([z.literal('numeric'), CaptureValidationSchema]).optional(),
     validation_error: z
       .string()
       .max(4096, 'Meta: text body ≤ 4096 chars (recomendado ≤ 1024)')
       .optional(),
+    max_attempts: z.number().int().min(1).max(5).optional(),
+    on_exhausted: z.string().min(1).optional(),
   }),
   transitions: z.array(TransitionSchema),
 });
@@ -531,6 +547,46 @@ export const FlowSchema = z
             message: `Nodo "${node.id}" tiene transición a "${t.next_node_id}" que no existe`,
           });
         }
+      }
+    }
+
+    // C-04: los intentos de una captura van con su salida, y la salida existe.
+    for (const node of flow.nodes) {
+      if (node.type !== 'wait_input') continue;
+      const { max_attempts, on_exhausted, validation } = node.content;
+      if ((max_attempts === undefined) !== (on_exhausted === undefined)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', node.id, 'content'],
+          message: `Nodo "${node.id}": max_attempts y on_exhausted van juntos`,
+        });
+      }
+      if (on_exhausted && !ids.has(on_exhausted)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', node.id, 'content', 'on_exhausted'],
+          message: `Nodo "${node.id}": on_exhausted lleva a "${on_exhausted}", que no existe`,
+        });
+      }
+      if (max_attempts !== undefined && !validation) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', node.id, 'content', 'max_attempts'],
+          message: `Nodo "${node.id}": max_attempts sin validation nunca se agota`,
+        });
+      }
+      const range =
+        validation && validation !== 'numeric' && validation.type === 'number'
+          ? [validation.min, validation.max]
+          : validation && validation !== 'numeric' && validation.type === 'text'
+            ? [validation.min_length, validation.max_length]
+            : [undefined, undefined];
+      if (range[0] !== undefined && range[1] !== undefined && range[0] > range[1]) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', node.id, 'content', 'validation'],
+          message: `Nodo "${node.id}": el mínimo (${range[0]}) es mayor que el máximo (${range[1]})`,
+        });
       }
     }
 

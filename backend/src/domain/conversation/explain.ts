@@ -58,13 +58,14 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
           : `Se buscó "${truncate(step.query, 60)}" en el catálogo: sin resultados.`,
       );
       break;
-    case 'validation':
-      lines.push(
-        step.valid
-          ? `En ${q(step.nodeId)} se esperaba un número y la respuesta lo es.`
-          : `En ${q(step.nodeId)} se esperaba un número y llegó otra cosa: se vuelve a pedir.`,
-      );
+    case 'validation': {
+      const what = `En ${q(step.nodeId)} se esperaba ${VALIDATOR_LABEL[step.validator]}`;
+      if (step.valid) lines.push(`${what} y la respuesta lo es.`);
+      else if (step.exhausted) lines.push(`${what} y llegó otra cosa por ${step.attempt}ª vez: se acabaron los intentos y sigue en ${q(step.target ?? '')}.`);
+      else if (step.attempt !== undefined) lines.push(`${what} y llegó otra cosa (intento ${step.attempt} de ${step.maxAttempts}): se vuelve a pedir.`);
+      else lines.push(`${what} y llegó otra cosa: se vuelve a pedir.`);
       break;
+    }
     case 'transitions':
       lines.push(explainTransitions(step.nodeId, step.candidates, step.winner));
       break;
@@ -140,6 +141,16 @@ function explainGate(
     return 'El negocio no tiene un flujo publicado: se contesta "en mantenimiento".';
   }
 }
+
+const VALIDATOR_LABEL: Record<Extract<DecisionStep, { kind: 'validation' }>['validator'], string> = {
+  numeric: 'un número',
+  number: 'un número',
+  phone_mx: 'un teléfono de 10 dígitos',
+  email: 'un correo',
+  date: 'una fecha',
+  time: 'una hora',
+  text: 'un texto del largo pedido',
+};
 
 function explainEscape(step: Extract<DecisionStep, { kind: 'escape_word' }>): string {
   const what = { menu: 'volver al menú', restart: 'empezar de nuevo', human: 'hablar con una persona' }[step.category];

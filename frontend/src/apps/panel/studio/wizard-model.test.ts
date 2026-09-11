@@ -14,6 +14,8 @@ import {
   removeOption,
   slugify,
   stepForIssue,
+  checkForType,
+  optionalNumber,
 } from './wizard-model';
 
 function spec(): WizardSpec {
@@ -86,6 +88,31 @@ describe('opciones', () => {
 
   it('variables disponibles: las del negocio y las que guardan las opciones', () => {
     expect(availableVariables(spec())).toEqual(['nombre_negocio', 'phone', 'tipo_emergencia', 'datos_emergencia']);
+  });
+});
+
+describe('revisión de una captura (C-04)', () => {
+  it('elegir un tipo arma la revisión con 3 intentos y a una persona; "cualquier texto" la quita', () => {
+    const phone = checkForType(undefined, 'phone_mx');
+
+    expect(phone).toEqual({ rule: { type: 'phone_mx' }, maxAttempts: 3, onExhausted: 'human' });
+    expect(checkForType(phone, 'free')).toBeUndefined();
+  });
+
+  it('cambiar de tipo conserva mensaje e intentos y empieza la regla de cero', () => {
+    const current = { rule: { type: 'number' as const, min: 1, max: 5 }, errorText: 'Solo el número.', maxAttempts: 2, onExhausted: 'menu' as const };
+
+    expect(checkForType(current, 'text')).toEqual({ rule: { type: 'text' }, errorText: 'Solo el número.', maxAttempts: 2, onExhausted: 'menu' });
+    expect(checkForType(current, 'number')).toBe(current);
+  });
+
+  it('un campo numérico vacío no manda valor', () => {
+    expect(optionalNumber(' ')).toBeUndefined();
+    expect(optionalNumber('10')).toBe(10);
+  });
+
+  it('el id del paso de persona queda reservado', () => {
+    expect(slugify('Hablar persona')).toBe('hablar_persona_op');
   });
 });
 
