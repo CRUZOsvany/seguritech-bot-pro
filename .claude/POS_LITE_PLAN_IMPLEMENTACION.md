@@ -11,14 +11,14 @@
 
 | Ticket | Estado | Rama |
 |---|---|---|
-| T-01 Migración | Hecho — **es la 022, no la 021** (ver §11) · sin aplicar en Cloud | `feat/pos-lite-backend` |
+| T-01 Migración | Hecho — **es la 022, no la 021** (ver §11) · **sin aplicar en Cloud** | `feat/pos-lite-backend` |
 | T-02 Entidades | Hecho | `feat/pos-lite-backend` |
 | T-03 Puertos + repos Supabase | Hecho | `feat/pos-lite-backend` |
 | T-04 Casos de uso | Hecho | `feat/pos-lite-backend` |
 | T-05 Endpoints | Hecho, probado con supertest | `feat/pos-lite-backend` |
-| T-06 Frontend cajero | Pendiente — tiene decisiones abiertas, ver §11.3 | — |
+| T-06 Frontend cajero | Hecho — PWA en `/caja/<tenantId>/`, probada de punta a punta contra los routers reales (§11.2) | `feat/pos-lite-backend` |
 
-§11 registra todo lo que cambió respecto al texto original al ejecutar T-01…T-05. Las secciones de abajo ya están corregidas.
+§11 registra todo lo que cambió respecto al texto original al ejecutar T-01…T-06, y las decisiones que tomó el humano a mitad de la ejecución. Las secciones de abajo ya están corregidas.
 
 ---
 
@@ -52,7 +52,7 @@
 
 Ningún trigger ni constraint impide `stock_qty < 0`: dos cajeros vendiendo la última pieza al mismo tiempo pueden dejarlo negativo. Aceptado para v1.
 
-### 1.2 Lo que faltaba al empezar (2026-09-10) — ya construido en T-01…T-05
+### 1.2 Lo que faltaba al empezar (2026-09-10) — ya construido en T-01…T-06
 
 | Capa | Antes | Ahora |
 |---|---|---|
@@ -61,8 +61,8 @@ Ningún trigger ni constraint impide `stock_qty < 0`: dos cajeros vendiendo la �
 | `application/pos/` | Solo `PosAuthService.ts, PosAuthError.ts` | + 4 casos de uso y `PosOperationError.ts` |
 | `infrastructure/repositories/pos/` | Sin repos de ventas ni caja | `SupabasePosSaleRepository.ts`, `SupabasePosCashSessionRepository.ts` |
 | `PosRouter.ts` | Solo GET de catálogo | + 5 rutas de caja y ventas (§7) |
-| Frontend | Solo panel admin (`tenants.$id.pos.tsx`) y `shared/api/pos.ts`. Sin app de cajero. `dexie` no instalado | Sin cambios — es T-06 |
-| Migraciones | **La última era `021_carousel_fallback_image.sql`** (el texto original decía 020) | `022_pos_cash_sessions_offline.sql` |
+| Frontend | Solo panel admin (`tenants.$id.pos.tsx`) y `shared/api/pos.ts`. Sin app de cajero. `dexie` no instalado | PWA del cajero en `frontend/src/apps/pos-cajero/` (§8), con `dexie` y tests en Vitest |
+| Migraciones | **La última era `021_carousel_fallback_image.sql`** (el texto original decía 020) | `022_pos_lite_offline.sql` |
 
 No hay filas en `pos_cash_sessions` ni `pos_sales` en los seeds (`seed_pos_papeleria_pilot.sql` no las toca); la 022 igual trae backfill idempotente por si producción tuviera alguna.
 
@@ -81,19 +81,24 @@ Ver `POS_LITE_PLAN_DISENO.md` para el detalle completo. Resumen operativo:
 
 ---
 
-## 3. Ticket T-01 — Migración 022: offline-first en `pos_cash_sessions` ✅
+## 3. Ticket T-01 — Migración 022: POS Lite offline-first ✅
 
-**Archivo:** `backend/supabase/migrations/022_pos_cash_sessions_offline.sql`
+**Archivo:** `backend/supabase/migrations/022_pos_lite_offline.sql`
 
-Agrega `client_id text not null` + `synced_at timestamptz` y `unique(tenant_id, client_id)`. Es idempotente de verdad: backfill `client_id = id::text` para filas previas y el constraint va en un bloque `do $$` que revisa `pg_constraint` antes de crearlo (un `add constraint` suelto falla la segunda vez).
+1. `pos_cash_sessions`: `client_id text not null` + `synced_at timestamptz` + `unique(tenant_id, client_id)`. Backfill `client_id = id::text` para filas previas, y el constraint va en un bloque `do $$` que revisa `pg_constraint` antes de crearlo (un `add constraint` suelto falla la segunda vez).
+2. `pos_sales`: `needs_review boolean not null default false` + `review_reason text` + índice parcial `(tenant_id, created_at desc) where needs_review` para listarlas. Decisión del humano del 2026-09-10 (§11.3).
+
+Idempotente de punta a punta: se puede correr dos veces sin error.
 
 **Pendiente humano:** aplicarla en Supabase Cloud (SQL Editor, el CLI no está enlazado) y verificar el mismo día del merge — regla 8.
 
 ```sql
 -- Verificación post-aplicación
-select column_name, is_nullable from information_schema.columns
- where table_name = 'pos_cash_sessions' and column_name in ('client_id','synced_at');
+select table_name, column_name, is_nullable from information_schema.columns
+ where (table_name = 'pos_cash_sessions' and column_name in ('client_id','synced_at'))
+    or (table_name = 'pos_sales' and column_name in ('needs_review','review_reason'));
 select conname from pg_constraint where conname = 'pos_cash_sessions_tenant_client_unique';
+select indexname from pg_indexes where indexname = 'idx_pos_sales_needs_review';
 ```
 
 ---
@@ -104,6 +109,7 @@ select conname from pg_constraint where conname = 'pos_cash_sessions_tenant_clie
 - `PosSale` (1:1 con `pos_sales`, con `items: PosSaleItem[]`), `PosSaleItem` (1:1 con `pos_sale_items`).
 - `PosSaleItemInput` — `productId, quantity`. Nada más viene del cliente.
 - `NewPosSale` — `clientId, cashSessionId, items, paymentMethod, amountPaid`.
+- `needsReview` / `reviewReason` en `PosSale` y `ResolvedPosSale` — la venta se registró con stock insuficiente, producto desactivado o pago que no cuadra (§6).
 - `ResolvedPosSale` / `ResolvedPosSaleLine` — **agregado**: la venta ya resuelta por el caso de uso (precios del catálogo, totales, ticket). Es lo que recibe el repositorio, que así no hace aritmética ni consulta precios.
 
 **`backend/src/domain/entities/pos/CashSession.ts`**
@@ -143,13 +149,17 @@ Regla 9 del CLAUDE.md: `tenantId` siempre como **primer** argumento. El texto or
 Errores de dominio tipados en `PosOperationError.ts` (mismo patrón que `PosAuthError`), con `code` que el router mapea a HTTP.
 
 - **`RegisterSaleUseCase`**
-  - Primero busca por `clientId`: si la venta ya existe y está completa, la devuelve **antes** de validar stock. Si no, el reintento de la venta de la última pieza fallaría por el stock que ella misma descontó.
-  - Agrupa items del mismo producto y valida stock sobre la cantidad total (solo `trackStock`).
+  - Primero busca por `clientId`: si la venta ya existe y está completa, la devuelve sin volver a resolverla.
   - Precio, nombre, sku e impuesto salen de `pos_products`; lo que mande el cliente se ignora.
+  - **La venta ya ocurrió cuando llega al servidor** (la PWA registra local primero), así que lo que delata un catálogo desactualizado en la laptop **no se rechaza**: se registra con `needs_review = true` y el motivo en `review_reason`, varios unidos con « · »:
+    - stock insuficiente sobre la cantidad agregada por producto (el trigger deja `stock_qty` negativo);
+    - producto desactivado después de que la laptop bajó el catálogo;
+    - efectivo menor al total del servidor, o tarjeta/transferencia distinta al total (el precio cambió).
+  - Solo se rechaza lo que no se puede registrar: caja inexistente, ajena o cerrada; carrito vacío; producto que no existe en el tenant.
   - Impuesto **aditivo**: `total = Σ(unit_price × qty) + Σ(subtotal × tax_rate/100)`. Con `tax_rate = 0` (el default y el caso del piloto) da igual; si algún tenant maneja precios con IVA incluido, esto hay que revisarlo.
-  - Efectivo: `amountPaid ≥ total`, `changeGiven = amountPaid − total`. Tarjeta/transferencia: pago exacto, porque el cambio saldría del cajón y descuadraría el arqueo.
-  - **`ticketNumber` lo asigna el servidor**: `count(ventas de la sesión) + 1`, con relleno a 3 dígitos (`001`, `002`…). El texto original decía "formateado en el cliente offline", pero el contrato de `POST /sales` (§7) no trae ese campo y la columna es `not null`. Mismo esquema (secuencial por sesión), otro lugar. La PWA puede mostrar un número provisional mientras está offline.
-- **`OpenCashSessionUseCase`** — primero busca por `clientId` (un reintento de la misma apertura devuelve su sesión, no "ya tienes una caja abierta"); después rechaza una segunda caja abierta del mismo cajero.
+  - `changeGiven = max(0, amountPaid − total)` en efectivo; tarjeta y transferencia nunca registran cambio.
+  - **`ticketNumber` lo asigna el servidor**: `count(ventas de la sesión) + 1`, con relleno a 3 dígitos (`001`, `002`…). El contrato de `POST /sales` no trae ese campo y la columna es `not null`. La PWA muestra un número provisional mientras la venta no sube.
+- **`OpenCashSessionUseCase`** — primero busca por `clientId` (un reintento de la misma apertura devuelve su sesión, no "ya tienes una caja abierta"); después rechaza una segunda caja abierta del mismo cajero, devolviendo el `sessionId` de la que ya existe.
 - **`CloseCashSessionUseCase`** — `expectedAmount = openingAmount + Σ total (cash)`, `difference = closingAmount − expectedAmount`. Cerrar una sesión ya cerrada la devuelve tal cual (idempotente).
 - **`GetCashSessionSummaryUseCase`** — solo el dueño de la sesión.
 
@@ -167,29 +177,39 @@ Una sesión solo la usa, cierra o consulta su propio cajero (`session_not_owned`
 | `GET` | `/cash-sessions/current` | — | `200 { session \| null }` |
 | `PATCH` | `/cash-sessions/:id/close` | `{ closingAmount }` | `200 { session, summary }` |
 | `GET` | `/cash-sessions/:id/summary` | — | `200 { session, summary }` |
-| `POST` | `/sales` | `{ clientId, cashSessionId, items: [{productId, quantity}], paymentMethod, amountPaid }` | `201 { sale }` nueva · `200` reintento |
+| `POST` | `/sales` | `{ clientId, cashSessionId, items: [{productId, quantity}], paymentMethod, amountPaid }` | `201 { sale }` nueva · `200` reintento. `sale.needsReview` / `sale.reviewReason` |
 
 - `clientId`, `cashSessionId`, `productId` y `:id` deben ser UUID (un id malformado da 400 en vez de un 500 de Postgres).
 - `paymentMethod` acepta `cash | card | transfer`. **`mixed` no**: existe en el CHECK de `pos_sales`, pero no hay columnas para el desglose efectivo/tarjeta, así que el arqueo no podría cuadrarlo. La pantalla de §3.2 del diseño tampoco lo ofrece.
-- Errores de dominio → `{ error, code, details? }`: `404` session/product_not_found · `403` session_not_owned · `409` session_closed, session_already_open, insufficient_stock · `400` empty_cart, insufficient_payment, invalid_payment. Infraestructura → `500 { error: 'Error interno del POS' }`.
+- Errores de dominio → `{ error, code, details? }`: `404` session_not_found, product_not_found · `403` session_not_owned · `409` session_closed, session_already_open (con `details.sessionId`) · `400` empty_cart. Infraestructura → `500 { error: 'Error interno del POS' }`.
+- Nadie lista todavía las ventas con `needs_review`: quedan en BD, marcadas y con índice. La pantalla para revisarlas (panel del operador o del dueño) es trabajo siguiente.
 
 ---
 
-## 8. Ticket T-06 — Frontend: app de cajero (pendiente)
+## 8. Ticket T-06 — Frontend: app de cajero ✅
 
-**Ubicación propuesta:** `frontend/src/apps/pos-cajero/` (nueva app hermana de `frontend/src/apps/panel/`, no se mezcla con el panel admin).
+**Ubicación:** `frontend/src/apps/pos-cajero/`, app hermana del panel con build propio (`vite.caja.config.ts` → `backend/public/caja/`). Comparte stack y componentes (`@/shared/ui`), pero no el router, la URL ni el cliente HTTP del panel — el `apiFetch` del panel redirige a `/app/login` en un 401 y la caja tiene que seguir funcionando con su cola.
 
-3 pantallas, diseño ya validado en `POS_LITE_PLAN_DISENO.md` §3 — no rediseñar, implementar tal cual:
-1. Login (nombre + PIN)
-2. Pantalla principal: catálogo con pestañas Todo/Productos/Servicios + buscador, cuadro de "agregar por código o nombre" dentro del panel de venta actual, carrito, métodos de pago, cobrar.
-3. Cerrar caja: arqueo + resumen (`GET /cash-sessions/:id/summary`).
+**Una URL por negocio** (decisión del humano): `/caja/<tenantId>/`. El `tenantId` que exige `pos-login` sale de la ruta. Express (`infrastructure/server/cajaStatic.ts`) sirve el build y un manifest por negocio en `/caja/<tenantId>/manifest.webmanifest`, con `start_url` y `scope` relativos: cada negocio se instala como su propia app. El manifest no consulta la BD — la ruta es pública y un UUID no debe revelar el nombre del negocio. El panel muestra el enlace en *Punto de venta* del negocio.
 
-**Cliente offline:** instalar `dexie` (no está en `package.json` hoy). Cada acción (abrir caja, venta, cerrar caja) se guarda local primero con `clientId` generado ahí (`crypto.randomUUID()`), se encola, y un proceso de sincronización la manda cuando hay conexión. El backend deduplica solo por `unique(tenant_id, client_id)` — el cliente no necesita lógica extra de deduplicación.
+**Pantallas** (diseño §3, sin rediseñar): login con nombre + PIN; abrir caja (sin caja no se vende); venta con catálogo Todo / Productos / Servicios + buscador, agregar rápido por código de barras, SKU o nombre (Enter, flechas, F2 regresa al campo), carrito, tres métodos de pago, recibido y cambio; cerrar caja con resumen, efectivo esperado, arqueo y lista de ventas con su estado (pendiente, sincronizada, revisar, rechazada).
 
-Lo que el backend ya fija para la cola (ver §11.3 para lo que falta decidir):
-- **Reintentar solo ante red o 5xx.** Un 4xx es definitivo: reintentarlo no cambia nada.
-- **FIFO estricto, sin saltarse elementos.** Una venta que se sincroniza después del cierre de su caja recibe `409 session_closed`; si la cola manda el cierre antes que una venta pendiente, esa venta se pierde y el arqueo se calcula sin ella.
-- **El cierre depende del `id` de servidor de la sesión**, que no existe mientras la apertura no se haya sincronizado. La PWA tiene que resolver `clientId → id` al sincronizar la apertura antes de mandar ventas y cierre.
+**Offline** — todo en `lib/`, con tests en Vitest sobre IndexedDB en memoria (`fake-indexeddb`):
+- `db.ts` — Dexie, una base por negocio: `catalog`, `sessions`, `sales`, `outbox`, `meta`.
+- `actions.ts` — abrir, vender y cerrar escriben local y encolan en una sola transacción, sin tocar la red. Vender descuenta el stock *local* para que el cajero vea un número aproximado sin internet.
+- `sync.ts` — la cola:
+  - **FIFO estricto**: apertura → ventas → cierre. El `id` de servidor de la caja se resuelve al subir la apertura y se usa en ventas y cierre.
+  - Red caída, `5xx`, `408` o `429` (el rate limit global es de 100 req/min por IP) → **se detiene** y reintenta sin saltarse nada.
+  - `401` → se detiene y pide volver a entrar; nada se pierde.
+  - Otro `4xx` → definitivo: la operación se marca fallida, se le muestra al cajero y la cola sigue.
+  - `409 session_already_open` al abrir → adopta la caja que el servidor ya tenía abierta, para no dejar las ventas sin dónde registrarse.
+  - Cada cajero sincroniza **solo sus** operaciones: con la cookie de otro, el servidor respondería `session_not_owned` y se perderían.
+- `hooks/useSyncEngine.ts` — corre la cola al montar, al volver la red, cada 20 s y después de cada acción. `navigator.locks` evita que dos pestañas sincronicen a la vez. Con la cola vacía adopta una caja abierta en otro equipo (`GET /cash-sessions/current`) y refresca el catálogo cada 5 min o en cuanto suben ventas.
+- `public/sw.js` — service worker que guarda solo el cascarón (HTML, JS, CSS, íconos) para que la app abra sin internet. `/api/*` nunca pasa por él.
+
+**Login sin internet:** el primer login necesita red (bcrypt + cookie). Después, el cajero queda guardado en `localStorage` (id, nombre, rol; nada secreto) y la caja reabre sin internet. Si la cookie venció (8 h, `ADMIN_JWT_TTL_SECONDS`), la cola se detiene con 401 y un aviso pide volver a entrar, sin perder lo guardado.
+
+**Build e integración:** `npm run build:caja --workspace frontend`, incluido en `npm run build` de la raíz, en el `Dockerfile` (stage 1 + `COPY public/caja`) y en CI, que además corre `npm test --workspace frontend`.
 
 ---
 
@@ -217,17 +237,28 @@ T-01 (migración) → T-02 (entidades) → T-03 (puertos) → T-04 (casos de uso
 | Los repositorios Supabase no estaban listados | Sin ellos T-05 no tiene implementación real | Creados y cableados en `Bootstrap.ts` |
 | `ticketNumber` formateado en el cliente | El body de `POST /sales` no lo trae; la columna es `not null` | Lo asigna el servidor, mismo esquema secuencial |
 | `pos_cash_sessions` sin mención de timestamps | No tiene `created_at` | El orden de sesiones usa `opened_at` |
+| Rechazar con `insufficient_stock` | La venta offline ya ocurrió; rechazarla la pierde | Se registra y se marca `needs_review` (decisión del humano, §11.3) |
+| El frontend no tenía runner de tests | "Sin test en el mismo commit, no está hecho" | Vitest 4 (compatible con Node 20 de CI/Docker; Vitest 5 pide Node 22) + `fake-indexeddb` |
 
 ### 11.2 Verificación
 
-- `npm test`: 64 suites, 503/503 (antes de esta rama: 58 suites · 456 tests).
-- `npm run type-check --workspace backend`: limpio.
-- `npm run lint`: 0 errores (los warnings de `any` en el mock de Supabase siguen el patrón de los tests existentes).
-- Tests nuevos: 5 suites unitarias en `tests/unit/pos/` (casos de uso + repos Supabase con mock fluent) y `tests/integration/pos/posSalesRouter.test.ts` (HTTP con el middleware POS real).
-- **No verificado:** la 022 no se ha corrido contra Postgres real; los repos Supabase solo se probaron con mock. Se verifica al aplicar la migración en Cloud y hacer una venta de punta a punta.
+- Backend `npm test`: 65 suites · 515/515 (antes de esta rama: 58 · 456).
+- Frontend `npm test --workspace frontend`: 3 archivos · 31 tests (carrito, catálogo, acciones locales, cola de sincronización).
+- `type-check` limpio en ambos workspaces; `lint` sin errores; `npm run build` de la raíz genera `backend/public/app/` y `backend/public/caja/`.
+- **Prueba de punta a punta** (temporal, no commiteada): los routers reales de auth, POS y `/caja` sobre el store en memoria, y el código real de la caja hablándoles por HTTP. Login → catálogo → se cae la red → abrir caja y dos ventas → vuelve la red → suben en orden (tickets 001, 002; la segunda con `needs_review` y stock en −1) → reenvío de una venta sin duplicar → cierre sin red → el esperado y la diferencia del servidor (520, −5) coinciden con los de la laptop → cookie vencida detiene la cola con `unauthorized` sin perder la apertura. Además: `/caja/<uuid>` redirige a la barra final, el manifest del negocio sale con `start_url: "./"`, y `sw.js`, assets e íconos responden 200.
+- **No verificado:**
+  - La 022 no se ha corrido contra Postgres real; los repos Supabase solo se probaron con mock.
+  - La UI no se ha visto en un navegador: no hubo herramienta de navegador en la sesión. Falta abrirla, instalarla como PWA y probarla con un lector de código de barras.
+  - El comportamiento del service worker sin internet (abrir la app con la red caída) necesita navegador real.
 
-### 11.3 Decisiones abiertas para el humano (bloquean T-06, no T-01…T-05)
+### 11.3 Decisiones del humano (2026-09-10)
 
-1. **Venta offline sin stock en el servidor.** El plan pide rechazar con `insufficient_stock` si no hay stock suficiente, y así quedó. Pero en offline la venta ya ocurrió: el producto salió de la tienda y el dinero está en el cajón. Si al sincronizar el servidor dice que no había stock (catálogo desactualizado en la laptop, otro cajero vendió la última pieza), el `409` es definitivo y la venta no se registra — el arqueo va a salir con sobrante. Opciones: (a) dejarlo así y que la PWA le muestre la venta rechazada al cajero para resolverla a mano; (b) que las ventas sincronizadas acepten stock negativo y lo marquen para revisión. Afecta cómo la cola maneja el 409.
-2. **El login necesita `tenantId`.** `POST /api/auth/pos-login` recibe `{ tenantId, name, pin }`. El diseño dice "campo único: nombre + PIN", así que el `tenantId` tiene que venir de la configuración de la laptop (se fija una vez al instalar la PWA). Hay que decidir cómo se configura: URL por tenant, pantalla de setup del operador, etc.
-3. **Login offline.** El login es contra el servidor (bcrypt + cookie). Si el internet está caído cuando el cajero llega en la mañana, no hay sesión y no puede ni abrir caja offline. O la cookie se deja viva lo suficiente (hoy `jwtTtlSeconds`), o hace falta un mecanismo de desbloqueo local.
+1. **Venta con stock insuficiente → se acepta y se marca para revisión**, en vez de rechazarse. Se aplicó el mismo criterio a los otros dos síntomas de catálogo desactualizado (producto desactivado, pago que no cuadra por cambio de precio), porque rechazarlos también perdía la venta. Si solo debe aplicar al stock, es revertir dos `push` en `RegisterSaleUseCase`.
+2. **Una URL por negocio**: `/caja/<tenantId>/`.
+3. **Login sin internet** — no se decidió explícitamente; quedó así: el primer login necesita red, después la caja reabre sin ella con el cajero guardado. Si se quiere entrar por primera vez en el día sin internet, hace falta un desbloqueo local por PIN (no construido).
+
+### 11.4 Pendiente
+
+- Aplicar y verificar la 022 en Cloud (regla 8). La 021 también sigue sin aplicar.
+- Pantalla para revisar las ventas con `needs_review`.
+- Probar la PWA en la laptop real del mostrador.

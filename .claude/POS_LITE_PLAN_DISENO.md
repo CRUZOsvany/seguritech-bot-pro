@@ -56,7 +56,7 @@ Campo único: nombre + PIN. No se elige rol — el backend ya distingue `pos_cas
 - Cajeros simultáneos (cada sesión de caja ya está ligada a `cashier_id`, así que varios cajeros pueden tener su propia caja abierta al mismo tiempo en el mismo tenant sin conflicto)
 
 **Cambio necesario:**
-- Agregar `client_id text not null` y `synced_at timestamptz` a `pos_cash_sessions`, con `unique(tenant_id, client_id)` — mismo patrón que `pos_sales`, para que abrir/cerrar caja también sea seguro sin internet. *(Hecho en `022_pos_cash_sessions_offline.sql` — ver plan de implementación.)*
+- Agregar `client_id text not null` y `synced_at timestamptz` a `pos_cash_sessions`, con `unique(tenant_id, client_id)` — mismo patrón que `pos_sales`, para que abrir/cerrar caja también sea seguro sin internet. *(Hecho en `022_pos_lite_offline.sql`, que además agrega `needs_review`/`review_reason` a `pos_sales` — ver plan de implementación §3.)*
 
 **Decisión futura, no bloqueante:** si dos empleados comparten literalmente un solo cajón de dinero (no cada quien el suyo), lo más simple es que compartan un mismo usuario/PIN de caja en vez de construir lógica de "entrega de turno" entre sesiones — evita complejidad que v1 no necesita.
 
