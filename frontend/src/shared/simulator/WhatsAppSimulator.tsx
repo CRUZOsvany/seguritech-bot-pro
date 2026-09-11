@@ -10,6 +10,7 @@ import { ApiError } from '@/shared/api/client';
 import { Button } from '@/shared/ui/button';
 import { Input } from '@/shared/ui/input';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
+import { buttonReply, carouselReply, listReply, type SimulatedReply } from './replies';
 
 /**
  * Simulador de conversación de WhatsApp reutilizable.
@@ -96,11 +97,16 @@ export function WhatsAppSimulator({
   // —no en useState— para no quedar obsoleto dentro del closure async de send.
   const stateRef = useRef<SimulateState>({ currentNodeId: undefined, context: {} });
 
-  const send = async (content: string) => {
+  /**
+   * `label` es lo que se pinta en la burbuja del cliente cuando no coincide
+   * con lo que viaja al backend: al tocar una fila, Meta entrega su id, pero
+   * el cliente ve el título (ver ./replies).
+   */
+  const send = async (content: string, label: string = content) => {
     if (!content.trim() || busy) return;
     setBusy(true);
     setErr(null);
-    setTurns((t) => [...t, { from: 'user', text: content }]);
+    setTurns((t) => [...t, { from: 'user', text: label }]);
     setText('');
     try {
       if (onBeforeSend) await onBeforeSend();
@@ -177,7 +183,11 @@ export function WhatsAppSimulator({
             </p>
           )}
           {turns.map((turn, i) => (
-            <SimulatorBubble key={i} turn={turn} onReply={send} />
+            <SimulatorBubble
+              key={i}
+              turn={turn}
+              onReply={(reply) => send(reply.content, reply.label)}
+            />
           ))}
           {busy && (
             <div className="self-start rounded-lg bg-white px-3 py-1.5 text-xs text-muted-foreground shadow-sm">
@@ -267,8 +277,10 @@ function SimulatorBubble({
   onReply,
 }: {
   turn: Turn;
-  onReply: (content: string) => void;
+  onReply: (reply: SimulatedReply) => void;
 }) {
+  const say = (text: string) => onReply({ content: text, label: text });
+
   if (turn.from === 'user') {
     return (
       <div className="max-w-[80%] self-end rounded-lg rounded-br-sm bg-emerald-500 px-3 py-1.5 text-sm text-white shadow-sm">
@@ -293,7 +305,7 @@ function SimulatorBubble({
           <p className="whitespace-pre-wrap">{o.text}</p>
           <div className="mt-1.5 flex flex-wrap gap-1">
             {o.buttons.map((b) => (
-              <button key={b.id} className={chip} onClick={() => onReply(b.title)}>
+              <button key={b.id} className={chip} onClick={() => onReply(buttonReply(b))}>
                 {b.title}
               </button>
             ))}
@@ -314,7 +326,7 @@ function SimulatorBubble({
                   <button
                     key={it.id}
                     className="rounded-md border px-2 py-1 text-left text-xs hover:bg-muted"
-                    onClick={() => onReply(it.title)}
+                    onClick={() => onReply(listReply(it))}
                   >
                     <span className="font-medium">{it.title}</span>
                     {it.description && (
@@ -402,7 +414,7 @@ function SimulatorBubble({
           <p className="whitespace-pre-wrap">{o.body}</p>
           <button
             className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-emerald-400 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-            onClick={() => onReply('[ubicación compartida]')}
+            onClick={() => say('[ubicación compartida]')}
           >
             <MapPin className="h-3 w-3" /> Enviar ubicación
           </button>
@@ -427,7 +439,7 @@ function SimulatorBubble({
                         <button
                           key={bi}
                           className="rounded border border-emerald-400 px-1.5 py-0.5 text-[10px] text-emerald-700 hover:bg-emerald-50"
-                          onClick={() => onReply(btn.title)}
+                          onClick={() => onReply(carouselReply(btn))}
                         >
                           {btn.title}
                         </button>
@@ -464,12 +476,12 @@ function SimulatorBubble({
           <p className="whitespace-pre-wrap">{o.body}</p>
           {o.footer && <p className="mt-0.5 text-[10px] text-muted-foreground">{o.footer}</p>}
           <div className="mt-1.5 flex gap-1">
-            <button className={chip} onClick={() => onReply('Permitir llamada')}>
+            <button className={chip} onClick={() => say('Permitir llamada')}>
               📞 Permitir
             </button>
             <button
               className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted"
-              onClick={() => onReply('Rechazar llamada')}
+              onClick={() => say('Rechazar llamada')}
             >
               Rechazar
             </button>
@@ -485,7 +497,7 @@ function SimulatorBubble({
           {o.footer && <p className="mt-0.5 text-[10px] text-muted-foreground">{o.footer}</p>}
           <button
             className="mt-1.5 flex w-full items-center justify-center gap-1 rounded-md border border-emerald-400 px-2 py-1 text-xs font-medium text-emerald-700 hover:bg-emerald-50"
-            onClick={() => onReply(`[abrió formulario: ${o.flow_cta}]`)}
+            onClick={() => say(`[abrió formulario: ${o.flow_cta}]`)}
           >
             <Smile className="h-3 w-3" /> {o.flow_cta}
           </button>
