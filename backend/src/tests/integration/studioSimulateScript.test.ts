@@ -49,7 +49,7 @@ beforeAll(async () => {
     next();
   });
   const router = express.Router();
-  router.use(createStudioRouter({ botFlowRepository: repo, simulateConversation: useCase, audit: { log: jest.fn() } as never, logger: silentLogger }));
+  router.use(createStudioRouter({ botFlowRepository: repo, simulateConversation: useCase, testCases: { list: async () => [] } as never, audit: { log: jest.fn() } as never, logger: silentLogger }));
   app.use('/api/admin', router);
 
   server = await new Promise<Server>((ok) => {

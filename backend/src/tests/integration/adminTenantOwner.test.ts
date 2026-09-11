@@ -50,6 +50,7 @@ function buildApp(update: jest.Mock) {
     posCategoryRepository: noop,
     importPosProductsUseCase: noop,
     serviceDirectoryRepository: noop,
+    flowTestCaseRepository: {} as never,
     tenantConfigPort: { getConfig: jest.fn(), invalidate: jest.fn() },
     audit: audit as never,
     supabase: noop,

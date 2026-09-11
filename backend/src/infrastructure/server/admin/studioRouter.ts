@@ -12,6 +12,11 @@ import type { AuditLogService } from '@/infrastructure/services/AuditLogService'
 import { requireRole } from '@/infrastructure/auth/AuthMiddleware';
 import { WizardSpecSchema, compileWizard, readWizardSpec } from '@/domain/studio/wizard';
 import { STUDIO_MOLDS } from '@/domain/studio/molds';
+import { TestExpectationSchema, TestOptionsSchema } from '@/domain/studio/testCases';
+import { diffFlows } from '@/domain/studio/diff';
+import { TestCasesUnavailableError, type FlowTestCaseRepository } from '@/domain/ports/FlowTestCaseRepository';
+import { StudioFlowTestRunner } from '@/infrastructure/studio/StudioFlowTestRunner';
+import { StudioFlowExplorer } from '@/infrastructure/studio/StudioFlowExplorer';
 import { validateFlowDesign } from '@/domain/validation/flowDesignValidator';
 import { WHATSAPP_LIMITS, WHATSAPP_LIMITS_VERIFIED_AT } from '@/domain/whatsapp/limits';
 
@@ -49,11 +54,15 @@ const SimulateBodySchema = z.object({
 export function createStudioRouter(params: {
   botFlowRepository: BotFlowRepository;
   simulateConversation: SimulateConversationUseCase;
+  /** Casos de prueba guardados (flow_test_cases, migración 023). */
+  testCases: FlowTestCaseRepository;
   audit: AuditLogService;
   logger: pino.Logger;
 }): Router {
-  const { botFlowRepository, simulateConversation, audit, logger } = params;
+  const { botFlowRepository, simulateConversation, testCases, audit, logger } = params;
   const router = Router();
+  const runner = new StudioFlowTestRunner(simulateConversation, logger);
+  const explorer = new StudioFlowExplorer(simulateConversation, logger);
 
   router.post(
     '/tenants/:id/studio/flows/:flowId/simulate',
@@ -246,7 +255,178 @@ export function createStudioRouter(params: {
     },
   );
 
+  // ==========================================================================
+  // Pruebas, explorador y diff (Fase 4)
+  // ==========================================================================
+
+  const base = '/tenants/:id/studio/flows/:flowId';
+  const ids = (req: Request) => ({ tenantId: String(req.params.id), flowId: String(req.params.flowId) });
+
+  // GET …/tests — casos de prueba guardados del flow.
+  router.get(`${base}/tests`, requireTenantScope, async (req: Request, res: Response) => {
+    const { tenantId, flowId } = ids(req);
+    try {
+      res.json({ tests: await testCases.list(tenantId, flowId) });
+    } catch (err) {
+      logger.error({ err: errMsg(err), tenantId, flowId }, 'GET studio tests failed');
+      res.status(500).json({ error: 'Error leyendo las pruebas' });
+    }
+  });
+
+  // POST …/tests — guardar una conversación como prueba. Crear pruebas es de
+  // cualquier admin de su tenant (§13 de la especificación).
+  router.post(`${base}/tests`, requireTenantScope, async (req: Request, res: Response) => {
+    const c = ctx(req);
+    const { tenantId, flowId } = ids(req);
+    const parsed = TestBodySchema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'La prueba no es válida', issues: specIssues(parsed.error.issues) });
+      return;
+    }
+    try {
+      const test = await testCases.create(tenantId, { flowId, ...parsed.data, createdBy: c.adminId });
+      audit.log({ ...c, action: 'flow.test.create', targetType: 'flow_test_case', targetId: test.id, metadata: { tenantId, flowId } });
+      res.status(201).json({ test });
+    } catch (err) {
+      sendTestError(err, res, logger, 'POST studio test failed');
+    }
+  });
+
+  router.put(`${base}/tests/:testId`, requireTenantScope, async (req: Request, res: Response) => {
+    const c = ctx(req);
+    const { tenantId, flowId } = ids(req);
+    const testId = String(req.params.testId);
+    const parsed = TestBodySchema.partial().safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'La prueba no es válida', issues: specIssues(parsed.error.issues) });
+      return;
+    }
+    try {
+      const test = await testCases.update(tenantId, testId, parsed.data);
+      if (!test) {
+        res.status(404).json({ error: 'Prueba no encontrada' });
+        return;
+      }
+      audit.log({ ...c, action: 'flow.test.update', targetType: 'flow_test_case', targetId: testId, metadata: { tenantId, flowId } });
+      res.json({ test });
+    } catch (err) {
+      sendTestError(err, res, logger, 'PUT studio test failed');
+    }
+  });
+
+  router.delete(`${base}/tests/:testId`, requireTenantScope, async (req: Request, res: Response) => {
+    const c = ctx(req);
+    const { tenantId, flowId } = ids(req);
+    const testId = String(req.params.testId);
+    try {
+      if (!(await testCases.delete(tenantId, testId))) {
+        res.status(404).json({ error: 'Prueba no encontrada' });
+        return;
+      }
+      audit.log({ ...c, action: 'flow.test.delete', targetType: 'flow_test_case', targetId: testId, metadata: { tenantId, flowId } });
+      res.json({ ok: true });
+    } catch (err) {
+      sendTestError(err, res, logger, 'DELETE studio test failed');
+    }
+  });
+
+  // POST …/tests/run — corre todas las pruebas contra el borrador (o lo
+  // activo, o una versión). No publica nada.
+  router.post(`${base}/tests/run`, requireTenantScope, async (req: Request, res: Response) => {
+    const { tenantId, flowId } = ids(req);
+    const parsed = SourceSchema.safeParse(req.body ?? {});
+    if (!parsed.success || (parsed.data.source === 'version' && !parsed.data.versionId)) {
+      res.status(400).json({ error: 'Fuente inválida' });
+      return;
+    }
+    try {
+      const resolved = await resolveFlow(botFlowRepository, tenantId, flowId, parsed.data.source, parsed.data.versionId);
+      if (!resolved.ok) {
+        res.status(resolved.status).json(resolved.body);
+        return;
+      }
+      const cases = await testCases.list(tenantId, flowId);
+      res.json({ report: await runner.run(tenantId, resolved.flow, cases) });
+    } catch (err) {
+      logger.error({ err: errMsg(err), tenantId, flowId }, 'POST studio tests/run failed');
+      res.status(500).json({ error: 'Error corriendo las pruebas' });
+    }
+  });
+
+  // POST …/explore — explorador de ramas.
+  router.post(`${base}/explore`, requireTenantScope, async (req: Request, res: Response) => {
+    const { tenantId, flowId } = ids(req);
+    const parsed = SourceSchema.extend({ depth: z.number().int().min(1).max(8).default(5) }).safeParse(req.body ?? {});
+    if (!parsed.success || (parsed.data.source === 'version' && !parsed.data.versionId)) {
+      res.status(400).json({ error: 'Parámetros inválidos' });
+      return;
+    }
+    try {
+      const resolved = await resolveFlow(botFlowRepository, tenantId, flowId, parsed.data.source, parsed.data.versionId);
+      if (!resolved.ok) {
+        res.status(resolved.status).json(resolved.body);
+        return;
+      }
+      res.json({ report: await explorer.explore(tenantId, resolved.flow, { depth: parsed.data.depth }) });
+    } catch (err) {
+      logger.error({ err: errMsg(err), tenantId, flowId }, 'POST studio explore failed');
+      res.status(500).json({ error: 'Error explorando el flujo' });
+    }
+  });
+
+  // GET …/diff?against=<n> — qué cambió en lo editable respecto a lo
+  // publicado (la versión más nueva) o a una versión del historial.
+  router.get(`${base}/diff`, requireTenantScope, async (req: Request, res: Response) => {
+    const { tenantId, flowId } = ids(req);
+    const against = req.query.against === undefined ? null : Number(req.query.against);
+    if (against !== null && (!Number.isInteger(against) || against < 1)) {
+      res.status(400).json({ error: 'against: número de versión inválido' });
+      return;
+    }
+    try {
+      const [editable, versions] = await Promise.all([
+        botFlowRepository.getEditableFlow(flowId, tenantId),
+        botFlowRepository.listVersions(flowId, tenantId),
+      ]);
+      if (!editable) {
+        res.status(404).json({ error: 'Flow no encontrado' });
+        return;
+      }
+      const target = against === null ? versions[0] : versions.find((v) => v.versionNumber === against);
+      if (against !== null && !target) {
+        res.status(404).json({ error: 'Versión no encontrada' });
+        return;
+      }
+      const before = target ? await botFlowRepository.getVersionFlow(target.id, tenantId) : null;
+      const after = editable.flow as BotFlow;
+      if (!Array.isArray((after as { nodes?: unknown }).nodes)) {
+        res.status(400).json({ error: 'El borrador no tiene la forma de un flujo' });
+        return;
+      }
+      res.json({ against: target?.versionNumber ?? null, source: editable.source, diff: diffFlows(before, after) });
+    } catch (err) {
+      logger.error({ err: errMsg(err), tenantId, flowId }, 'GET studio diff failed');
+      res.status(500).json({ error: 'Error calculando los cambios' });
+    }
+  });
+
   return router;
+}
+
+const TestBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  events: z.array(SimEventSchema).min(1).max(100),
+  expect: TestExpectationSchema,
+  options: TestOptionsSchema.default({}),
+});
+
+function sendTestError(err: unknown, res: Response, logger: pino.Logger, msg: string): void {
+  if (err instanceof TestCasesUnavailableError) {
+    res.status(503).json({ error: err.message });
+    return;
+  }
+  logger.error({ err: errMsg(err) }, msg);
+  res.status(500).json({ error: 'Error guardando la prueba' });
 }
 
 /** Issues de Zod en la forma que muestra el panel: ruta legible + mensaje. */

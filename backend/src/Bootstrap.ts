@@ -16,6 +16,7 @@ import { SupabaseAdminUsersRepository } from '@/infrastructure/repositories/Supa
 import { SupabaseAdminSessionsRepository } from '@/infrastructure/repositories/SupabaseAdminSessionsRepository';
 import { SupabaseLoginAttemptsRepository } from '@/infrastructure/repositories/SupabaseLoginAttemptsRepository';
 import { createAdminRouter } from '@/infrastructure/server/AdminRouter';
+import { SupabaseFlowTestCaseRepository } from '@/infrastructure/repositories/SupabaseFlowTestCaseRepository';
 import { createAuthRouter } from '@/infrastructure/server/AuthRouter';
 import { createPosRouter } from '@/infrastructure/server/PosRouter';
 import { SupabasePosProductRepository } from '@/infrastructure/repositories/pos/SupabasePosProductRepository';
@@ -284,6 +285,7 @@ export class Bootstrap {
         posCategoryRepository,
         importPosProductsUseCase,
         serviceDirectoryRepository,
+        flowTestCaseRepository: new SupabaseFlowTestCaseRepository(supabase, this.logger),
         tenantConfigPort: tenantConfigService, // D-01, auditoría 2026-08-26
         audit: auditLog,
         supabase,

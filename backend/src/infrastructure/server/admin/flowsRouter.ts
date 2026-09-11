@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import type pino from 'pino';
 import { z } from 'zod';
-import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
+import { DraftChangedError, type BotFlowRepository } from '@/domain/ports/BotFlowRepository';
+import type { PublishFlowUseCase, PublishOutcome } from '@/domain/use-cases/PublishFlowUseCase';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole, requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
 import { FlowValidationError } from '@/domain/validators/flowSchema';
@@ -14,10 +15,12 @@ import { ctx, errMsg } from './helpers';
  */
 export function createFlowsRouter(params: {
   botFlowRepository: BotFlowRepository;
+  /** Publicar y hacer rollback pasan por la compuerta del Studio (Fase 4). */
+  publishFlow: PublishFlowUseCase;
   audit: AuditLogService;
   logger: pino.Logger;
 }): Router {
-  const { botFlowRepository, audit, logger } = params;
+  const { botFlowRepository, publishFlow, audit, logger } = params;
   const router = Router();
 
   // GET /api/admin/tenants/:id/flows — lista flows del tenant (resuelve flowId)
@@ -114,11 +117,12 @@ export function createFlowsRouter(params: {
     },
   );
 
-  // POST /api/admin/tenants/:id/flows/:flowId/publish — valida + versiona + activa
-  // super_admin ONLY (D5, congelada, implementada aquí — T4 documentaba la
-  // asimetría con rollback pero ningún prompt la había cerrado todavía; ver
-  // Bitácora H5). admin_operator puede guardar draft y ver el historial,
-  // pero empujar a producción y deshacerlo quedan bajo el mismo candado.
+  // POST /api/admin/tenants/:id/flows/:flowId/publish — la compuerta de la
+  // Fase 4 del Studio: validador de diseño + schema + pruebas guardadas, y
+  // solo entonces publicación atómica (PublishFlowUseCase).
+  // super_admin ONLY (D5): admin_operator puede guardar draft y ver el
+  // historial, pero empujar a producción y deshacerlo quedan bajo el mismo
+  // candado.
   router.post(
     '/tenants/:id/flows/:flowId/publish',
     requireRole('super_admin'),
@@ -128,35 +132,26 @@ export function createFlowsRouter(params: {
       const flowId = String(req.params.flowId);
       const note = typeof req.body?.note === 'string' ? req.body.note : undefined;
       try {
-        const { versionNumber } = await botFlowRepository.publishDraft({
-          flowId,
-          tenantId,
-          createdBy: c.adminId,
-          note,
-        });
+        const outcome = await publishFlow.publish({ tenantId, flowId, createdBy: c.adminId, note });
+        if (!outcome.ok) {
+          sendRejection(res, outcome);
+          return;
+        }
         audit.log({
           ...c,
           action: 'flow.publish',
           targetType: 'bot_flow',
           targetId: flowId,
-          metadata: { tenantId, versionNumber },
+          metadata: {
+            tenantId,
+            versionNumber: outcome.versionNumber,
+            warnings: outcome.report.summary.warnings,
+            tests: outcome.testReport?.total ?? 0,
+          },
         });
-        res.json({ versionNumber });
+        res.json({ versionNumber: outcome.versionNumber, report: outcome.report, testReport: outcome.testReport });
       } catch (err) {
-        // FlowValidationError: límites Meta, seguro de exponer al panel.
-        if (err instanceof FlowValidationError) {
-          res.status(400).json({ error: err.message, issues: err.issues });
-          return;
-        }
-        // RestrictedGiroGuardrailError (DEC-12, auditoría 2026-08-26):
-        // giro médico/farmacia con categorías de catálogo restringidas.
-        if (err instanceof RestrictedGiroGuardrailError) {
-          res.status(400).json({
-            error: err.message,
-            offendingCategories: err.offendingCategories,
-          });
-          return;
-        }
+        if (handleKnownError(err, res)) return;
         logger.warn({ err: errMsg(err), flowId }, 'POST publish failed');
         res.status(500).json({ error: 'Error publicando flow. Revisa logs del servidor.' });
       }
@@ -206,7 +201,9 @@ export function createFlowsRouter(params: {
     },
   );
 
-  // POST /api/admin/tenants/:id/flows/:flowId/rollback — super_admin
+  // POST /api/admin/tenants/:id/flows/:flowId/rollback — super_admin.
+  // Publica el contenido de una versión anterior como versión nueva, pasando
+  // por el validador (no por las pruebas: ver PublishFlowUseCase.rollback).
   router.post(
     '/tenants/:id/flows/:flowId/rollback',
     requireRole('super_admin'),
@@ -222,21 +219,26 @@ export function createFlowsRouter(params: {
         return;
       }
       try {
-        const { versionNumber } = await botFlowRepository.rollback({
-          flowId,
+        const outcome = await publishFlow.rollback({
           tenantId,
+          flowId,
           versionNumber: parsed.data.versionNumber,
           createdBy: c.adminId,
         });
+        if (!outcome.ok) {
+          sendRejection(res, outcome);
+          return;
+        }
         audit.log({
           ...c,
           action: 'flow.rollback',
           targetType: 'bot_flow',
           targetId: flowId,
-          metadata: { tenantId, restoredFrom: parsed.data.versionNumber, newVersion: versionNumber },
+          metadata: { tenantId, restoredFrom: parsed.data.versionNumber, newVersion: outcome.versionNumber },
         });
-        res.json({ versionNumber });
+        res.json({ versionNumber: outcome.versionNumber });
       } catch (err) {
+        if (handleKnownError(err, res)) return;
         logger.warn({ err: errMsg(err), flowId }, 'POST rollback failed');
         res.status(500).json({ error: 'Error en rollback. Revisa logs del servidor.' });
       }
@@ -244,4 +246,58 @@ export function createFlowsRouter(params: {
   );
 
   return router;
+}
+
+/**
+ * Por qué no se publicó, en la forma que ya muestra el Designer:
+ * { error, issues: [{ path, message }] } + el reporte completo.
+ */
+function sendRejection(res: Response, outcome: Exclude<PublishOutcome, { ok: true }>): void {
+  switch (outcome.reason) {
+  case 'not_found':
+    res.status(404).json({ error: 'Flow o versión no encontrada' });
+    return;
+  case 'nothing_to_publish':
+    res.status(409).json({ error: 'No hay cambios sin publicar: lo editable es igual a lo publicado.' });
+    return;
+  case 'validation': {
+    const issues = [
+      ...outcome.report.issues
+        .filter((i) => i.level === 'error')
+        .map((i) => ({ path: i.nodeId ?? i.code, message: `${i.code}: ${i.message}` })),
+      ...outcome.report.schema.issues,
+    ];
+    res.status(400).json({ error: `No se puede publicar: el flujo tiene ${issues.length} error(es).`, issues, report: outcome.report });
+    return;
+  }
+  case 'tests': {
+    const failed = outcome.testReport.results.filter((r) => !r.passed);
+    res.status(400).json({
+      error: `No se puede publicar: fallan ${failed.length} prueba(s).`,
+      issues: failed.map((r) => ({ path: r.name, message: r.failures.join(' ') })),
+      report: outcome.report,
+      testReport: outcome.testReport,
+    });
+  }
+  }
+}
+
+/** Errores conocidos de publicar: se contestan con su motivo en vez de un 500. */
+function handleKnownError(err: unknown, res: Response): boolean {
+  // FlowValidationError: límites Meta, seguro de exponer al panel.
+  if (err instanceof FlowValidationError) {
+    res.status(400).json({ error: err.message, issues: err.issues });
+    return true;
+  }
+  // RestrictedGiroGuardrailError (DEC-12): giro médico/farmacia con
+  // categorías de catálogo restringidas.
+  if (err instanceof RestrictedGiroGuardrailError) {
+    res.status(400).json({ error: err.message, offendingCategories: err.offendingCategories });
+    return true;
+  }
+  if (err instanceof DraftChangedError) {
+    res.status(409).json({ error: err.message });
+    return true;
+  }
+  return false;
 }

@@ -28,6 +28,9 @@ import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
 import { createPosCatalogRouter } from './admin/posCatalogRouter';
 import { createServiceDirectoryRouter } from './admin/serviceDirectoryRouter';
 import { createStudioRouter } from './admin/studioRouter';
+import type { FlowTestCaseRepository } from '@/domain/ports/FlowTestCaseRepository';
+import { PublishFlowUseCase } from '@/domain/use-cases/PublishFlowUseCase';
+import { StudioFlowTestRunner } from '@/infrastructure/studio/StudioFlowTestRunner';
 
 /**
  * Router de API admin interna del panel SegurITech.
@@ -63,6 +66,8 @@ export function createAdminRouter(params: {
   posCategoryRepository: PosCategoryRepository;
   importPosProductsUseCase: ImportPosProductsUseCase;
   serviceDirectoryRepository: ServiceDirectoryRepository;
+  /** Casos de prueba del Studio (flow_test_cases, migración 023). */
+  flowTestCaseRepository: FlowTestCaseRepository;
   /**
    * D-01 (auditoría 2026-08-26): opcional para no romper wiring/tests
    * existentes, pero SIEMPRE presente en Bootstrap real. Cuando está, se
@@ -94,11 +99,21 @@ export function createAdminRouter(params: {
     posCategoryRepository,
     importPosProductsUseCase,
     serviceDirectoryRepository,
+    flowTestCaseRepository,
     tenantConfigPort,
     audit,
     supabase,
     logger,
   } = params;
+
+  // Publicar pasa por la compuerta del Studio (Fase 4): validador + pruebas
+  // guardadas corridas con el motor real + publicación atómica.
+  const publishFlow = new PublishFlowUseCase(
+    botFlowRepository,
+    flowTestCaseRepository,
+    new StudioFlowTestRunner(simulateConversationUseCase, logger),
+    logger,
+  );
 
   const router = Router();
 
@@ -109,7 +124,7 @@ export function createAdminRouter(params: {
   // `/tenants/:id` y `/tenants/:id/{services,flows,meta-credentials}`), así que
   // el orden de montaje no altera el matching.
   router.use(
-    createFlowsRouter({ botFlowRepository, audit, logger }),
+    createFlowsRouter({ botFlowRepository, publishFlow, audit, logger }),
   );
   // Bloques compuestos (F1-a): expandir y ensamblar. No persiste nada — el
   // Designer carga el resultado en el canvas y guarda por la ruta de siempre.
@@ -121,6 +136,7 @@ export function createAdminRouter(params: {
     createStudioRouter({
       botFlowRepository,
       simulateConversation: simulateConversationUseCase,
+      testCases: flowTestCaseRepository,
       audit,
       logger,
     }),

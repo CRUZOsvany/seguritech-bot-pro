@@ -68,6 +68,7 @@ function buildApp(deps: {
     posCategoryRepository: noop,
     importPosProductsUseCase: noop,
     serviceDirectoryRepository: (deps.serviceDirectoryRepository ?? {}) as ServiceDirectoryRepository,
+    flowTestCaseRepository: {} as never,
     tenantConfigPort,
     audit: { log: jest.fn() } as any,
     supabase: noop,
