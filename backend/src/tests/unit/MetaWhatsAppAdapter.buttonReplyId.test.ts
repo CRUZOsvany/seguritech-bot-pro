@@ -106,3 +106,30 @@ describe('parseIncomingMessage — button_reply: id vs title', () => {
     expect(parsed?.messageId).toBe('wamid.TEST');
   });
 });
+
+function webhookConListReply(id: string, title: string) {
+  const payload = webhookConButtonReply('x', 'x');
+  payload.entry[0].changes[0].value.messages[0].interactive = {
+    type: 'list_reply',
+    list_reply: { id, title },
+  } as never;
+  return payload;
+}
+
+// sendList, a diferencia de sendButtons, conserva los ids del flow: no hay
+// ids sintéticos que descartar, así que el id de la fila siempre gana.
+describe('parseIncomingMessage — list_reply: el id de la fila', () => {
+  it('entrega el id, no el título', () => {
+    const parsed = makeAdapter().parseIncomingMessage(
+      webhookConListReply('svc-engargolado', 'Engargolado'),
+    );
+
+    expect(parsed?.content).toBe('svc-engargolado');
+  });
+
+  it('sin id cae al título', () => {
+    const parsed = makeAdapter().parseIncomingMessage(webhookConListReply('', 'Engargolado'));
+
+    expect(parsed?.content).toBe('Engargolado');
+  });
+});
