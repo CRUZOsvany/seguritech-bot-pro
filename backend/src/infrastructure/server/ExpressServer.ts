@@ -9,6 +9,7 @@ import { config } from '@/config/env';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
 import { tenantLookupService } from '@/infrastructure/services/TenantLookupService';
 import { MessageLogService } from '@/infrastructure/services/MessageLogService';
+import { mountCajaApp } from './cajaStatic';
 
 type ProcessMessage = (
   tenantId: string,
@@ -375,6 +376,7 @@ export class ExpressServer {
     const panelDir = path.join(publicDir, 'panel');
     const simulatorDir = path.join(publicDir, 'simulator');
     const appDir = path.join(publicDir, 'app');
+    const cajaDir = path.join(publicDir, 'caja');
 
     const noCache = (res: Response): void => {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
@@ -405,6 +407,9 @@ export class ExpressServer {
       res.sendFile(path.join(appDir, 'index.html'));
     });
 
+    // /caja/<tenantId>/ — PWA del cajero (POS Lite). Build aparte de Vite.
+    mountCajaApp(this.app, cajaDir);
+
     // /simulator/:tenantId  →  /simulator/index.html?tenantId=<uuid>
     this.app.get('/simulator/:tenantId', (req: Request, res: Response, next) => {
       const raw = String(req.params.tenantId ?? '');
@@ -416,7 +421,7 @@ export class ExpressServer {
 
     this.logger.info(
       { publicDir },
-      '📂 Assets estáticos montados en /panel, /simulator y /app',
+      '📂 Assets estáticos montados en /panel, /simulator, /app y /caja',
     );
   }
 
