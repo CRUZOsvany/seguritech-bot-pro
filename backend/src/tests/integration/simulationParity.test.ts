@@ -158,7 +158,7 @@ async function runSimulation(mold: Mold) {
     req.admin = { sub: 'admin-1', email: 'a@x.test', role: 'super_admin', tenantId: null } as never;
     next();
   });
-  app.use(createStudioRouter({ botFlowRepository: repo, simulateConversation: useCase, logger: silentLogger }));
+  app.use(createStudioRouter({ botFlowRepository: repo, simulateConversation: useCase, audit: { log: jest.fn() } as never, logger: silentLogger }));
 
   const res = await request(app)
     .post(`/tenants/${HARNESS_TENANT_ID}/studio/flows/${FLOW_ID}/simulate`)
