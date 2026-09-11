@@ -42,11 +42,17 @@ export class SequentialIdGenerator implements IdGenerator {
 }
 
 /**
- * Sesiones en memoria. Guarda y devuelve COPIAS: el motor lee al usuario,
- * después marca su último mensaje y más tarde compara contra lo que leyó. Si
- * el repositorio devolviera la misma referencia, esa marca sobrescribiría el
- * dato viejo y la expiración de sesión no se dispararía nunca — un
- * comportamiento distinto al de la base real.
+ * Sesiones en memoria, con la semántica de SupabaseUserRepository sobre
+ * bot_users — no la de un mapa cualquiera:
+ *
+ * - Guarda y devuelve COPIAS. El motor lee al usuario, después marca su
+ *   último mensaje y más tarde compara contra lo que leyó; con la misma
+ *   referencia esa marca pisaría el dato viejo y la sesión no expiraría nunca.
+ * - `update()` escribe solo las columnas que escribe el UPDATE real
+ *   (current_state, current_node_id, context, human_paused_until). Reemplazar
+ *   el registro entero borraría `lastInboundAt` y `optedOutAt`, que se
+ *   guardan aparte (touchLastInbound, setOptOut).
+ * - `save()` inserta con la pausa en null, como el INSERT real.
  */
 export class InMemorySessionRepository implements UserRepository {
   private readonly users = new Map<string, User>();
@@ -54,7 +60,12 @@ export class InMemorySessionRepository implements UserRepository {
   constructor(private readonly clock: ClockPort) {}
 
   async save(user: User): Promise<void> {
-    this.users.set(user.id, copy(user));
+    this.users.set(user.id, {
+      ...copy(user),
+      humanPausedUntil: null,
+      lastInboundAt: null,
+      optedOutAt: null,
+    });
   }
 
   async findById(tenantId: string, id: string): Promise<User | null> {
@@ -68,7 +79,16 @@ export class InMemorySessionRepository implements UserRepository {
   }
 
   async update(user: User): Promise<void> {
-    if (this.users.has(user.id)) this.users.set(user.id, copy(user));
+    const stored = this.users.get(user.id);
+    if (!stored || stored.tenantId !== user.tenantId) return;
+    const incoming = copy(user);
+    this.users.set(user.id, {
+      ...stored,
+      currentState: incoming.currentState,
+      currentNodeId: incoming.currentNodeId,
+      context: incoming.context ?? {},
+      humanPausedUntil: incoming.humanPausedUntil ?? null,
+    });
   }
 
   async resetUserState(tenantId: string, phoneNumber: string): Promise<void> {
