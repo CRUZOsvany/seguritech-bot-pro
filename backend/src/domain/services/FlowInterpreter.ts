@@ -257,7 +257,7 @@ export class FlowInterpreter {
       transition.condition.type === 'list_item_any' &&
       transition.condition.save_to_context
     ) {
-      const itemId = this.extractListItemId(currentNode, message);
+      const itemId = this.resolveListItemId(currentNode, message, tenantConfig);
       if (itemId) contextUpdates[transition.condition.save_to_context] = itemId;
     }
 
@@ -642,19 +642,8 @@ export class FlowInterpreter {
       return false;
     }
 
-    case 'list_item_any': {
-      if (node.type !== 'send_list') return false;
-      for (const s of node.content.sections) {
-        if (s.type === 'static') {
-          for (const it of s.items) {
-            if (content === it.id) return true;
-            if (lower === it.title.toLowerCase()) return true;
-          }
-        }
-        if (s.type === 'dynamic') return true;
-      }
-      return false;
-    }
+    case 'list_item_any':
+      return this.resolveListItemId(node, message, tenantConfig) !== null;
 
     case 'card_any': {
       if (node.type !== 'send_media_carousel') return false;
@@ -712,23 +701,41 @@ export class FlowInterpreter {
     return null;
   }
 
-  private extractListItemId(node: FlowNode, message: Message): string | null {
+  /**
+   * Id de la fila que eligió el cliente, o null si el mensaje no corresponde
+   * a ninguna fila que haya podido ver.
+   *
+   * Meta entrega el id de la fila (`list_reply.id`). Si el cliente escribe la
+   * opción en vez de tocarla llega el título, que se acepta sin distinguir
+   * mayúsculas — mismo criterio que `list_item` y `button`. Primero se busca
+   * por id en todas las filas y después por título, para que el título de
+   * una fila no se confunda con el id de otra.
+   *
+   * Las secciones dinámicas se hidratan igual que al renderizar, así que la
+   * comparación es contra las filas reales del tenant. Antes una sección
+   * dinámica aceptaba cualquier texto y lo guardaba crudo en contexto: en
+   * `menu_servicios` de papelería `matched_service_id` quedaba como
+   * "Engargolado" (o "quiero copias") y {{matched_service_name}} salía vacío.
+   * Ahora un texto que no es ninguna fila cae al `default` del nodo, y una
+   * palabra de escape ya no queda absorbida como "fila elegida".
+   */
+  private resolveListItemId(
+    node: FlowNode,
+    message: Message,
+    tenantConfig: TenantConfig,
+  ): string | null {
     if (node.type !== 'send_list') return null;
     const content = message.content.trim();
     const lower = content.toLowerCase();
 
-    for (const s of node.content.sections) {
-      if (s.type === 'static') {
-        for (const it of s.items) {
-          if (content === it.id) return it.id;
-          if (lower === it.title.toLowerCase()) return it.id;
-        }
-      }
-    }
-    // Dynamic: el content puede ser el id directo (Meta interactive list reply)
-    // o el title del producto. Devolvemos content tal cual; el VariableResolver
-    // hará el lookup en TenantConfig.catalog.
-    return content;
+    const items = this.dynamicSectionResolver
+      .resolve(node.content.sections, tenantConfig)
+      .flatMap((s) => s.items);
+
+    const byId = items.find((it) => it.id === content);
+    if (byId) return byId.id;
+    const byTitle = items.find((it) => it.title.toLowerCase() === lower);
+    return byTitle ? byTitle.id : null;
   }
 
   // ==========================================================================

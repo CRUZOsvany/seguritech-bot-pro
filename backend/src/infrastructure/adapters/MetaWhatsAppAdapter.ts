@@ -383,8 +383,15 @@ export class MetaWhatsAppAdapter implements NotificationPort {
           replyId && !/^btn_\d+$/.test(replyId)
             ? replyId
             : message.interactive.button_reply.title;
-      } else if (message.interactive?.list_reply?.title) {
-        content = message.interactive.list_reply.title;
+      } else if (message.interactive?.list_reply) {
+        // El id de la fila, no el título. sendList conserva los ids del flow
+        // (a diferencia de sendButtons), y en una sección dinámica ese id es
+        // el del producto o del servicio: con el título, `list_item_any`
+        // guardaba "Engargolado" como matched_service_id y
+        // {{matched_service_name}} salía vacío. El intérprete sigue
+        // aceptando el título para quien escribe la opción en vez de tocarla.
+        content =
+          message.interactive.list_reply.id || message.interactive.list_reply.title;
       } else if (message.interactive?.type === 'call_permission_reply') {
         // Meta envía interactive.type = "call_permission_reply"
         // El campo status lo obtenemos del objeto raw via cast seguro
