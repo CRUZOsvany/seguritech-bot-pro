@@ -1,0 +1,15 @@
+{
+  "_comment": "Conversación de ejemplo para un tenant con el molde de papelería. Los botones van con el título tal como está en el molde; la fila de la lista va como texto escrito, así funciona con los servicios reales del tenant sin saber sus ids.",
+  "events": [
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_1", "title": "🖨️ Servicios" },
+    { "type": "text", "text": "Engargolado" },
+    { "type": "text", "text": "50 hojas" },
+    { "type": "advance_time", "minutes": 2890 },
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_2", "title": "🔍 Buscar producto" },
+    { "type": "text", "text": "cuaderno" },
+    { "type": "text", "text": "menu" },
+    { "type": "media", "mediaType": "audio" }
+  ]
+}

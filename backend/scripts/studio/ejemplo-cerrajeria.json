@@ -1,0 +1,14 @@
+{
+  "_comment": "Conversación de ejemplo para un tenant con el molde de cerrajería: emergencia hasta el paso a humano, silencio durante la pausa, reinicio y baja.",
+  "events": [
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_0", "title": "🚨 Emergencia" },
+    { "type": "list_reply", "id": "Apertura de puerta", "title": "Apertura de puerta" },
+    { "type": "text", "text": "Calle Morelos 12, centro. Se me cerró la puerta" },
+    { "type": "button_reply", "id": "btn_0", "title": "✅ Sí, correcto" },
+    { "type": "text", "text": "¿ya vienen?" },
+    { "type": "advance_time", "minutes": 2900 },
+    { "type": "text", "text": "hola de nuevo" },
+    { "type": "text", "text": "baja" }
+  ]
+}
