@@ -3,6 +3,7 @@ import type pino from 'pino';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
+import type { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
@@ -26,6 +27,7 @@ import { createBlocksRouter } from './admin/blocksRouter';
 import { createWhatsappFlowsRouter } from './admin/whatsappFlowsRouter';
 import { createPosCatalogRouter } from './admin/posCatalogRouter';
 import { createServiceDirectoryRouter } from './admin/serviceDirectoryRouter';
+import { createStudioRouter } from './admin/studioRouter';
 
 /**
  * Router de API admin interna del panel SegurITech.
@@ -46,6 +48,8 @@ export function createAdminRouter(params: {
   assignMoldeUseCase: AssignMoldeUseCase;
   setTenantStatusUseCase: SetTenantStatusUseCase;
   simulateMessageUseCase: SimulateMessageUseCase;
+  /** Simulador del Studio (Fase 1): el motor real con adaptadores falsos. */
+  simulateConversationUseCase: SimulateConversationUseCase;
   createTenantUseCase: CreateTenantUseCase;
   tenantRepository: TenantRepository;
   tenantServiceRepository: TenantServiceRepository;
@@ -77,6 +81,7 @@ export function createAdminRouter(params: {
     assignMoldeUseCase,
     setTenantStatusUseCase,
     simulateMessageUseCase,
+    simulateConversationUseCase,
     createTenantUseCase,
     tenantRepository,
     tenantServiceRepository,
@@ -110,6 +115,14 @@ export function createAdminRouter(params: {
   // Designer carga el resultado en el canvas y guarda por la ruta de siempre.
   router.use(
     createBlocksRouter({ logger }),
+  );
+  // Studio (Fase 1): simulación con el motor real. No persiste nada.
+  router.use(
+    createStudioRouter({
+      botFlowRepository,
+      simulateConversation: simulateConversationUseCase,
+      logger,
+    }),
   );
   router.use(
     createServicesRouter({ tenantServiceRepository, audit, logger }),

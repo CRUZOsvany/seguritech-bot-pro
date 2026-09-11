@@ -61,6 +61,7 @@ function buildApp() {
     assignMoldeUseCase: noop,
     setTenantStatusUseCase: noop,
     simulateMessageUseCase: noop,
+    simulateConversationUseCase: noop,
     createTenantUseCase: noop,
     tenantRepository: noop,
     tenantServiceRepository: noop,
