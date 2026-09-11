@@ -6,6 +6,7 @@ import type { BusinessHoursService } from '@/domain/services/BusinessHoursServic
 import { ConversationEngine } from '@/domain/conversation/ConversationEngine';
 import type { OutboundMessage } from '@/domain/conversation/OutboundMessage';
 import type { DecisionStep } from '@/domain/conversation/trace';
+import { explainTrace } from '@/domain/conversation/explain';
 import {
   CapturingMessenger,
   FakeClock,
@@ -50,6 +51,8 @@ export interface SimulatedTurn {
   at: string;
   outbound: OutboundMessage[];
   trace: DecisionStep[];
+  /** La traza en español claro: el bloque "Por qué" del simulador. */
+  why: string[];
   session: SessionSnapshot | null;
   /**
    * Mensajes que este paso envió. Todos son mensajes de servicio: el motor
@@ -125,6 +128,7 @@ export class SimulateConversationUseCase {
         at: clock.now().toISOString(),
         outbound,
         trace,
+        why: explainTrace(trace),
         session: toSnapshot(sessions, input.tenantId, input.from),
         billing: { serviceMessages: outbound.length, templates: 0 },
       });

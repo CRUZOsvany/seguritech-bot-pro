@@ -597,6 +597,7 @@ export class FlowInterpreter {
         nodeId: node.id,
         candidates: transitions.map((t, i) => ({
           condition: t.condition.type,
+          ...conditionDetail(t.condition),
           target: t.next_node_id,
           matched: matches[i],
           score: this.transitionSpecificity(t.condition),
@@ -1126,6 +1127,19 @@ export class FlowInterpreter {
     const contentJson = JSON.stringify(node.content ?? {});
     if (!contentJson.includes('{{order_id}}')) return null;
     return orderIdFactory();
+  }
+}
+
+/** Valor legible de una condición para la traza: el id del botón o de la fila, o las palabras clave. */
+function conditionDetail(condition: TransitionCondition): { detail?: string } {
+  switch (condition.type) {
+  case 'button':
+  case 'list_item':
+    return { detail: condition.value };
+  case 'keyword':
+    return { detail: condition.values.join(', ') };
+  default:
+    return {};
   }
 }
 
