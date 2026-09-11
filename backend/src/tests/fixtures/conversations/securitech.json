@@ -1,0 +1,18 @@
+{
+  "mold": "securitech",
+  "description": "Saludo en dos mensajes, texto no entendido, rama de cámaras hasta la captura de contacto y paso a humano, y audio no soportado.",
+  "startAt": "2026-09-10T16:30:00-06:00",
+  "tenant": {
+    "horarioSemana": null,
+    "horarioSabado": null,
+    "abreDomingo": false
+  },
+  "events": [
+    { "type": "text", "text": "hola" },
+    { "type": "text", "text": "no sé qué necesito" },
+    { "type": "button_reply", "id": "btn_0", "title": "Cámaras" },
+    { "type": "button_reply", "id": "btn_1", "title": "Plan Estándar" },
+    { "type": "text", "text": "Juan Pérez, 7471112233, local en el centro" },
+    { "type": "media", "mediaType": "audio" }
+  ]
+}

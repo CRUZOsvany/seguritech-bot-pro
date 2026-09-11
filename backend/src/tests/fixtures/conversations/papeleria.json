@@ -1,0 +1,25 @@
+{
+  "mold": "papeleria",
+  "description": "Servicio elegido de la lista dinámica del directorio, pausa por humano que expira, búsqueda en catálogo, cantidad inválida y válida con folio, e imagen no soportada.",
+  "startAt": "2026-09-10T12:00:00-06:00",
+  "tenant": {
+    "horarioSemana": null,
+    "horarioSabado": null,
+    "abreDomingo": false
+  },
+  "events": [
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_1", "title": "🖨️ Servicios" },
+    { "type": "list_reply", "id": "svc-engargolado", "title": "Engargolado" },
+    { "type": "text", "text": "50 hojas, engargolado negro" },
+    { "type": "advance_time", "minutes": 2890 },
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_2", "title": "🔍 Buscar producto" },
+    { "type": "text", "text": "cuaderno profesional" },
+    { "type": "button_reply", "id": "btn_0", "title": "🛒 Agregar a pedido" },
+    { "type": "text", "text": "muchos" },
+    { "type": "text", "text": "3" },
+    { "type": "button_reply", "id": "btn_0", "title": "✅ Sí, correcto" },
+    { "type": "media", "mediaType": "image" }
+  ]
+}
