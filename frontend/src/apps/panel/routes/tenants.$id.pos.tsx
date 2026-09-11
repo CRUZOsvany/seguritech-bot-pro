@@ -196,6 +196,49 @@ function ImportResultSummary({ result, label }: { result: CatalogImportResult; l
   );
 }
 
+/**
+ * Enlace de la caja del negocio (POS Lite): una URL por negocio. El operador
+ * lo abre en la laptop del mostrador y la instala como app desde el navegador.
+ */
+function CajaLinkSection({ tenantId }: { tenantId: string }) {
+  const url = `${window.location.origin}/caja/${tenantId}/`;
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* sin permiso de portapapeles: el enlace queda visible para copiarlo a mano */
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Caja del negocio</CardTitle>
+        <CardDescription>
+          Abre este enlace en la laptop del mostrador e instálalo como app desde el navegador
+          (ícono de instalar en la barra de direcciones). Funciona sin internet una vez abierto;
+          para entrar la primera vez sí hace falta.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-wrap items-center gap-2">
+        <code className="min-w-0 flex-1 truncate rounded-md border bg-muted px-2 py-1.5 text-xs">{url}</code>
+        <Button variant="outline" size="sm" onClick={() => void copy()}>
+          {copied ? 'Copiado' : 'Copiar'}
+        </Button>
+        <Button asChild size="sm">
+          <a href={url} target="_blank" rel="noreferrer">
+            Abrir caja
+          </a>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
 function PosPanelPage() {
   const { id } = Route.useParams();
 
@@ -222,6 +265,8 @@ function PosPanelPage() {
           </p>
         </CardContent>
       </Card>
+
+      <CajaLinkSection tenantId={id} />
 
       <CatalogImportSection tenantId={id} />
     </div>

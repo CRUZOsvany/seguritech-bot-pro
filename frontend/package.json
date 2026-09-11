@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:caja": "vite --config vite.caja.config.ts",
     "build:panel": "vite build --outDir ../backend/public/app",
+    "build:caja": "vite build --config vite.caja.config.ts",
     "preview": "vite preview",
     "lint": "eslint .",
-    "type-check": "tsc -p tsconfig.app.json --noEmit"
+    "type-check": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
@@ -19,6 +22,8 @@
     "clsx": "^2.1.1",
     "dagre": "^0.8.5",
     "date-fns": "^4.4.0",
+    "dexie": "^4.4.5",
+    "dexie-react-hooks": "^4.4.0",
     "lucide-react": "^1.16.0",
     "radix-ui": "^1.4.3",
     "react": "^19.2.6",
@@ -40,11 +45,13 @@
     "eslint": "^10.3.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
+    "fake-indexeddb": "^6.2.5",
     "globals": "^17.6.0",
     "shadcn": "^4.8.1",
     "tailwindcss": "^4.3.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.59.2",
-    "vite": "^8.0.12"
+    "vite": "^8.0.12",
+    "vitest": "^4.1.11"
   }
 }
