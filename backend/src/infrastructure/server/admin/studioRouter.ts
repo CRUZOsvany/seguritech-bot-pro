@@ -284,6 +284,12 @@ export function createStudioRouter(params: {
       return;
     }
     try {
+      // El flow tiene que ser de este tenant: sin esto quedaría una prueba
+      // colgada de un flow ajeno (la tabla no cruza tenant_id con el flow).
+      if (!(await botFlowRepository.getEditableFlow(flowId, tenantId))) {
+        res.status(404).json({ error: 'Flow no encontrado' });
+        return;
+      }
       const test = await testCases.create(tenantId, { flowId, ...parsed.data, createdBy: c.adminId });
       audit.log({ ...c, action: 'flow.test.create', targetType: 'flow_test_case', targetId: test.id, metadata: { tenantId, flowId } });
       res.status(201).json({ test });

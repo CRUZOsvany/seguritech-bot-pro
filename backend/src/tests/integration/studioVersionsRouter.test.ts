@@ -166,6 +166,15 @@ describe('casos de prueba', () => {
     expect(audit.log.mock.calls.map((c) => c[0].action)).toEqual(['flow.test.create', 'flow.test.update', 'flow.test.delete']);
   });
 
+  it('no guarda pruebas en un flow que no es del tenant', async () => {
+    const { app, tests } = buildApp('admin_operator');
+
+    const res = await request(app).post(`/tenants/${T}/studio/flows/flow-de-otro/tests`).send(EMERGENCY_TEST);
+
+    expect(res.status).toBe(404);
+    expect(tests.rows).toHaveLength(0);
+  });
+
   it('rechaza una prueba sin expectativas o con eventos inválidos', async () => {
     const { app } = buildApp();
 
