@@ -182,13 +182,16 @@ export function createTenantsRouter(params: {
     }
     try {
       await tenantRepository.update(id, parsed.data);
-      // D-01 (auditoría 2026-08-26): bot_configuration (guion) es parte del
-      // TenantConfig cacheado (TTL 5 min, SupabaseTenantConfigService). Sin
-      // esto, el panel "guardaba" el guion nuevo pero el bot seguía
-      // respondiendo el viejo hasta que expirara el TTL.
-      if (parsed.data.bot_configuration) {
-        tenantConfigPort?.invalidate(id);
-      }
+      // D-01 (auditoría 2026-08-26): TenantConfig se cachea 5 min
+      // (SupabaseTenantConfigService). Sin invalidar, el panel "guardaba" y
+      // el bot seguía respondiendo lo viejo hasta que expirara el TTL.
+      //
+      // Se invalida SIEMPRE, no solo con bot_configuration: el TenantConfig
+      // también lee de `tenants` nombre_negocio, horarios, abre_domingo y
+      // giro. Antes un cambio de horario tardaba hasta 5 min en llegar al
+      // gate de horario del bot. Una lista selectiva de campos se volvería a
+      // quedar corta la próxima vez que TenantConfig lea un campo nuevo.
+      tenantConfigPort?.invalidate(id);
       audit.log({
         ...c,
         action: 'tenant.update',

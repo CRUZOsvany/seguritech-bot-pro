@@ -103,7 +103,16 @@ describe('Invalidación de caché de TenantConfig tras mutaciones admin (D-01)',
     expect(tenantConfigPort.invalidate).toHaveBeenCalledWith(TENANT_A);
   });
 
-  it('PATCH /tenants/:id SIN bot_configuration no invalida (no hay nada cacheado que cambie)', async () => {
+  // Antes este caso afirmaba que un PATCH sin bot_configuration "no tiene
+  // nada cacheado que cambie". Era falso: TenantConfig también cachea
+  // nombre_negocio, horarios, abre_domingo y giro, que viven en `tenants`.
+  it.each([
+    ['horario_semana', { horario_semana: '09:00-14:00' }],
+    ['horario_sabado', { horario_sabado: '10:00-13:00' }],
+    ['abre_domingo', { abre_domingo: true }],
+    ['nombre_negocio', { nombre_negocio: 'Cerrajería Nueva' }],
+    ['giro', { giro: 'papeleria' }],
+  ])('PATCH /tenants/:id con solo %s invalida la caché del tenant', async (_campo, body) => {
     const { app, tenantConfigPort, cookie } = buildApp({
       tenantRepository: { update: jest.fn().mockResolvedValue(undefined) },
     });
@@ -111,9 +120,23 @@ describe('Invalidación de caché de TenantConfig tras mutaciones admin (D-01)',
     const res = await request(app)
       .patch(`/api/admin/tenants/${TENANT_A}`)
       .set('Cookie', cookie)
-      .send({ direccion: 'Nueva dirección 123' });
+      .send(body);
 
     expect(res.status).toBe(200);
+    expect(tenantConfigPort.invalidate).toHaveBeenCalledWith(TENANT_A);
+  });
+
+  it('PATCH /tenants/:id que falla en el repositorio no invalida', async () => {
+    const { app, tenantConfigPort, cookie } = buildApp({
+      tenantRepository: { update: jest.fn().mockRejectedValue(new Error('boom')) },
+    });
+
+    const res = await request(app)
+      .patch(`/api/admin/tenants/${TENANT_A}`)
+      .set('Cookie', cookie)
+      .send({ horario_semana: '09:00-14:00' });
+
+    expect(res.status).toBe(500);
     expect(tenantConfigPort.invalidate).not.toHaveBeenCalled();
   });
 

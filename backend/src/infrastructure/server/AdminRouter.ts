@@ -63,8 +63,8 @@ export function createAdminRouter(params: {
    * D-01 (auditoría 2026-08-26): opcional para no romper wiring/tests
    * existentes, pero SIEMPRE presente en Bootstrap real. Cuando está, se
    * invalida la caché in-process de TenantConfig (node-cache, TTL 5 min en
-   * SupabaseTenantConfigService) tras cada mutación de `bot_configuration`
-   * o del directorio de servicios — sin esto, el panel "guardaba" cambios
+   * SupabaseTenantConfigService) tras cada PATCH del tenant y cada mutación
+   * del directorio de servicios — sin esto, el panel "guardaba" cambios
    * que el bot seguía sin ver hasta que expirara el TTL.
    */
   tenantConfigPort?: TenantConfigPort;
