@@ -1,14 +1,6 @@
-import { randomUUID } from 'crypto';
 import pino from 'pino';
 import { config } from '@/config/env';
-
-/** TTL de la pausa por handoff humano, en ms. Default global 48h (env HANDOFF_PAUSE_MINUTES, D3). */
-const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
-
-import { Message, User, UserState } from '@/domain/entities';
-import { SESSION_EXPIRED_NOTICE, isSessionExpired } from '@/domain/services/SessionTtlPolicy';
-import { enrichOwnerAlert } from '@/domain/services/OwnerAlertFormatter';
-import { FlowInterpreter, InterpreterOutput } from '@/domain/services/FlowInterpreter';
+import { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import {
   NotificationPort,
@@ -16,591 +8,66 @@ import {
   TenantConfigPort,
   BotFlowRepository,
   AuditPort,
+  ClockPort,
+  IdGenerator,
 } from '@/domain/ports';
+import { ConversationEngine } from '@/domain/conversation/ConversationEngine';
+import { NotificationPortMessenger } from '@/domain/conversation/NotificationPortMessenger';
+import { createSystemIdGenerator, systemClock } from '@/app/systemRuntime';
+
+/** TTL de la pausa por handoff humano, en ms. Default global 48h (env HANDOFF_PAUSE_MINUTES, D3). */
+const HUMAN_HANDOFF_TTL_MS = config.bot.handoffPauseMinutes * 60 * 1000;
 
 /**
- * Comandos que el DUEÑO del negocio puede mandarle al número del bot para
- * reanudar una conversación pausada por handoff humano, sin tocar el panel
- * (P4, D4). Match EXACTO y case-insensitive — cualquier otro mensaje del
- * dueño sigue de largo al FlowInterpreter normal, para que pueda seguir
- * auto-probando su propio bot como si fuera cliente.
- */
-const OWNER_RESUME_COMMANDS = ['#listo', '#reanudar'] as const;
-
-/**
- * Palabras de opt-out real (Bloque 2.2, cumplimiento Meta). Distinto de
- * ESCAPE_WORDS del FlowInterpreter ("cancelar" ahí solo resetea el flow):
- * estas marcan `bot_users.opted_out_at` y cortan CUALQUIER envío al número
- * hasta que el cliente vuelva a escribir voluntariamente. Match exacto
- * (trim + lowercase), mismo criterio que ESCAPE_WORDS.
- */
-const OPT_OUT_WORDS = [
-  'stop',
-  'baja',
-  'no molestar',
-  'cancelar suscripcion',
-  'cancelar suscripción',
-] as const;
-
-const OPT_OUT_CONFIRMATION =
-  'Listo, no volverás a recibir mensajes de este número. ' +
-  'Si cambias de opinión, solo escríbenos de nuevo cuando quieras.';
-
-/**
- * Controlador del bot.
+ * Controlador del bot: la entrada del webhook de Meta.
+ *
+ * Desde la Fase 1 del Studio la orquestación (gates, intérprete, envío) vive
+ * en ConversationEngine, el mismo código que ejecuta el simulador. Este
+ * controlador solo arma el motor con los adaptadores de producción: la
+ * sesión en bot_users, el envío por NotificationPort y la hora real.
  *
  * Ruta única: FlowInterpreter cuando el tenant tiene bot_flow activo.
- * Sin flow → mensaje de mantenimiento (ADR-012: fallback a FSM hardcodeada
- * de papelería eliminado en Sprint 6 — causaba que ferreterías/cerrajerías
- * respondieran con catálogo de productos escolares).
+ * Sin flow → mensaje de mantenimiento (ADR-012).
  */
 export class BotController {
-  constructor(
-    private readonly userRepository: UserRepository,
-    private readonly notificationPort: NotificationPort,
-    private readonly tenantConfigPort: TenantConfigPort,
-    private readonly botFlowRepository: BotFlowRepository,
-    private readonly flowInterpreter: FlowInterpreter,
-    private readonly auditPort: AuditPort,
-    private readonly businessHoursService: BusinessHoursService,
-    private readonly logger: pino.Logger,
-  ) {}
+  private readonly engine: ConversationEngine;
 
+  constructor(
+    userRepository: UserRepository,
+    notificationPort: NotificationPort,
+    tenantConfigPort: TenantConfigPort,
+    botFlowRepository: BotFlowRepository,
+    flowInterpreter: FlowInterpreter,
+    auditPort: AuditPort,
+    businessHoursService: BusinessHoursService,
+    logger: pino.Logger,
+    /** Solo para tests: reloj e ids controlados (p.ej. el test de paridad con el simulador). */
+    runtime: { clock?: ClockPort; ids?: IdGenerator } = {},
+  ) {
+    const clock = runtime.clock ?? systemClock;
+    this.engine = new ConversationEngine({
+      sessions: userRepository,
+      messenger: new NotificationPortMessenger(notificationPort),
+      tenantConfig: tenantConfigPort,
+      flows: { findActive: (tenantId) => botFlowRepository.findActiveByTenant(tenantId) },
+      interpreter: flowInterpreter,
+      businessHours: businessHoursService,
+      audit: auditPort,
+      clock,
+      ids: runtime.ids ?? createSystemIdGenerator(clock),
+      handoffPauseMs: HUMAN_HANDOFF_TTL_MS,
+      logger,
+    });
+  }
+
+  /** Devuelve el último texto enviado (o null), que ExpressServer registra como outbound. */
   async processMessage(
     tenantId: string,
     from: string,
     content: string,
     metaMessageId?: string,
   ): Promise<string | null> {
-    try {
-      this.logger.info(
-        { tenantId, from, contentPreview: content.slice(0, 80) },
-        'Mensaje recibido',
-      );
-
-      // 1. Cargar configuración del tenant (con caché)
-      const config = await this.tenantConfigPort.getConfig(tenantId);
-      if (!config) {
-        this.logger.error(
-          { tenantId },
-          'No hay bot_configuration para este tenant — ignorando mensaje',
-        );
-        return null;
-      }
-
-      // 1.5. Gate de comandos del dueño (D4/P4): si el mensaje viene del
-      // ownerPhone y matchea EXACTO un comando conocido, se resuelve aquí y
-      // NUNCA se toca el FlowInterpreter. Va antes de cargar el flow porque
-      // no lo necesita. Cualquier otro mensaje del dueño sigue de largo.
-      if (config.ownerPhone && this.isOwnerPhone(from, config.ownerPhone)) {
-        // null = el mensaje no matcheó ningún comando -> sigue de largo al flow.
-        const reply = await this.tryHandleOwnerCommand(tenantId, from, content);
-        if (reply !== null) return reply;
-      }
-
-      // 2. Construir entidad del dominio
-      const message: Message = {
-        id: this.generateId(),
-        tenantId,
-        from,
-        content,
-        timestamp: new Date(),
-        metaMessageId,
-      };
-
-      // 2.5. Usuario + cumplimiento Meta (Bloque 2.1/2.2). Se resuelve para
-      // TODO mensaje entrante, tenga o no flow activo el tenant — el
-      // opt-out y el tracking de ventana de servicio no dependen del flow.
-      // El dueño queda fuera de esta lógica (ya se filtró arriba: si llegó
-      // hasta acá es porque su mensaje no fue un comando, y no aplica
-      // opt-out a su propio número de pruebas).
-      const user = await this.getOrCreateUser(tenantId, from);
-      await this.userRepository.touchLastInbound(tenantId, from, message.timestamp);
-
-      const isOwner = !!config.ownerPhone && this.isOwnerPhone(from, config.ownerPhone);
-      if (!isOwner) {
-        if (this.isOptOutWord(content)) {
-          await this.userRepository.setOptOut(tenantId, from, message.timestamp);
-          await this.notificationPort.sendMessage(tenantId, from, OPT_OUT_CONFIRMATION);
-          this.auditPort.log({
-            actorLabel: `whatsapp:${from}`,
-            action: 'bot_user.opt_out',
-            targetType: 'bot_user',
-            targetId: user.id,
-            metadata: { tenantId },
-          });
-          this.logger.info({ tenantId, from }, 'Opt-out real activado (Bloque 2.2)');
-          return OPT_OUT_CONFIRMATION;
-        }
-
-        if (user.optedOutAt) {
-          // Cualquier mensaje nuevo de un usuario opted-out es opt-in
-          // implícito (patrón estándar) — se reactiva y el mensaje sigue
-          // de largo al flow normal.
-          await this.userRepository.setOptOut(tenantId, from, null);
-          user.optedOutAt = null;
-          this.auditPort.log({
-            actorLabel: `whatsapp:${from}`,
-            action: 'bot_user.opt_in_implicit',
-            targetType: 'bot_user',
-            targetId: user.id,
-            metadata: { tenantId },
-          });
-          this.logger.info({ tenantId, from }, 'Opt-in implícito — usuario reactivado');
-        }
-      }
-
-      // 3. Intentar cargar bot_flow activo
-      let flow = null;
-      try {
-        flow = await this.botFlowRepository.findActiveByTenant(tenantId);
-      } catch (err) {
-        this.logger.error(
-          { err, tenantId },
-          'Error cargando bot_flow — respondiendo "en mantenimiento"',
-        );
-      }
-
-      // 4. Ruta principal: FlowInterpreter
-      if (flow) {
-        // Gate de handoff humano: si el usuario está en pausa, el bot calla.
-        if (user.humanPausedUntil && user.humanPausedUntil > new Date()) {
-          this.logger.info(
-            { tenantId, from, pausedUntil: user.humanPausedUntil },
-            'Usuario en handoff humano — mensaje registrado, bot silenciado',
-          );
-          return null;
-        }
-
-        // Gate de expiración de sesión conversacional (DEC-07, auditoría
-        // 2026-08-26). Solo aplica a media captura: un usuario nuevo o que
-        // terminó su flow (currentNodeId undefined o 'end') ya arranca
-        // limpio y en silencio vía el "Caso 2" de FlowInterpreter — avisar
-        // "empezamos de nuevo" ahí no tendría sentido (no había nada
-        // empezado). Va DESPUÉS del gate de handoff humano: si el dueño
-        // está atendiendo manualmente, este gate no debe resetear nada por
-        // debajo suyo.
-        let effectiveUser = user;
-        const midFlow = !!user.currentNodeId && user.currentNodeId !== 'end';
-        if (midFlow && user.lastInboundAt) {
-          const expired = isSessionExpired(
-            this.businessHoursService,
-            {
-              horarioSemana: config.horarioSemana,
-              horarioSabado: config.horarioSabado,
-              abreDomingo: config.abreDomingo,
-            },
-            user.lastInboundAt,
-            message.timestamp,
-          );
-          if (expired) {
-            await this.notificationPort.sendMessage(tenantId, from, SESSION_EXPIRED_NOTICE);
-            // Limpia currentNodeId/context de verdad (mismo patrón que la
-            // palabra de escape en FlowInterpreter) para que el "Caso 2" del
-            // interpreter arranque el flow desde start_node_id, y para que
-            // {{variables}} de la sesión vieja no se filtren en la nueva.
-            effectiveUser = { ...user, currentNodeId: undefined, context: {} };
-            this.logger.info({ tenantId, from }, 'Sesión conversacional expirada — reset con aviso');
-          }
-        }
-
-        // Gate de horario de atención (§2.2): fuera de horario, el bot NO
-        // ejecuta el flow — solo avisa que está cerrado y no mueve
-        // currentNodeId/context, para retomar donde iba cuando reabra. El
-        // dueño queda fuera (mismo criterio que opt-out: sigue probando su
-        // bot a cualquier hora).
-        if (!isOwner) {
-          const hoursCheck = this.businessHoursService.isOpenNow({
-            horarioSemana: config.horarioSemana,
-            horarioSabado: config.horarioSabado,
-            abreDomingo: config.abreDomingo,
-          });
-          if (hoursCheck.unknown) {
-            this.logger.warn(
-              { tenantId },
-              'Horario de atención no parseable (formato esperado HH:MM-HH:MM) — sin gating',
-            );
-          }
-          if (!hoursCheck.isOpen) {
-            const text = config.outOfHoursMessage;
-            await this.notificationPort.sendMessage(tenantId, from, text);
-            this.logger.info({ tenantId, from }, 'Fuera de horario — flow no ejecutado');
-            return text;
-          }
-        }
-
-        const result = await this.flowInterpreter.execute({
-          flow,
-          user: effectiveUser,
-          message,
-          tenantConfig: config,
-        });
-
-        // Persistir nextNodeId + contextUpdates. Parte de effectiveUser (no
-        // de user): si el gate de arriba reseteó la sesión, el contexto
-        // viejo no debe resucitar aquí.
-        const mergedContext = { ...(effectiveUser.context ?? {}), ...result.contextUpdates };
-        await this.userRepository.update({
-          ...effectiveUser,
-          currentNodeId: result.nextNodeId,
-          context: mergedContext,
-          updatedAt: new Date(),
-        });
-
-        // Enviar outputs
-        const lastText = await this.dispatchOutputs(
-          tenantId,
-          from,
-          result.outputs,
-          config.ownerPhone,
-          metaMessageId,
-        );
-
-        // Si algún output fue escape_to_human, activar pausa en BD.
-        const handoffTriggered = result.outputs.some((o) => o.kind === 'escape_to_human');
-        if (handoffTriggered) {
-          const pausedUntil = new Date(Date.now() + HUMAN_HANDOFF_TTL_MS);
-          await this.userRepository.setHumanHandoff(tenantId, from, pausedUntil);
-          this.logger.info(
-            { tenantId, from, pausedUntil },
-            'Handoff humano activado — bot silenciado 48 h',
-          );
-        }
-
-        this.logger.info(
-          {
-            tenantId,
-            from,
-            nextNodeId: result.nextNodeId,
-            outputs: result.outputs.length,
-            flowEnded: result.flowEnded,
-          },
-          'Flow ejecutado',
-        );
-        return lastText;
-      }
-
-      // 5. Sin bot_flow activo — respuesta de mantenimiento (ADR-012).
-      const maintenanceText =
-        '⚙️ Este servicio está siendo configurado. Por favor intenta más tarde.';
-      this.logger.warn(
-        { tenantId, from },
-        '[BotController] Tenant sin bot_flow activo — respondiendo "en mantenimiento"',
-      );
-      await this.notificationPort.sendMessage(tenantId, from, maintenanceText);
-      return maintenanceText;
-    } catch (error) {
-      this.logger.error({ error, tenantId, from }, 'Error procesando mensaje');
-      throw error;
-    }
-  }
-
-  private async getOrCreateUser(tenantId: string, from: string): Promise<User> {
-    const existing = await this.userRepository.findByPhoneNumber(tenantId, from);
-    if (existing) return existing;
-
-    const newUser: User = {
-      id: this.generateId(),
-      tenantId,
-      phoneNumber: from,
-      currentState: UserState.INITIAL,
-      currentNodeId: undefined,
-      context: {},
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    await this.userRepository.save(newUser);
-    return newUser;
-  }
-
-  /**
-   * Traduce InterpreterOutput[] a llamadas al NotificationPort.
-   * Devuelve el último texto enviado (o null si no se envió nada).
-   */
-  private async dispatchOutputs(
-    tenantId: string,
-    to: string,
-    outputs: InterpreterOutput[],
-    ownerPhone?: string | null,
-    lastUserMessageId?: string, // nuevo: para send_reaction
-  ): Promise<string | null> {
-    let lastText: string | null = null;
-
-    for (const output of outputs) {
-      switch (output.kind) {
-      case 'text':
-        await this.notificationPort.sendMessage(tenantId, to, output.text);
-        lastText = output.text;
-        break;
-
-      case 'buttons':
-        await this.notificationPort.sendButtons(
-          tenantId,
-          to,
-          output.text,
-          output.buttons.map((b) => b.title),
-        );
-        lastText = output.text;
-        break;
-
-      case 'list':
-        await this.notificationPort.sendList(
-          tenantId,
-          to,
-          output.text,
-          output.buttonLabel,
-          output.sections.map((section) => ({
-            title: section.title,
-            rows: section.items.map((item) => ({
-              id: item.id,
-              title: item.title,
-              ...(item.description ? { description: item.description } : {}),
-            })),
-          })),
-        );
-        lastText = output.text;
-        break;
-
-      case 'image':
-        await this.notificationPort.sendImage(
-          tenantId,
-          to,
-          output.url,
-          output.caption,
-        );
-        lastText = output.caption ?? null;
-        break;
-
-      case 'location':
-        await this.notificationPort.sendLocation(
-          tenantId,
-          to,
-          output.latitude,
-          output.longitude,
-          output.name,
-          output.address,
-        );
-        lastText = output.name ?? null;
-        break;
-
-      case 'document':
-        await this.notificationPort.sendDocument(
-          tenantId,
-          to,
-          output.url,
-          output.filename,
-          output.caption,
-        );
-        lastText = output.caption ?? output.filename;
-        break;
-
-      case 'escape_to_human':
-        await this.notificationPort.sendMessage(tenantId, to, output.userResponse);
-        lastText = output.userResponse;
-        // Aviso al dueño por WhatsApp — best-effort: NUNCA rompe el flujo del cliente.
-        // El destino (ownerPhone) viene de owner_data.whatsapp_dueno vía TenantConfig.
-        if (ownerPhone && output.ownerAlert?.trim()) {
-          try {
-            const enrichedAlert = enrichOwnerAlert(output.ownerAlert, to);
-            await this.notificationPort.sendMessage(tenantId, ownerPhone, enrichedAlert);
-            this.logger.info({ tenantId }, 'Aviso de lead enviado al dueño');
-          } catch (err) {
-            this.logger.error(
-              { err, tenantId },
-              'No se pudo enviar el aviso al dueño (el cliente sí recibió su cierre)',
-            );
-          }
-        } else if (!ownerPhone) {
-          this.logger.warn(
-            { tenantId },
-            'escape_to_human sin ownerPhone (owner_data.whatsapp_dueno) — aviso no enviado',
-          );
-        }
-        break;
-
-      case 'cta_url':
-        await this.notificationPort.sendCtaUrl(
-          tenantId,
-          to,
-          output.body,
-          output.button,
-          {
-            ...(output.header ? { header: output.header } : {}),
-            ...(output.footer ? { footer: output.footer } : {}),
-          },
-        );
-        lastText = output.body;
-        break;
-
-      case 'location_request':
-        await this.notificationPort.sendLocationRequest(tenantId, to, output.body);
-        lastText = output.body;
-        break;
-
-      case 'media_carousel':
-        await this.notificationPort.sendMediaCarousel(tenantId, to, output.body, output.cards);
-        lastText = output.body;
-        break;
-
-      case 'reaction':
-        if (lastUserMessageId) {
-          await this.notificationPort.sendReaction(tenantId, to, lastUserMessageId, output.emoji);
-        } else {
-          this.logger.warn(
-            { tenantId },
-            'send_reaction sin messageId del usuario — reacción omitida',
-          );
-        }
-        // Reactions no tienen texto de respuesta
-        break;
-
-      case 'call_permission_request':
-        await this.notificationPort.sendCallPermissionRequest(
-          tenantId,
-          to,
-          output.body,
-          output.footer,
-        );
-        lastText = output.body;
-        break;
-
-      case 'whatsapp_flow':
-        await this.notificationPort.sendWhatsappFlow(
-          tenantId,
-          to,
-          output.body,
-          output.flow_id_meta,
-          output.flow_cta,
-          {
-            header: output.header,
-            footer: output.footer,
-            mode: output.mode,
-            flow_action: output.flow_action,
-            flow_action_payload: output.flow_action_payload,
-          },
-        );
-        lastText = output.body;
-        break;
-      }
-    }
-
-    return lastText;
-  }
-
-  // ==========================================================================
-  // P4 — Reanudación de handoff por WhatsApp del dueño (D4, conservadora)
-  // ==========================================================================
-
-  private normalizeDigits(phone: string): string {
-    return phone.replace(/\D/g, '');
-  }
-
-  private isOwnerPhone(from: string, ownerPhone: string): boolean {
-    const a = this.normalizeDigits(from);
-    const b = this.normalizeDigits(ownerPhone);
-    return a.length > 0 && a === b;
-  }
-
-  /** Match exacto (trim + lowercase) contra OPT_OUT_WORDS (Bloque 2.2). */
-  private isOptOutWord(content: string): boolean {
-    const trimmed = content.trim().toLowerCase();
-    return (OPT_OUT_WORDS as readonly string[]).includes(trimmed);
-  }
-
-  /**
-   * Match EXACTO (case-insensitive) contra OWNER_RESUME_COMMANDS, con o sin
-   * un código de 4 dígitos (últimos 4 del teléfono del cliente a reanudar).
-   * `null` = el mensaje no es un comando reconocido.
-   */
-  private matchOwnerResumeCommand(content: string): { code: string | null } | null {
-    const trimmed = content.trim();
-    for (const cmd of OWNER_RESUME_COMMANDS) {
-      if (trimmed.toLowerCase() === cmd) return { code: null };
-      const withCode = new RegExp(`^${cmd}\\s+(\\d{4})$`, 'i');
-      const m = trimmed.match(withCode);
-      if (m) return { code: m[1] };
-    }
-    return null;
-  }
-
-  /** "vence en 3h 20m" — cuánto falta para que la pausa expire sola. */
-  private formatRemaining(until: Date | null | undefined): string {
-    if (!until) return '';
-    const ms = until.getTime() - Date.now();
-    if (ms <= 0) return 'por expirar';
-    const hours = Math.floor(ms / 3_600_000);
-    const mins = Math.floor((ms % 3_600_000) / 60_000);
-    return hours > 0 ? `vence en ${hours}h${mins > 0 ? ` ${mins}m` : ''}` : `vence en ${mins}m`;
-  }
-
-  /**
-   * Resuelve un comando del dueño. Devuelve `null` si `content` no matcheó
-   * ningún comando (el caller debe dejar que el mensaje siga al flow normal,
-   * D4). Si matcheó, SIEMPRE contesta algo al dueño y devuelve ese texto.
-   */
-  private async tryHandleOwnerCommand(
-    tenantId: string,
-    ownerPhone: string,
-    content: string,
-  ): Promise<string | null> {
-    const match = this.matchOwnerResumeCommand(content);
-    if (!match) return null;
-
-    const reply = async (text: string): Promise<string> => {
-      await this.notificationPort.sendMessage(tenantId, ownerPhone, text);
-      return text;
-    };
-
-    const paused = await this.userRepository.listPaused(tenantId);
-
-    if (paused.length === 0) {
-      return reply('No hay conversaciones pausadas ahora mismo.');
-    }
-
-    let target: User;
-    if (match.code) {
-      const candidates = paused.filter((u) => u.phoneNumber.endsWith(match.code!));
-      if (candidates.length === 0) {
-        return reply(`No encontré ninguna conversación pausada que termine en ${match.code}.`);
-      }
-      if (candidates.length > 1) {
-        // Colisión de últimos 4 dígitos entre pausados simultáneos: rarísimo
-        // para un negocio chico, pero no se adivina — se pide desambiguar.
-        const list = candidates.map((u) => u.phoneNumber).join(', ');
-        return reply(
-          `Hay ${candidates.length} conversaciones pausadas que terminan en ${match.code}: ` +
-            `${list}. Contacta soporte para reanudar la correcta.`,
-        );
-      }
-      target = candidates[0];
-    } else if (paused.length === 1) {
-      target = paused[0];
-    } else {
-      const list = paused
-        .map((u) => `• …${u.phoneNumber.slice(-4)} (${this.formatRemaining(u.humanPausedUntil)})`)
-        .join('\n');
-      return reply(
-        `Hay ${paused.length} conversaciones pausadas. Dime cuál con el código:\n${list}\n\n` +
-          `Ejemplo: #listo ${paused[0].phoneNumber.slice(-4)}`,
-      );
-    }
-
-    await this.userRepository.setHumanHandoff(tenantId, target.phoneNumber, null);
-    this.auditPort.log({
-      actorLabel: `whatsapp:${ownerPhone}`,
-      action: 'handoff.resume_via_whatsapp',
-      targetType: 'bot_user',
-      targetId: target.id,
-      metadata: { tenantId, resumedPhone: target.phoneNumber },
-    });
-    this.logger.info(
-      { tenantId, resumedPhone: target.phoneNumber },
-      'Handoff reanudado por comando de WhatsApp del dueño',
-    );
-    return reply(`Listo, reanudé el bot para …${target.phoneNumber.slice(-4)}.`);
-  }
-
-  private generateId(): string {
-    return randomUUID();
+    const turn = await this.engine.handle({ tenantId, from, content, metaMessageId });
+    return turn.lastText;
   }
 }

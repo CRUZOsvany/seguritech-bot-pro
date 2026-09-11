@@ -1,4 +1,6 @@
 import { NotificationPort, MetaCredentialsRepository } from '@/domain/ports';
+import type { OutboundContent } from '@/domain/conversation/OutboundMessage';
+import { buildMetaPayload, type MetaSendPayload } from './meta/metaPayloads';
 import pino from 'pino';
 import { Request, Response } from 'express';
 
@@ -93,210 +95,120 @@ export interface ParsedIncomingMessage {
   flowResponsePayload?: Record<string, unknown>;
 }
 
-interface MetaTextPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'text';
-  text: { body: string };
-}
-
-interface MetaButtonPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'button';
-    body: { text: string };
-    action: {
-      buttons: Array<{
-        type: 'reply';
-        reply: { id: string; title: string };
-      }>;
-    };
-  };
-}
-
-interface MetaImagePayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'image';
-  image: { link: string; caption?: string };
-}
-
-interface MetaListPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'list';
-    body: { text: string };
-    action: {
-      button: string;
-      sections: Array<{
-        title: string;
-        rows: Array<{ id: string; title: string; description?: string }>;
-      }>;
-    };
-  };
-}
-
-interface MetaLocationPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'location';
-  location: {
-    latitude: number;
-    longitude: number;
-    name?: string;
-    address?: string;
-  };
-}
-
-interface MetaDocumentPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'document';
-  document: {
-    link: string;
-    filename: string;
-    caption?: string;
-  };
-}
-
-// ---- Payloads Meta v23.0 ----
-
-interface MetaCtaUrlPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'cta_url';
-    header?: (
-      | { type: 'text'; text: string }
-      | { type: 'image'; image: { link: string } }
-      | { type: 'video'; video: { link: string } }
-      | { type: 'document'; document: { link: string } }
-    );
-    body: { text: string };
-    footer?: { text: string };
-    action: {
-      name: 'cta_url';
-      parameters: { display_text: string; url: string };
-    };
-  };
-}
-
-interface MetaLocationRequestPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'location_request_message';
-    body: { text: string };
-    action: { name: 'send_location' };
-  };
-}
-
-interface MetaMediaCarouselPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'media_carousel';
-    body?: { text: string };
-    action: {
-      sections: Array<{
-        cards: Array<{
-          header: { type: 'image' | 'video'; image?: { link: string }; video?: { link: string } };
-          body: { text: string };
-          action: {
-            buttons: Array<
-              | { type: 'reply'; reply: { id: string; title: string } }
-              | {
-                  type: 'cta_url';
-                  parameters: { display_text: string; url: string };
-                }
-            >;
-          };
-        }>;
-      }>;
-    };
-  };
-}
-
-interface MetaReactionPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'reaction';
-  reaction: {
-    message_id: string;
-    emoji: string;
-  };
-}
-
-interface MetaCallPermissionPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'call_permission_request';
-    body: { text: string };
-    footer?: { text: string };
-    action: { name: 'send_call_permission' };
-  };
-}
-
-interface MetaWhatsappFlowPayload {
-  messaging_product: 'whatsapp';
-  to: string;
-  type: 'interactive';
-  interactive: {
-    type: 'flow';
-    header?: { type: 'text'; text: string };
-    body: { text: string };
-    footer?: { text: string };
-    action: {
-      name: 'flow';
-      parameters: {
-        flow_message_version: '3';
-        flow_token: string;
-        flow_id: string;
-        flow_cta: string;
-        mode: 'draft' | 'published';
-        flow_action?: 'navigate' | 'data_exchange';
-        flow_action_payload?: {
-          screen?: string;
-          data?: Record<string, unknown>;
-        };
-      };
-    };
-  };
-}
-
-type MetaSendPayload =
-  | MetaTextPayload
-  | MetaButtonPayload
-  | MetaImagePayload
-  | MetaListPayload
-  | MetaLocationPayload
-  | MetaDocumentPayload
-  | MetaCtaUrlPayload
-  | MetaLocationRequestPayload
-  | MetaMediaCarouselPayload
-  | MetaReactionPayload
-  | MetaCallPermissionPayload
-  | MetaWhatsappFlowPayload;
-
 /**
- * México (+52) y Argentina (+54): WhatsApp entrega el wa_id con un dígito extra
- * (52 1 NNNNNNNNNN / 54 9 NNNNNNNNNN) pero el ENVÍO debe ir sin él, o Meta
- * responde (#131030) recipient not in allowed list. Normalizamos al enviar.
+ * Traduce el webhook de Meta al mensaje que entiende el motor. Función pura
+ * (solo registra en el logger): la usan el webhook real y el simulador del
+ * Studio, que arma webhooks sintéticos para que un toque de botón o de fila
+ * llegue al motor exactamente como llegaría de WhatsApp.
  */
-function normalizeWaId(to: string): string {
-  const d = to.replace(/\D/g, '');
-  if (d.startsWith('521') && d.length === 13) return '52' + d.slice(3);
-  if (d.startsWith('549') && d.length === 13) return '54' + d.slice(3);
-  return d;
+export function parseMetaWebhook(
+  requestBody: unknown,
+  logger: pino.Logger,
+): ParsedIncomingMessage | null {
+  try {
+    const payload = requestBody as MetaWebhookPayload;
+
+    if (!payload.entry?.length) return null;
+    const entry = payload.entry[0];
+    if (!entry.changes?.length) return null;
+
+    const change = entry.changes[0];
+    const value = change.value;
+
+    if (!value.messages?.length) return null;
+    const message = value.messages[0];
+    const businessNumber = value.metadata?.display_phone_number;
+    if (!businessNumber) return null;
+
+    // Soportar text e interactive (botones/listas) + tipos v23.0
+    let content: string | undefined;
+    let locationPayload: ParsedIncomingMessage['locationPayload'];
+    let flowResponsePayload: ParsedIncomingMessage['flowResponsePayload'];
+
+    if (message.text?.body) {
+      content = message.text.body;
+    } else if (message.interactive?.button_reply?.title) {
+      // Preferimos el id del reply SALVO que sea uno de los sintéticos que
+      // genera sendButtons (`btn_0`/`btn_1`/`btn_2`): ahí el id del nodo se
+      // descartó al enviar y el único dato con significado es el título.
+      //
+      // Un carrusel sí conserva el id real de su quick_reply
+      // (sendMediaCarousel lo pasa tal cual), y en las cards dinámicas ese
+      // id es el id del producto — sin esta rama todas las cards llegarían
+      // con el MISMO texto (el button_title compartido) y sería imposible
+      // saber cuál tocó el cliente.
+      const replyId = message.interactive.button_reply.id;
+      content =
+        replyId && !/^btn_\d+$/.test(replyId)
+          ? replyId
+          : message.interactive.button_reply.title;
+    } else if (message.interactive?.list_reply) {
+      // El id de la fila, no el título. sendList conserva los ids del flow
+      // (a diferencia de sendButtons), y en una sección dinámica ese id es
+      // el del producto o del servicio: con el título, `list_item_any`
+      // guardaba "Engargolado" como matched_service_id y
+      // {{matched_service_name}} salía vacío. El intérprete sigue
+      // aceptando el título para quien escribe la opción en vez de tocarla.
+      content =
+        message.interactive.list_reply.id || message.interactive.list_reply.title;
+    } else if (message.interactive?.type === 'call_permission_reply') {
+      // Meta envía interactive.type = "call_permission_reply"
+      // El campo status lo obtenemos del objeto raw via cast seguro
+      const rawInteractive = message.interactive as Record<string, unknown>;
+      const reply = rawInteractive['call_permission_reply'] as { status?: string } | undefined;
+      if (reply?.status === 'accepted') {
+        content = '__CALL_PERMISSION_GRANTED__';
+      } else {
+        content = '__CALL_PERMISSION_DENIED__';
+      }
+    } else if (message.interactive?.nfm_reply) {
+      // Respuesta a un WhatsApp Flow (formulario multipantalla)
+      content = '__FLOW_RESPONSE__';
+      try {
+        flowResponsePayload = JSON.parse(
+          message.interactive.nfm_reply.response_json,
+        ) as Record<string, unknown>;
+      } catch {
+        flowResponsePayload = {
+          body: message.interactive.nfm_reply.body,
+          name: message.interactive.nfm_reply.name,
+        };
+      }
+    } else if (message.location) {
+      // Respuesta a send_location_request
+      content = '__LOCATION__';
+      locationPayload = {
+        latitude: message.location.latitude,
+        longitude: message.location.longitude,
+        ...(message.location.name ? { name: message.location.name } : {}),
+        ...(message.location.address ? { address: message.location.address } : {}),
+      };
+    }
+
+    if (!message.from || !content) {
+      logger.warn(
+        { messageType: Object.keys(message) },
+        '⚠️  Mensaje sin contenido procesable',
+      );
+      return null;
+    }
+
+    return {
+      from: message.from,
+      content,
+      businessNumber,
+      timestamp: message.timestamp || new Date().toISOString(),
+      messageId: message.id,
+      ...(locationPayload ? { locationPayload } : {}),
+      ...(flowResponsePayload ? { flowResponsePayload } : {}),
+    };
+  } catch (error) {
+    logger.error(
+      { err: error, payload: JSON.stringify(requestBody).slice(0, 500) },
+      '❌ Error parseando incoming',
+    );
+    return null;
+  }
 }
 
 export class MetaWhatsAppAdapter implements NotificationPort {
@@ -346,138 +258,20 @@ export class MetaWhatsAppAdapter implements NotificationPort {
   // ========================================================================
 
   parseIncomingMessage(requestBody: unknown): ParsedIncomingMessage | null {
-    try {
-      const payload = requestBody as MetaWebhookPayload;
-
-      if (!payload.entry?.length) return null;
-      const entry = payload.entry[0];
-      if (!entry.changes?.length) return null;
-
-      const change = entry.changes[0];
-      const value = change.value;
-
-      if (!value.messages?.length) return null;
-      const message = value.messages[0];
-      const businessNumber = value.metadata?.display_phone_number;
-      if (!businessNumber) return null;
-
-      // Soportar text e interactive (botones/listas) + tipos v23.0
-      let content: string | undefined;
-      let locationPayload: ParsedIncomingMessage['locationPayload'];
-      let flowResponsePayload: ParsedIncomingMessage['flowResponsePayload'];
-
-      if (message.text?.body) {
-        content = message.text.body;
-      } else if (message.interactive?.button_reply?.title) {
-        // Preferimos el id del reply SALVO que sea uno de los sintéticos que
-        // genera sendButtons (`btn_0`/`btn_1`/`btn_2`): ahí el id del nodo se
-        // descartó al enviar y el único dato con significado es el título.
-        //
-        // Un carrusel sí conserva el id real de su quick_reply
-        // (sendMediaCarousel lo pasa tal cual), y en las cards dinámicas ese
-        // id es el id del producto — sin esta rama todas las cards llegarían
-        // con el MISMO texto (el button_title compartido) y sería imposible
-        // saber cuál tocó el cliente.
-        const replyId = message.interactive.button_reply.id;
-        content =
-          replyId && !/^btn_\d+$/.test(replyId)
-            ? replyId
-            : message.interactive.button_reply.title;
-      } else if (message.interactive?.list_reply) {
-        // El id de la fila, no el título. sendList conserva los ids del flow
-        // (a diferencia de sendButtons), y en una sección dinámica ese id es
-        // el del producto o del servicio: con el título, `list_item_any`
-        // guardaba "Engargolado" como matched_service_id y
-        // {{matched_service_name}} salía vacío. El intérprete sigue
-        // aceptando el título para quien escribe la opción en vez de tocarla.
-        content =
-          message.interactive.list_reply.id || message.interactive.list_reply.title;
-      } else if (message.interactive?.type === 'call_permission_reply') {
-        // Meta envía interactive.type = "call_permission_reply"
-        // El campo status lo obtenemos del objeto raw via cast seguro
-        const rawInteractive = message.interactive as Record<string, unknown>;
-        const reply = rawInteractive['call_permission_reply'] as { status?: string } | undefined;
-        if (reply?.status === 'accepted') {
-          content = '__CALL_PERMISSION_GRANTED__';
-        } else {
-          content = '__CALL_PERMISSION_DENIED__';
-        }
-      } else if (message.interactive?.nfm_reply) {
-        // Respuesta a un WhatsApp Flow (formulario multipantalla)
-        content = '__FLOW_RESPONSE__';
-        try {
-          flowResponsePayload = JSON.parse(
-            message.interactive.nfm_reply.response_json,
-          ) as Record<string, unknown>;
-        } catch {
-          flowResponsePayload = {
-            body: message.interactive.nfm_reply.body,
-            name: message.interactive.nfm_reply.name,
-          };
-        }
-      } else if (message.location) {
-        // Respuesta a send_location_request
-        content = '__LOCATION__';
-        locationPayload = {
-          latitude: message.location.latitude,
-          longitude: message.location.longitude,
-          ...(message.location.name ? { name: message.location.name } : {}),
-          ...(message.location.address ? { address: message.location.address } : {}),
-        };
-      }
-
-      if (!message.from || !content) {
-        this.logger.warn(
-          { messageType: Object.keys(message) },
-          '⚠️  Mensaje sin contenido procesable',
-        );
-        return null;
-      }
-
-      return {
-        from: message.from,
-        content,
-        businessNumber,
-        timestamp: message.timestamp || new Date().toISOString(),
-        messageId: message.id,
-        ...(locationPayload ? { locationPayload } : {}),
-        ...(flowResponsePayload ? { flowResponsePayload } : {}),
-      };
-    } catch (error) {
-      this.logger.error(
-        { err: error, payload: JSON.stringify(requestBody).slice(0, 500) },
-        '❌ Error parseando incoming',
-      );
-      return null;
-    }
+    return parseMetaWebhook(requestBody, this.logger);
   }
 
   // ========================================================================
   // ENVÍO DE MENSAJES
+  //
+  // Cada método traduce sus argumentos a un OutboundContent y el payload lo
+  // arma buildMetaPayload (meta/metaPayloads.ts), la misma función que usa
+  // el simulador del Studio.
   // ========================================================================
 
-  async sendMessage(
-    tenantId: string,
-    phoneNumber: string,
-    message: string,
-  ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — mensaje no enviado',
-      );
-      return;
-    }
-
-    const payload: MetaTextPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'text',
-      text: { body: message },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+  async sendMessage(tenantId: string, phoneNumber: string, message: string): Promise<void> {
+    await this.send(tenantId, phoneNumber, { kind: 'text', text: message },
+      '⚠️  Sin credenciales Meta para este tenant — mensaje no enviado');
   }
 
   async sendButtons(
@@ -486,40 +280,14 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     message: string,
     buttons: string[],
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — mensaje no enviado',
-      );
-      return;
-    }
-
-    if (buttons.length === 0) {
-      // Fallback: enviar como texto plano si no hay botones
-      return this.sendMessage(tenantId, phoneNumber, message);
-    }
-
-    const buttonPayload = buttons.slice(0, 3).map((title, index) => ({
-      type: 'reply' as const,
-      reply: {
-        id: `btn_${index}`,
-        title: title.slice(0, 20),
-      },
-    }));
-
-    const payload: MetaButtonPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'button',
-        body: { text: message },
-        action: { buttons: buttonPayload },
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    // El id real del botón no llega hasta aquí (NotificationPort solo recibe
+    // títulos): buildMetaPayload los numera btn_0..2, como siempre.
+    await this.send(
+      tenantId,
+      phoneNumber,
+      { kind: 'buttons', text: message, buttons: buttons.map((title, i) => ({ id: `btn_${i}`, title })) },
+      '⚠️  Sin credenciales Meta para este tenant — mensaje no enviado',
+    );
   }
 
   async sendImage(
@@ -528,23 +296,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     imageUrl: string,
     caption?: string,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — imagen no enviada',
-      );
-      return;
-    }
-
-    const payload: MetaImagePayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'image',
-      image: { link: imageUrl, ...(caption ? { caption } : {}) },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(tenantId, phoneNumber, { kind: 'image', url: imageUrl, caption },
+      '⚠️  Sin credenciales Meta para este tenant — imagen no enviada');
   }
 
   async sendList(
@@ -557,55 +310,17 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       rows: Array<{ id: string; title: string; description?: string }>;
     }>,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — list no enviado',
-      );
-      return;
-    }
-
-    // Validación defensiva en runtime (el Zod del flow ya valida, pero por
-    // si llegan llamadas directas desde código externo)
-    if (sections.length === 0 || sections.length > 10) {
-      this.logger.error(
-        { tenantId, sectionsCount: sections.length },
-        '❌ List inválida: sections debe ser 1..10',
-      );
-      return;
-    }
-    const totalRows = sections.reduce((acc, s) => acc + s.rows.length, 0);
-    if (totalRows === 0 || totalRows > 10) {
-      this.logger.error(
-        { tenantId, totalRows },
-        '❌ List inválida: total rows debe ser 1..10',
-      );
-      return;
-    }
-
-    const payload: MetaListPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'list',
-        body: { text: bodyText.slice(0, 1024) },
-        action: {
-          button: buttonLabel.slice(0, 20),
-          sections: sections.map((s) => ({
-            title: s.title.slice(0, 24),
-            rows: s.rows.map((r) => ({
-              id: r.id,
-              title: r.title.slice(0, 24),
-              ...(r.description ? { description: r.description.slice(0, 72) } : {}),
-            })),
-          })),
-        },
+    await this.send(
+      tenantId,
+      phoneNumber,
+      {
+        kind: 'list',
+        text: bodyText,
+        buttonLabel,
+        sections: sections.map((s) => ({ title: s.title, items: s.rows })),
       },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+      '⚠️  Sin credenciales Meta para este tenant — list no enviado',
+    );
   }
 
   async sendLocation(
@@ -616,28 +331,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     name?: string,
     address?: string,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — location no enviada',
-      );
-      return;
-    }
-
-    const payload: MetaLocationPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'location',
-      location: {
-        latitude,
-        longitude,
-        ...(name ? { name } : {}),
-        ...(address ? { address } : {}),
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(tenantId, phoneNumber, { kind: 'location', latitude, longitude, name, address },
+      '⚠️  Sin credenciales Meta para este tenant — location no enviada');
   }
 
   async sendDocument(
@@ -647,27 +342,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     filename: string,
     caption?: string,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn(
-        { tenantId, phoneNumber },
-        '⚠️  Sin credenciales Meta para este tenant — document no enviado',
-      );
-      return;
-    }
-
-    const payload: MetaDocumentPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'document',
-      document: {
-        link: documentUrl,
-        filename: filename.slice(0, 240),
-        ...(caption ? { caption: caption.slice(0, 1024) } : {}),
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(tenantId, phoneNumber, { kind: 'document', url: documentUrl, filename, caption },
+      '⚠️  Sin credenciales Meta para este tenant — document no enviado');
   }
 
   // ========================================================================
@@ -684,72 +360,23 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       footer?: string;
     },
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendCtaUrl no enviado');
-      return;
-    }
-
-    // Construir header Meta según tipo
-    let metaHeader: MetaCtaUrlPayload['interactive']['header'] | undefined;
-    if (opts?.header) {
-      const h = opts.header;
-      if (h.type === 'text') {
-        metaHeader = { type: 'text', text: h.text.slice(0, 60) };
-      } else if (h.type === 'image') {
-        metaHeader = { type: 'image', image: { link: h.link } };
-      } else if (h.type === 'video') {
-        metaHeader = { type: 'video', video: { link: h.link } };
-      } else if (h.type === 'document') {
-        metaHeader = { type: 'document', document: { link: h.link } };
-      }
-    }
-
-    const payload: MetaCtaUrlPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'cta_url',
-        ...(metaHeader ? { header: metaHeader } : {}),
-        body: { text: body.slice(0, 1024) },
-        ...(opts?.footer ? { footer: { text: opts.footer.slice(0, 60) } } : {}),
-        action: {
-          name: 'cta_url',
-          parameters: {
-            display_text: button.display_text.slice(0, 20),
-            url: button.url.slice(0, 2000),
-          },
-        },
+    await this.send(
+      tenantId,
+      phoneNumber,
+      {
+        kind: 'cta_url',
+        body,
+        button,
+        ...(opts?.header ? { header: opts.header } : {}),
+        ...(opts?.footer ? { footer: opts.footer } : {}),
       },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+      '⚠️  Sin credenciales — sendCtaUrl no enviado',
+    );
   }
 
-  async sendLocationRequest(
-    tenantId: string,
-    phoneNumber: string,
-    body: string,
-  ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendLocationRequest no enviado');
-      return;
-    }
-
-    const payload: MetaLocationRequestPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'location_request_message',
-        body: { text: body.slice(0, 1024) },
-        action: { name: 'send_location' },
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+  async sendLocationRequest(tenantId: string, phoneNumber: string, body: string): Promise<void> {
+    await this.send(tenantId, phoneNumber, { kind: 'location_request', body },
+      '⚠️  Sin credenciales — sendLocationRequest no enviado');
   }
 
   async sendMediaCarousel(
@@ -765,57 +392,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       >;
     }>,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendMediaCarousel no enviado');
-      return;
-    }
-
-    if (cards.length === 0 || cards.length > 10) {
-      this.logger.error({ tenantId, cardsCount: cards.length }, '❌ Carrusel inválido: 1..10 cards');
-      return;
-    }
-
-    const metaCards: MetaMediaCarouselPayload['interactive']['action']['sections'][0]['cards'] =
-      cards.map((card) => {
-        const header: MetaMediaCarouselPayload['interactive']['action']['sections'][0]['cards'][0]['header'] =
-          card.header.type === 'image'
-            ? { type: 'image', image: { link: card.header.link } }
-            : { type: 'video', video: { link: card.header.link } };
-
-        const buttons: MetaMediaCarouselPayload['interactive']['action']['sections'][0]['cards'][0]['action']['buttons'] =
-          card.buttons.slice(0, 2).map((btn) => {
-            if (btn.type === 'quick_reply') {
-              return {
-                type: 'reply' as const,
-                reply: { id: btn.id, title: btn.title.slice(0, 20) },
-              };
-            }
-            return {
-              type: 'cta_url' as const,
-              parameters: { display_text: btn.display_text.slice(0, 20), url: btn.url },
-            };
-          });
-
-        return {
-          header,
-          body: { text: card.body.slice(0, 1024) },
-          action: { buttons },
-        };
-      });
-
-    const payload: MetaMediaCarouselPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'media_carousel',
-        ...(body.trim() ? { body: { text: body.slice(0, 1024) } } : {}),
-        action: { sections: [{ cards: metaCards }] },
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(tenantId, phoneNumber, { kind: 'media_carousel', body, cards },
+      '⚠️  Sin credenciales — sendMediaCarousel no enviado');
   }
 
   async sendReaction(
@@ -824,23 +402,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     messageId: string,
     emoji: string,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendReaction no enviado');
-      return;
-    }
-
-    const payload: MetaReactionPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'reaction',
-      reaction: {
-        message_id: messageId,
-        emoji,
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(tenantId, phoneNumber, { kind: 'reaction', emoji, messageId },
+      '⚠️  Sin credenciales — sendReaction no enviado');
   }
 
   async sendCallPermissionRequest(
@@ -849,25 +412,12 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     body: string,
     footer?: string,
   ): Promise<void> {
-    const creds = await this.credsRepo.findByTenantId(tenantId);
-    if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendCallPermissionRequest no enviado');
-      return;
-    }
-
-    const payload: MetaCallPermissionPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'call_permission_request',
-        body: { text: body.slice(0, 1024) },
-        ...(footer ? { footer: { text: footer.slice(0, 60) } } : {}),
-        action: { name: 'send_call_permission' },
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.send(
+      tenantId,
+      phoneNumber,
+      { kind: 'call_permission_request', body, ...(footer ? { footer } : {}) },
+      '⚠️  Sin credenciales — sendCallPermissionRequest no enviado',
+    );
   }
 
   async sendWhatsappFlow(
@@ -884,43 +434,53 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
     },
   ): Promise<void> {
+    // flow_token es un nonce único por envío. Meta lo incluye en el nfm_reply
+    // del webhook para que puedas correlacionar la respuesta con la sesión.
+    const flowToken = `ft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    await this.send(
+      tenantId,
+      phoneNumber,
+      {
+        kind: 'whatsapp_flow',
+        body,
+        flow_id_meta,
+        flow_cta,
+        mode: opts?.mode ?? 'published',
+        ...(opts?.header ? { header: opts.header } : {}),
+        ...(opts?.footer ? { footer: opts.footer } : {}),
+        ...(opts?.flow_action ? { flow_action: opts.flow_action } : {}),
+        ...(opts?.flow_action_payload ? { flow_action_payload: opts.flow_action_payload } : {}),
+      },
+      '⚠️  Sin credenciales — sendWhatsappFlow no enviado',
+      { flowToken },
+    );
+  }
+
+  /**
+   * Credenciales → payload → Meta. Sin credenciales o con un mensaje que
+   * Meta rechazaría por forma (lista o carrusel fuera de rango), se registra
+   * y no se envía, igual que antes.
+   */
+  private async send(
+    tenantId: string,
+    phoneNumber: string,
+    content: OutboundContent,
+    noCredsWarning: string,
+    buildOpts: { flowToken?: string } = {},
+  ): Promise<void> {
     const creds = await this.credsRepo.findByTenantId(tenantId);
     if (!creds) {
-      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — sendWhatsappFlow no enviado');
+      this.logger.warn({ tenantId, phoneNumber }, noCredsWarning);
       return;
     }
 
-    // flow_token es un nonce único por envío. Meta lo incluye en el nfm_reply
-    // del webhook para que puedas correlacionar la respuesta con la sesión.
-    const flow_token = `ft_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const built = buildMetaPayload(phoneNumber, content, buildOpts);
+    if (!built.ok) {
+      this.logger.error({ tenantId, kind: content.kind }, `❌ ${built.reason}`);
+      return;
+    }
 
-    const payload: MetaWhatsappFlowPayload = {
-      messaging_product: 'whatsapp',
-      to: phoneNumber,
-      type: 'interactive',
-      interactive: {
-        type: 'flow',
-        ...(opts?.header ? { header: { type: 'text', text: opts.header.slice(0, 60) } } : {}),
-        body: { text: body.slice(0, 1024) },
-        ...(opts?.footer ? { footer: { text: opts.footer.slice(0, 60) } } : {}),
-        action: {
-          name: 'flow',
-          parameters: {
-            flow_message_version: '3',
-            flow_token,
-            flow_id: flow_id_meta,
-            flow_cta: flow_cta.slice(0, 20),
-            mode: opts?.mode ?? 'published',
-            ...(opts?.flow_action ? { flow_action: opts.flow_action } : {}),
-            ...(opts?.flow_action_payload
-              ? { flow_action_payload: opts.flow_action_payload }
-              : {}),
-          },
-        },
-      },
-    };
-
-    await this.sendToMeta(creds, payload, phoneNumber);
+    await this.sendToMeta(creds, built.payload, phoneNumber);
   }
 
   // ========================================================================
@@ -935,8 +495,9 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     payload: MetaSendPayload,
     phoneNumber: string,
   ): Promise<void> {
+    // `payload.to` ya viene normalizado (MX/AR sin el dígito legacy, #131030)
+    // desde buildMetaPayload.
     const url = `${this.metaApiUrl}/${creds.phoneNumberId}/messages`;
-    payload.to = normalizeWaId(payload.to); // MX/AR: quita el dígito legacy (#131030)
 
     try {
       const response = await fetch(url, {
