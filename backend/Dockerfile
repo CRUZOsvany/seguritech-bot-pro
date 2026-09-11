@@ -1,6 +1,6 @@
 # =============================================================================
 # Stage 1: build-frontend
-# Genera backend/public/app/ (Vite → Express static)
+# Genera backend/public/app/ (panel) y backend/public/caja/ (PWA del cajero)
 # =============================================================================
 FROM node:20-alpine AS build-frontend
 
@@ -20,6 +20,7 @@ COPY frontend/ ./frontend/
 
 # Build: Vite emite a ../backend/public/app según vite.config.ts build.outDir
 RUN npm run --workspace frontend build:panel
+RUN npm run --workspace frontend build:caja
 
 # =============================================================================
 # Stage 2: build-backend
@@ -56,6 +57,9 @@ COPY backend/tsconfig.runtime.json ./tsconfig.json
 
 # Panel admin (frontend compilado por stage 1)
 COPY --from=build-frontend /workspace/backend/public/app ./public/app
+
+# PWA del cajero (POS Lite) — servida en /caja/<tenantId>/
+COPY --from=build-frontend /workspace/backend/public/caja ./public/caja
 
 # Usuario no-root
 USER node

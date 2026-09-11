@@ -22,6 +22,8 @@ import { SupabasePosProductRepository } from '@/infrastructure/repositories/pos/
 import { SupabasePosCategoryRepository } from '@/infrastructure/repositories/pos/SupabasePosCategoryRepository';
 import { SupabasePosTenantConfigRepository } from '@/infrastructure/repositories/pos/SupabasePosTenantConfigRepository';
 import { SupabasePosUserRepository } from '@/infrastructure/repositories/pos/SupabasePosUserRepository';
+import { SupabasePosSaleRepository } from '@/infrastructure/repositories/pos/SupabasePosSaleRepository';
+import { SupabasePosCashSessionRepository } from '@/infrastructure/repositories/pos/SupabasePosCashSessionRepository';
 import { ImportPosProductsUseCase } from '@/domain/use-cases/ImportPosProductsUseCase';
 import { PosAuthService } from '@/application/pos/PosAuthService';
 import { createPosAuthMiddleware } from '@/infrastructure/auth/PosAuthMiddleware';
@@ -173,6 +175,8 @@ export class Bootstrap {
         this.logger,
       );
       const posUserRepository = new SupabasePosUserRepository(supabase, this.logger);
+      const posSaleRepository = new SupabasePosSaleRepository(supabase, this.logger);
+      const posCashSessionRepository = new SupabasePosCashSessionRepository(supabase, this.logger);
       const importPosProductsUseCase = new ImportPosProductsUseCase(
         posProductRepository,
         posCategoryRepository,
@@ -293,10 +297,12 @@ export class Bootstrap {
         posProducts: posProductRepository,
         posCategories: posCategoryRepository,
         posConfig: posTenantConfigRepository,
+        posSales: posSaleRepository,
+        posCashSessions: posCashSessionRepository,
         logger: this.logger,
       });
       this.expressServer.setupPosRoutes(posRouter);
-      this.logger.info('✅ API POS montada en /api/pos (Sprint 5.1a)');
+      this.logger.info('✅ API POS montada en /api/pos (catálogo + caja y ventas)');
 
       this.expressServer.setupStaticAssets();
 

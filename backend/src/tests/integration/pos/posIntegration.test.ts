@@ -20,6 +20,8 @@ import type { PosUserRepository } from '@/domain/ports/pos/PosUserRepository';
 import type { PosProductRepository } from '@/domain/ports/pos/PosProductRepository';
 import type { PosCategoryRepository } from '@/domain/ports/pos/PosCategoryRepository';
 import type { PosTenantConfigRepository } from '@/domain/ports/pos/PosTenantConfigRepository';
+import type { PosSaleRepository } from '@/domain/ports/pos/PosSaleRepository';
+import type { PosCashSessionRepository } from '@/domain/ports/pos/PosCashSessionRepository';
 import type { PosUser } from '@/domain/entities/pos/PosUser';
 import type { PosProduct } from '@/domain/entities/pos/Product';
 import type { PosCategory } from '@/domain/entities/pos/Category';
@@ -208,6 +210,8 @@ function buildApp(opts: BuildOpts = {}) {
   const posRouter = createPosRouter({
     requirePosSession, requireModule,
     posProducts, posCategories, posConfig,
+    posSales: {} as PosSaleRepository,
+    posCashSessions: {} as PosCashSessionRepository,
     logger,
   });
 

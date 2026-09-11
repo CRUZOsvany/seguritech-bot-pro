@@ -45,8 +45,14 @@ jobs:
       - name: Type check frontend
         run: npm run type-check --workspace frontend
 
+      - name: Test frontend
+        run: npm test --workspace frontend
+
       - name: Build frontend
         run: npm run build:panel --workspace frontend
+
+      - name: Build caja (PWA del cajero)
+        run: npm run build:caja --workspace frontend
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4

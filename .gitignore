@@ -13,6 +13,7 @@ out/
 
 # Frontend build output (Vite → backend/public/app/, served by Express)
 backend/public/app/
+backend/public/caja/
 
 # Frontend dev
 frontend/node_modules/
