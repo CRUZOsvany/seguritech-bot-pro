@@ -70,6 +70,74 @@ function buildApp(repo: Partial<BotFlowRepository> = {}) {
   return { app, botFlowRepository, cookieFor };
 }
 
+describe('POST .../studio/flows/:flowId/validate', () => {
+  const validateUrl = (tenant = HARNESS_TENANT_ID) => `/api/admin/tenants/${tenant}/studio/flows/${FLOW_ID}/validate`;
+
+  it('un molde en buen estado: sin errores y publicable', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app).post(validateUrl()).set('Cookie', cookieFor('super_admin', null)).send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      source: 'draft',
+      flowId: FLOW_ID,
+      report: { ok: true, summary: { errors: 0 }, schema: { ok: true } },
+    });
+  });
+
+  it('un borrador que el schema rechaza igual se revisa: devuelve el reporte, no un 400', async () => {
+    const { app, cookieFor } = buildApp({
+      getEditableFlow: jest.fn().mockResolvedValue({
+        flow: {
+          version: '1.0',
+          start_node_id: 'hola',
+          nodes: [{ id: 'hola', type: 'send_text', content: { text: 'Hola {{misterio}}' }, transitions: [] }],
+        },
+        source: 'draft',
+      }),
+    });
+
+    const res = await request(app).post(validateUrl()).set('Cookie', cookieFor('super_admin', null)).send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.report.ok).toBe(false);
+    expect(res.body.report.schema.ok).toBe(false);
+    const codes = res.body.report.issues.map((i: { code: string }) => i.code);
+    expect(codes).toEqual(expect.arrayContaining(['V-EST-01', 'V-EST-05', 'V-EST-08', 'V-CUMP-01']));
+  });
+
+  it('un admin_operator no puede validar flows de otro tenant', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app)
+      .post(validateUrl(OTHER_TENANT))
+      .set('Cookie', cookieFor('admin_operator', HARNESS_TENANT_ID))
+      .send({});
+
+    expect(res.status).toBe(403);
+  });
+});
+
+describe('GET /api/admin/studio/limits', () => {
+  it('devuelve los límites verificados de WhatsApp, con su fuente', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app).get('/api/admin/studio/limits').set('Cookie', cookieFor('admin_operator', HARNESS_TENANT_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.verifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(res.body.limits.replyButtons).toMatchObject({ buttonsMax: 3, buttonTitleMax: 20 });
+    expect(res.body.limits.mediaCarousel.doc).toMatch(/^https:\/\/developers\.facebook\.com\//);
+  });
+
+  it('sin sesión no responde', async () => {
+    const { app } = buildApp();
+
+    expect((await request(app).get('/api/admin/studio/limits')).status).toBe(401);
+  });
+});
+
 describe('POST .../studio/flows/:flowId/simulate', () => {
   it('un admin_operator no puede simular flows de otro tenant', async () => {
     const { app, cookieFor } = buildApp();
