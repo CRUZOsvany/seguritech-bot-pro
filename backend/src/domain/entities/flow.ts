@@ -468,6 +468,12 @@ export interface BotFlow {
   version: '1.0';
   start_node_id: string;
   nodes: FlowNode[];
+  /**
+   * Si el flow lo generó el asistente del Studio, su especificación. El motor
+   * no la lee. El Designer no la conserva al guardar: un flow editado en modo
+   * avanzado deja de ser editable desde el asistente (ver domain/studio/wizard).
+   */
+  studio?: { wizard: unknown };
 }
 
 // ============================================================================

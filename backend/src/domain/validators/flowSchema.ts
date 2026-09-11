@@ -478,6 +478,11 @@ export const FlowSchema = z
     version: z.literal('1.0'),
     start_node_id: z.string().min(1),
     nodes: z.array(FlowNodeSchema).min(1),
+    // Metadatos del Studio: la especificación del asistente que generó el
+    // flow. El motor la ignora; se conserva al publicar para que el asistente
+    // pueda reabrir lo publicado. Antes una clave extra se descartaba en
+    // silencio, así que ningún flow deja de ser publicable por esto.
+    studio: z.object({ wizard: z.unknown() }).optional(),
   })
   .superRefine((flow, ctx) => {
     const ids = new Set(flow.nodes.map((n) => n.id));
