@@ -53,6 +53,9 @@ export const SimEventSchema = z.discriminatedUnion('type', [
 
 export type SimEvent = z.infer<typeof SimEventSchema>;
 
+/** Teléfono del cliente simulado por default: el mismo del simulador del panel. */
+export const DEFAULT_SIM_PHONE = '5210000000000';
+
 /** Número de negocio de mentira para el sobre del webhook: el parser lo exige, el motor no lo usa. */
 const SIM_BUSINESS_NUMBER = '5210000000001';
 

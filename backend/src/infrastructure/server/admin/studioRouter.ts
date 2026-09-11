@@ -6,7 +6,7 @@ import type { BotFlow } from '@/domain/entities/flow';
 import type { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
 import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchema';
 import { requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
-import { SimEventSchema, eventToStep, toApiTurn } from './studioSimulation';
+import { DEFAULT_SIM_PHONE, SimEventSchema, eventToStep, toApiTurn } from './studioSimulation';
 import { ctx, errMsg } from './helpers';
 import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { requireRole } from '@/infrastructure/auth/AuthMiddleware';
@@ -15,8 +15,6 @@ import { STUDIO_MOLDS } from '@/domain/studio/molds';
 import { validateFlowDesign } from '@/domain/validation/flowDesignValidator';
 import { WHATSAPP_LIMITS, WHATSAPP_LIMITS_VERIFIED_AT } from '@/domain/whatsapp/limits';
 
-/** Mismo teléfono de prueba que el simulador del panel. */
-const DEFAULT_SIM_PHONE = '5210000000000';
 
 const SourceSchema = z.object({
   source: z.enum(['draft', 'active', 'version']).default('draft'),
