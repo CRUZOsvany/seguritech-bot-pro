@@ -8,6 +8,7 @@ import type {
   UpdateTenantInput,
   TenantStatus,
 } from '@/domain/ports/TenantRepository';
+import { OwnerDataIncompleteError } from '@/domain/ports/TenantRepository';
 
 /**
  * Implementación Supabase del TenantRepository.
@@ -129,7 +130,7 @@ export class SupabaseTenantRepository implements TenantRepository {
   }
 
   async findFullDetail(id: string): Promise<TenantDetail | null> {
-    const [tenantRes, bcRes, mcRes, flowRes, svcRes] = await Promise.all([
+    const [tenantRes, bcRes, mcRes, flowRes, svcRes, ownerRes] = await Promise.all([
       this.supabase
         .from('tenants')
         .select(
@@ -165,6 +166,11 @@ export class SupabaseTenantRepository implements TenantRepository {
         .eq('tenant_id', id)
         .eq('service_type', 'whatsapp_bot')
         .maybeSingle(),
+      this.supabase
+        .from('owner_data')
+        .select('nombre_dueno, whatsapp_dueno')
+        .eq('tenant_id', id)
+        .maybeSingle(),
     ]);
 
     if (tenantRes.error) {
@@ -177,6 +183,7 @@ export class SupabaseTenantRepository implements TenantRepository {
     const bc = bcRes.data as any | null;
     const mc = mcRes.data as any | null;
     const flow = flowRes.data as any | null;
+    const owner = ownerRes.data as { nombre_dueno: string; whatsapp_dueno: string } | null;
 
     return {
       id: t.id,
@@ -221,6 +228,7 @@ export class SupabaseTenantRepository implements TenantRepository {
           updated_at: flow.updated_at,
         }
         : null,
+      owner: owner ? { nombre_dueno: owner.nombre_dueno, whatsapp_dueno: owner.whatsapp_dueno } : null,
       created_at: t.created_at,
       updated_at: t.updated_at,
     };
@@ -398,7 +406,41 @@ export class SupabaseTenantRepository implements TenantRepository {
       }
     }
 
+    if (input.owner) await this.upsertOwner(id, input.owner);
+
     this.logger.info({ id }, '[SupabaseTenantRepository] tenant actualizado');
+  }
+
+  /**
+   * owner_data tiene una fila por tenant (unique tenant_id) con nombre y
+   * WhatsApp obligatorios: si ya existe se actualiza lo que venga; si no, se
+   * crea y hacen falta los dos.
+   */
+  private async upsertOwner(
+    tenantId: string,
+    owner: NonNullable<UpdateTenantInput['owner']>,
+  ): Promise<void> {
+    const patch: Record<string, string> = {};
+    if (owner.nombre_dueno !== undefined) patch.nombre_dueno = owner.nombre_dueno;
+    if (owner.whatsapp_dueno !== undefined) patch.whatsapp_dueno = owner.whatsapp_dueno;
+    if (Object.keys(patch).length === 0) return;
+
+    const { data: existing, error: readErr } = await this.supabase
+      .from('owner_data')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (readErr) throw new Error(`read owner_data: ${readErr.message}`);
+
+    if (existing) {
+      const { error } = await this.supabase.from('owner_data').update(patch).eq('tenant_id', tenantId);
+      if (error) throw new Error(`update owner_data: ${error.message}`);
+      return;
+    }
+
+    if (!patch.nombre_dueno || !patch.whatsapp_dueno) throw new OwnerDataIncompleteError();
+    const { error } = await this.supabase.from('owner_data').insert({ tenant_id: tenantId, ...patch });
+    if (error) throw new Error(`insert owner_data: ${error.message}`);
   }
 
   async softDelete(id: string): Promise<void> {
