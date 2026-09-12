@@ -170,4 +170,27 @@ describe('parsePosCatalogCsv', () => {
     expect(rows).toHaveLength(0);
     expect(errors[0].message).toMatch(/no tiene filas/i);
   });
+
+  // GHSA-8cw4-87c7-c6xx: un encabezado `__proto__` repetido reemplazaba el
+  // prototipo del registro. En la librería solo se alcanza con
+  // `group_columns_by_name`, que este parser no usa; esto fija que el
+  // archivo del operador tampoco lo logra por `columns: true` ni por cleanRow.
+  describe('encabezados __proto__', () => {
+    const prototypeKeys = () => Object.getOwnPropertyNames(Object.prototype).sort();
+
+    it.each([
+      ['una vez', 'sku,name,category,unit_price,stock_qty,__proto__', 'X-1,Producto,Cat,10,5,a'],
+      ['repetido', 'sku,name,category,unit_price,stock_qty,__proto__,__proto__', 'X-1,Producto,Cat,10,5,a,b'],
+    ])('%s: la fila se importa igual y Object.prototype no cambia', (_caso, header, line) => {
+      const before = prototypeKeys();
+
+      const { rows, errors } = parsePosCatalogCsv([header, line].join('\n'));
+
+      expect(errors).toHaveLength(0);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({ sku: 'X-1', name: 'Producto', unitPrice: 10, stockQty: 5 });
+      expect(Object.getPrototypeOf(rows[0])).toBe(Object.prototype);
+      expect(prototypeKeys()).toEqual(before);
+    });
+  });
 });
