@@ -3,6 +3,7 @@ import type { BotFlow, FlowNode } from '@/domain/entities/flow';
 import type { SimulateConversationUseCase, SimulatedTurn } from '@/domain/use-cases/SimulateConversationUseCase';
 import { DEFAULT_TEST_START } from '@/domain/studio/testCases';
 import { resolveEscape } from '@/domain/conversation/escapeWords';
+import { sampleCapture } from '@/domain/conversation/captureValidation';
 import { buildMetaPayload } from '@/infrastructure/adapters/meta/metaPayloads';
 import { DEFAULT_SIM_PHONE, eventToStep, type SimEvent } from '@/infrastructure/server/admin/studioSimulation';
 
@@ -21,7 +22,8 @@ export interface ExplorationReport {
 }
 
 interface Candidate {
-  event: SimEvent;
+  /** Casi siempre un solo evento; agotar los intentos de una captura son varios. */
+  events: SimEvent[];
   label: string;
 }
 
@@ -99,7 +101,7 @@ export class StudioFlowExplorer {
       expanded.add(waiting);
 
       for (const c of nextMoves(last, byId.get(waiting), escapeWords)) {
-        queue.push({ events: [...item.events, c.event], path: [...item.path, c.label] });
+        queue.push({ events: [...item.events, ...c.events], path: [...item.path, c.label] });
       }
     }
 
@@ -142,15 +144,15 @@ function nextMoves(turn: SimulatedTurn, waitingNode: FlowNode | undefined, escap
     if (!built.ok || built.payload.type !== 'interactive') continue;
     const i = built.payload.interactive;
     if (i.type === 'button') {
-      for (const b of i.action.buttons) add({ event: { type: 'button_reply', id: b.reply.id, title: b.reply.title }, label: `[botón] ${b.reply.title}` });
+      for (const b of i.action.buttons) add({ events: [{ type: 'button_reply', id: b.reply.id, title: b.reply.title }], label: `[botón] ${b.reply.title}` });
     } else if (i.type === 'list') {
       for (const s of i.action.sections) {
-        for (const r of s.rows) add({ event: { type: 'list_reply', id: r.id, title: r.title }, label: `[lista] ${r.title}` });
+        for (const r of s.rows) add({ events: [{ type: 'list_reply', id: r.id, title: r.title }], label: `[lista] ${r.title}` });
       }
     } else if (i.type === 'media_carousel') {
       for (const card of i.action.sections[0]?.cards ?? []) {
         for (const b of card.action.buttons) {
-          if (b.type === 'reply') add({ event: { type: 'button_reply', id: b.reply.id, title: b.reply.title }, label: `[tarjeta] ${b.reply.title}` });
+          if (b.type === 'reply') add({ events: [{ type: 'button_reply', id: b.reply.id, title: b.reply.title }], label: `[tarjeta] ${b.reply.title}` });
         }
       }
     }
@@ -160,14 +162,23 @@ function nextMoves(turn: SimulatedTurn, waitingNode: FlowNode | undefined, escap
     for (const t of waitingNode.transitions) {
       if (t.condition.type === 'keyword' && t.condition.values[0]) {
         const word = t.condition.values[0];
-        add({ event: { type: 'text', text: word }, label: `"${word}"` });
+        add({ events: [{ type: 'text', text: word }], label: `"${word}"` });
       }
     }
     if (waitingNode.type === 'wait_input' || waitingNode.type === 'search_catalog') {
-      add({ event: { type: 'text', text: FREE_TEXT }, label: `"${FREE_TEXT}"` });
+      add({ events: [{ type: 'text', text: FREE_TEXT }], label: `"${FREE_TEXT}"` });
+    }
+    // C-04: una respuesta que la validación acepta, y agotar los intentos.
+    if (waitingNode.type === 'wait_input' && waitingNode.content.validation) {
+      const { validation, max_attempts: max, on_exhausted: exit } = waitingNode.content;
+      const sample = sampleCapture(validation);
+      add({ events: [{ type: 'text', text: sample }], label: `"${sample}"` });
+      if (max && exit) {
+        add({ events: Array.from({ length: max }, () => ({ type: 'text' as const, text: NONSENSE })), label: `"${NONSENSE}" ×${max}` });
+      }
     }
   }
-  for (const word of escapeWords) add({ event: { type: 'text', text: word }, label: `"${word}"` });
-  add({ event: { type: 'text', text: NONSENSE }, label: `"${NONSENSE}"` });
+  for (const word of escapeWords) add({ events: [{ type: 'text', text: word }], label: `"${word}"` });
+  add({ events: [{ type: 'text', text: NONSENSE }], label: `"${NONSENSE}"` });
   return moves;
 }

@@ -125,6 +125,24 @@ interface WizardOptionBase {
   keywords: string[];
 }
 
+/** Qué acepta una captura (C-04). Espejo de backend/src/domain/conversation/captureValidation.ts. */
+export type CaptureRule =
+  | { type: 'phone_mx' }
+  | { type: 'email' }
+  | { type: 'number'; integer?: boolean; min?: number; max?: number }
+  | { type: 'date' }
+  | { type: 'time' }
+  | { type: 'text'; min_length?: number; max_length?: number };
+
+export interface CaptureCheck {
+  rule: CaptureRule;
+  /** Vacío: el bot usa un mensaje según el tipo. */
+  errorText?: string;
+  maxAttempts: number;
+  /** Al agotar los intentos: a una persona (aviso de "no te entendí") o al menú. */
+  onExhausted: 'human' | 'menu';
+}
+
 export interface WizardCaptureOption extends WizardOptionBase {
   kind: 'capture';
   choices: null | {
@@ -136,6 +154,8 @@ export interface WizardCaptureOption extends WizardOptionBase {
   };
   question: string;
   saveAs: string;
+  /** Sin él, la pregunta acepta cualquier texto. */
+  check?: CaptureCheck;
   confirm: null | {
     text: string;
     yesTitle: string;

@@ -211,11 +211,14 @@ export interface SimConversation {
   from: string;
 }
 
-/** Variables capturadas, sin las que están vacías. */
+/**
+ * Variables capturadas, sin las que están vacías ni las internas del motor
+ * (claves con "__", como el contador de intentos de una captura, C-04).
+ */
 export function sessionVariables(session: SimSession | null): Array<[string, string]> {
   if (!session) return [];
   return Object.entries(session.context)
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .filter(([k, v]) => !k.startsWith('__') && v !== null && v !== undefined && v !== '')
     .map(([k, v]) => [k, typeof v === 'string' ? v : JSON.stringify(v)]);
 }
 

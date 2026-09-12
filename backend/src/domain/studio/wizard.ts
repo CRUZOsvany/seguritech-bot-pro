@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { BotFlow, FlowNode, Transition } from '@/domain/entities/flow';
+import { CaptureValidationSchema } from '@/domain/validators/flowSchema';
 
 /**
  * El asistente del Studio (Fase 3): lo que el operador llena en los 8 pasos,
@@ -79,6 +80,20 @@ const CaptureOptionSchema = z.object({
     })
     .nullable(),
   handoff: HandoffSchema,
+  /**
+   * Qué acepta la pregunta como respuesta (C-04). Sin él, cualquier texto.
+   * Al agotar los intentos, a una persona (con el aviso de "no te entendí",
+   * que trae el último mensaje) o de vuelta al menú.
+   */
+  check: z
+    .object({
+      rule: CaptureValidationSchema,
+      /** Vacío: un mensaje según el tipo. */
+      errorText: z.string().trim().optional(),
+      maxAttempts: z.number().int().min(1).max(5),
+      onExhausted: z.enum(['human', 'menu']),
+    })
+    .optional(),
 });
 
 const InfoOptionSchema = z.object({
@@ -279,10 +294,18 @@ export function compileWizard(spec: WizardSpec): BotFlow {
           ],
         });
       }
+      const check = o.check
+        ? {
+          validation: o.check.rule,
+          ...(o.check.errorText ? { validation_error: o.check.errorText } : {}),
+          max_attempts: o.check.maxAttempts,
+          on_exhausted: o.check.onExhausted === 'human' ? ids.notUnderstoodHandoff : START,
+        }
+        : {};
       nodes.push({
         id: ids.question(o.id),
         type: 'wait_input',
-        content: { prompt: o.question, save_to_context: o.saveAs },
+        content: { prompt: o.question, save_to_context: o.saveAs, ...check },
         transitions: [byDefault(o.confirm ? ids.confirm(o.id) : ids.handoff(o.id))],
       });
       if (o.confirm) {

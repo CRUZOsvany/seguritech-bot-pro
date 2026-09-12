@@ -1,3 +1,4 @@
+import type { CaptureValidatorName } from './captureValidation';
 import type { FlowNode, TransitionCondition } from '@/domain/entities/flow';
 
 /**
@@ -29,7 +30,20 @@ export type DecisionStep =
   /** El flow arranca desde su nodo inicial. */
   | { kind: 'session_start'; startNodeId: string; reason: 'new' | 'ended' | 'unknown_node' | 'escape_word' }
   | { kind: 'catalog_search'; nodeId: string; query: string; productId: string | null }
-  | { kind: 'validation'; nodeId: string; validator: 'numeric'; valid: boolean }
+  /**
+   * Validación de una captura (C-04). `attempt` y `exhausted` solo vienen
+   * si el paso tiene tope de intentos; al agotarlos sigue en `target`.
+   */
+  | {
+      kind: 'validation';
+      nodeId: string;
+      validator: CaptureValidatorName;
+      valid: boolean;
+      attempt?: number;
+      maxAttempts?: number;
+      exhausted?: boolean;
+      target?: string;
+    }
   /** Todas las transiciones del nodo, cuáles coincidieron y cuál ganó por especificidad. */
   | {
       kind: 'transitions';

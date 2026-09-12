@@ -135,6 +135,29 @@ describe('compileWizard', () => {
     expect(validateFlowDesign(flow).ok).toBe(true);
   });
 
+  it('captura con validación (C-04): la pregunta lleva la regla, el tope y a dónde sigue al agotarlo', () => {
+    const spec = minimal();
+    const option = spec.options[0] as Extract<WizardSpec['options'][number], { kind: 'capture' }>;
+    option.check = { rule: { type: 'phone_mx' }, maxAttempts: 2, onExhausted: 'human' };
+    const flow = compileWizard(spec);
+
+    expect(flow.nodes.find((n) => n.id === 'pedido__pregunta')?.content).toEqual({
+      prompt: '¿Qué necesitas?',
+      save_to_context: 'detalle',
+      validation: { type: 'phone_mx' },
+      max_attempts: 2,
+      on_exhausted: 'no_entendi__persona',
+    });
+    expect(validateFlowDesign(flow).ok).toBe(true);
+    expect(readWizardSpec(JSON.parse(JSON.stringify(flow)))).toEqual({ ok: true, spec });
+
+    option.check = { rule: { type: 'number', min: 1 }, errorText: 'Solo el número.', maxAttempts: 3, onExhausted: 'menu' };
+    expect(compileWizard(spec).nodes.find((n) => n.id === 'pedido__pregunta')?.content).toMatchObject({
+      validation_error: 'Solo el número.',
+      on_exhausted: 'bienvenida',
+    });
+  });
+
   it('sin palabras de escape en la especificación, el flow tampoco las trae (el motor usa las de siempre)', () => {
     const flow = compileWizard(minimal());
 
@@ -196,6 +219,9 @@ describe('WizardSpecSchema', () => {
     ['escape sin palabra de baja', (s: WizardSpec) => { s.escape = { ...ESCAPE, optOutWords: [] }; }, 'darse de baja'],
     ['escape sin palabra para una persona', (s: WizardSpec) => { s.escape = { ...ESCAPE, humanWords: [] }; }, 'hablar con una persona'],
     ['opción con el id del paso de persona', (s: WizardSpec) => { s.options[0].id = 'hablar_persona'; }, 'reservado'],
+    ['captura con tope de intentos 0', (s: WizardSpec) => {
+      (s.options[0] as { check?: unknown }).check = { rule: { type: 'email' }, maxAttempts: 0, onExhausted: 'human' };
+    }, 'maxAttempts'],
   ])('rechaza %s', (_name, change, message) => {
     const spec = minimal();
     change(spec);

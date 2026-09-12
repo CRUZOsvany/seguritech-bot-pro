@@ -152,8 +152,8 @@ class GraphContext {
       const id = stack.pop()!;
       if (seen.has(id)) continue;
       seen.add(id);
-      for (const t of transitionsOf(this.byId.get(id)!)) {
-        if (this.byId.has(t.next_node_id)) stack.push(t.next_node_id);
+      for (const next of exitsOf(this.byId.get(id)!)) {
+        if (this.byId.has(next)) stack.push(next);
       }
     }
     return seen;
@@ -171,7 +171,7 @@ class GraphContext {
     const entries = new Set<string>([this.flow.start_node_id, ...this.escapeTargets]);
     for (const n of this.reachableNodes()) {
       if (!isWaitNode(n)) continue;
-      for (const t of transitionsOf(n)) entries.add(t.next_node_id);
+      for (const next of exitsOf(n)) entries.add(next);
     }
     return [...entries].filter((id) => this.byId.has(id));
   }
@@ -194,6 +194,17 @@ class GraphContext {
 }
 
 const transitionsOf = (n: FlowNode): Transition[] => n.transitions as Transition[];
+
+/**
+ * A dónde puede seguir un paso: sus salidas y, en una captura con tope de
+ * intentos (C-04), `on_exhausted`. No es una salida más para las reglas de
+ * empates: el motor la toma solo al agotar los intentos.
+ */
+function exitsOf(n: FlowNode): string[] {
+  const exits = transitionsOf(n).map((t) => t.next_node_id);
+  if (n.type === 'wait_input' && n.content.on_exhausted) exits.push(n.content.on_exhausted);
+  return exits;
+}
 
 const WAIT_TYPES = new Set(['send_buttons', 'send_list', 'wait_input', 'search_catalog', 'request_call_permission']);
 
@@ -256,6 +267,9 @@ function ruleDestinations(ctx: GraphContext): ValidationIssue[] {
       if (!ctx.byId.has(t.next_node_id)) {
         out.push(issue('V-EST-02', 'error', `${q(n.id)} sigue a ${q(t.next_node_id)}, que no existe.`, n.id));
       }
+    }
+    if (n.type === 'wait_input' && n.content.on_exhausted && !ctx.byId.has(n.content.on_exhausted)) {
+      out.push(issue('V-EST-02', 'error', `Al agotar los intentos, ${q(n.id)} sigue a ${q(n.content.on_exhausted)}, que no existe.`, n.id));
     }
   }
   return out;

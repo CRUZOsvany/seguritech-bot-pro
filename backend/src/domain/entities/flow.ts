@@ -1,3 +1,4 @@
+import type { AnyCaptureValidation } from '@/domain/conversation/captureValidation';
 /**
  * Contrato JSON del motor de flujos (Sprint A).
  *
@@ -218,14 +219,21 @@ export interface WaitInputNode extends FlowNodeBase {
     prompt?: string;
     save_to_context?: FlowVariableKey | string;
     /**
-     * Validación mínima antes de aceptar la respuesta del cliente
-     * (depuración motor+simulador, Fase 4 — cierra C-04 del tracker de
-     * auditoría, alcance acotado a 'numeric'). Ausente = sin validación,
-     * comportamiento de siempre.
+     * Qué acepta el paso como respuesta (C-04): teléfono, correo, número con
+     * rango, fecha, hora o texto con largo. `'numeric'` es la validación de
+     * antes y se conserva. Ausente = acepta cualquier texto, como siempre.
+     * Ver domain/conversation/captureValidation.
      */
-    validation?: 'numeric';
-    /** Texto a mostrar cuando `validation` falla. Si se omite, se usa un mensaje genérico. */
+    validation?: AnyCaptureValidation;
+    /** Texto a mostrar cuando `validation` falla. Si se omite, uno según el tipo. */
     validation_error?: string;
+    /**
+     * Respuestas inválidas seguidas que se aceptan antes de salir a
+     * `on_exhausted` (una persona o el menú). Sin él, se vuelve a pedir
+     * siempre. Van juntos: uno sin el otro no publica.
+     */
+    max_attempts?: number;
+    on_exhausted?: string;
   };
 }
 

@@ -1,14 +1,14 @@
 # Studio — Fase 5: control de respuestas
 
-> **Rama:** `feat/studio-fase-5-escape` · apilada sobre #91 (Fase 4), #90, #89, #88 y #87
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), y C-04 (`feat/studio-fase-5-capturas`) sobre C-08.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
 
 | Funcionalidad | Estado |
 |---|---|
-| C-08 · Palabras de escape por tenant | **Este PR** |
-| C-04 · Validación de capturas | Pendiente |
+| C-08 · Palabras de escape por tenant | Hecha: #92 |
+| C-04 · Validación de capturas | Hecha: PR apilado sobre el de C-08 |
 | B-02 · Desambiguación | Pendiente |
 | Horario en el saludo y en el paso a humano | Pendiente |
 | Inactividad con ventana | Pendiente |
@@ -91,3 +91,58 @@ Los tres moldes JSON (`backend/scripts/*-flow.json`) y el molde de cerrajería d
 ### Decisiones para OVY
 
 - **D-5.1 · Plantillas de Supabase.** ¿Actualizo `flow_templates` con las palabras de escape (una migración que reescribe el JSON de cada plantilla) o se quedan como están? Recomiendo esperar a que se use el Studio para crear bots.
+
+---
+
+## 2. C-04 · Validación de capturas
+
+> §6: *teléfono MX (10 dígitos; acepta +52, espacios y guiones; normaliza); correo; número entero o decimal con rango; fecha y hora; texto con largo mínimo y máximo; opción de lista, ubicación e imagen. Cada captura define su mensaje de error y sus reintentos. Al agotarlos, escala o vuelve al menú (configurable).*
+
+### Qué hace
+
+Un paso `wait_input` puede declarar `validation`. Si la respuesta no sirve, el bot vuelve a pedirla con `validation_error` o con un mensaje según el tipo, y no avanza ni guarda nada. Si sirve, guarda la respuesta **normalizada**.
+
+| Tipo | Acepta | Se guarda como |
+|---|---|---|
+| `phone_mx` | 10 dígitos, con +52, 52 o 521 delante, espacios, guiones o paréntesis | `7471234567` |
+| `email` | `nombre@dominio.algo` | en minúsculas |
+| `number` | entero o decimal (coma o punto), con `min`, `max` e `integer` opcionales | `3.5` |
+| `date` | `15/03/2026`, `15-3-26`, `15/03`, `15 de marzo (de 2026)`; revisa que el día exista | `15/03/2026` o `15/03` |
+| `time` | `17:30`, `5:30 pm`, `5 pm`, `17 h`, `17:30 hrs` | `17:30` |
+| `text` | con `min_length` y `max_length` (por caracteres) | sin espacios en las orillas |
+
+`'numeric'`, la validación de antes (papelería, `pedido_cantidad`), sigue igual: mismo patrón, mismo mensaje y guarda el texto tal cual.
+
+**Intentos.** Con `max_attempts` (1 a 5) y `on_exhausted`, el motor cuenta las respuestas inválidas seguidas en la sesión (clave reservada `__capture_attempts`). Al llegar al tope sigue en `on_exhausted`; una respuesta buena reinicia la cuenta. Sin tope, vuelve a pedir siempre, como antes.
+
+| Pieza | Dónde |
+|---|---|
+| Revisar, normalizar, mensajes, ejemplos | `backend/src/domain/conversation/captureValidation.ts` |
+| Motor | `FlowInterpreter.execute`, bloque de validación de `wait_input` |
+| Contrato | `WaitInputNode` en `flow.ts`, `FlowSchema` |
+| "Por qué" | `explain.ts`: qué se esperaba y en qué intento va |
+| Validador | `on_exhausted` cuenta como salida para alcanzar pasos y llegar a una persona |
+| Explorador | Prueba una respuesta válida de cada tipo y agotar los intentos |
+| Asistente | `check` en la opción de captura; al agotar va a «Cuando no entiende» (su aviso trae el último mensaje) o al menú |
+| Panel | Paso 3, en cada captura: tipo, rango o largo, mensaje, intentos y a dónde sigue |
+
+### Validador y schema
+
+| Dónde | Qué revisa |
+|---|---|
+| V-EST-02 (error) | `on_exhausted` lleva a un paso que no existe |
+| V-EST-03 / V-CUMP-01 | Un paso al que solo se llega al agotar los intentos es alcanzable, y cuenta como vía a una persona |
+| Schema (no publica) | `max_attempts` y `on_exhausted` van juntos; tope sin validación; mínimo mayor que el máximo; tipo desconocido |
+
+### Desvíos
+
+| Especificación | Qué se hizo | Por qué |
+|---|---|---|
+| Ubicación e imagen | No están | El motor no recibe esos mensajes: el parser los extrae pero no llegan al flow (H-4) o se ignoran (H-8). Regla 2: si el motor no lo hace, no se ofrece |
+| Opción de lista | Sin tipo nuevo | Ya lo hace `send_list` con `list_item_any`: desde #85 solo acepta filas reales |
+| Fecha y hora | Formatos fijos | «mañana a las 5» necesita saber qué día es hoy en la zona del negocio; queda para cuando se decida la zona horaria del contenedor |
+| Reintentos | Contador por captura, no el general del ADR | Ver D-5.2 |
+
+### Decisiones para OVY
+
+- **D-5.2 · ADR del contador de reintentos** (`.claude/ADR_CONTADOR_REINTENTOS.md`, "propuesto, sin decidir"). La especificación exige reintentos en capturas, así que implementé la parte mínima: un contador **solo para capturas con validación**, en la sesión, sin condición nueva de transición. No es la opción B del ADR (contar los "no entendí" de cualquier paso); los menús del asistente ya tienen su escalera con pasos. ¿Das el ADR por decidido así, o lo reviso con los datos del piloto como proponía?
