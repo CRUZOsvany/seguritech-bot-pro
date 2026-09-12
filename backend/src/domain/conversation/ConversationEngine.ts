@@ -271,6 +271,11 @@ export class ConversationEngine {
       // currentNodeId/context, para retomar donde iba cuando reabra. El
       // dueño queda fuera (mismo criterio que opt-out: sigue probando su
       // bot a cualquier hora).
+      //
+      // Fase 5: con `flow.hours.when_closed = 'continue'` el flow atiende
+      // igual. Una conversación nueva empieza con el mensaje de "cerrado" y
+      // el paso a persona usa su texto de fuera de horario.
+      let closedNow = false;
       if (!isOwner) {
         const hoursCheck = this.deps.businessHours.isOpenNow(
           {
@@ -286,11 +291,22 @@ export class ConversationEngine {
             'Horario de atención no parseable (formato esperado HH:MM-HH:MM) — sin gating',
           );
         }
-        if (!hoursCheck.isOpen) {
+        if (!hoursCheck.isOpen && flow.hours?.when_closed !== 'continue') {
           turn.trace.push({ kind: 'gate', gate: 'out_of_hours' });
           await turn.send({ to: from, audience: 'customer', content: { kind: 'text', text: config.outOfHoursMessage } });
           logger.info({ tenantId, from }, 'Fuera de horario — flow no ejecutado');
           return turn.result();
+        }
+        if (!hoursCheck.isOpen) {
+          closedNow = true;
+          const startsFresh = !effectiveUser.currentNodeId || effectiveUser.currentNodeId === 'end';
+          if (startsFresh) {
+            turn.trace.push({ kind: 'gate', gate: 'out_of_hours_notice' });
+            await turn.send(
+              { to: from, audience: 'customer', content: { kind: 'text', text: config.outOfHoursMessage } },
+              { countsAsLastText: false },
+            );
+          }
         }
       }
 
@@ -323,8 +339,10 @@ export class ConversationEngine {
       let ownerNotified = false;
       for (const output of result.outputs) {
         switch (output.kind) {
-        case 'escape_to_human':
-          await turn.send({ to: from, audience: 'customer', content: { kind: 'text', text: output.userResponse } });
+        case 'escape_to_human': {
+          const closedText = closedNow && output.userResponseClosed?.trim() ? output.userResponseClosed : null;
+          if (closedText) turn.trace.push({ kind: 'gate', gate: 'out_of_hours_handoff' });
+          await turn.send({ to: from, audience: 'customer', content: { kind: 'text', text: closedText ?? output.userResponse } });
           // Aviso al dueño por WhatsApp — best-effort: NUNCA rompe el flujo del cliente.
           // El destino (ownerPhone) viene de owner_data.whatsapp_dueno vía TenantConfig.
           if (config.ownerPhone && output.ownerAlert?.trim()) {
@@ -349,6 +367,7 @@ export class ConversationEngine {
             );
           }
           break;
+        }
 
         case 'reaction':
           if (metaMessageId) {

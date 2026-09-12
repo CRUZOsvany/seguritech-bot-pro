@@ -53,7 +53,7 @@ export type InterpreterOutput =
       filename: string;
       caption?: string;
     }
-  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string }
+  | { kind: 'escape_to_human'; userResponse: string; ownerAlert: string; userResponseClosed?: string }
   // ---- Nuevos v23.0 ----
   | {
       kind: 'cta_url';
@@ -1095,7 +1095,9 @@ export class FlowInterpreter {
     case 'escape_to_human': {
       const userResponse = await resolveText(node.content.user_response);
       const ownerAlert = await resolveText(node.content.owner_alert_template);
-      return [{ kind: 'escape_to_human', userResponse, ownerAlert }];
+      // Si es de noche lo decide ConversationEngine, que conoce el horario.
+      const closed = node.content.user_response_closed;
+      return [{ kind: 'escape_to_human', userResponse, ownerAlert, ...(closed ? { userResponseClosed: await resolveText(closed) } : {}) }];
     }
 
     case 'end':

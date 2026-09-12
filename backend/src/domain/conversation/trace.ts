@@ -81,6 +81,10 @@ export type GateName =
   | 'human_paused'
   | 'session_expired'
   | 'out_of_hours'
+  /** Fase 5: cerrado, pero el flow sigue atendiendo; una conversación nueva empieza con el aviso. */
+  | 'out_of_hours_notice'
+  /** Fase 5: cerrado; el paso a persona usó su texto de fuera de horario. */
+  | 'out_of_hours_handoff'
   | 'no_flow';
 
 export interface TransitionCandidate {

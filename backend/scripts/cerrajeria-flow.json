@@ -81,6 +81,7 @@
       "type": "escape_to_human",
       "content": {
         "user_response": "🛠️ Listo. Un cerrajero de {{nombre_negocio}} te marca en unos minutos. Ten tu teléfono a la mano.",
+        "user_response_closed": "🛠️ Listo. Un cerrajero de {{nombre_negocio}} te marca en unos minutos. Ten tu teléfono a la mano.",
         "owner_alert_template": "🚨 EMERGENCIA: {{tipo_emergencia}}\n📍 {{datos_emergencia}}\n📱 WhatsApp: {{phone}}"
       },
       "transitions": [
@@ -147,6 +148,7 @@
       "type": "escape_to_human",
       "content": {
         "user_response": "✅ Gracias. Un cerrajero de {{nombre_negocio}} te contactará para agendar y darte tu cotización.",
+        "user_response_closed": "✅ Gracias. Ahorita estamos fuera de horario: un cerrajero de {{nombre_negocio}} te contacta en cuanto abramos para agendar y darte tu cotización.",
         "owner_alert_template": "📅 AGENDAR: {{servicio}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}"
       },
       "transitions": [
@@ -222,6 +224,7 @@
       "type": "escape_to_human",
       "content": {
         "user_response": "No logré entenderte 🙏. Te conecto con alguien de {{nombre_negocio}} para que te ayude directo.",
+        "user_response_closed": "No logré entenderte 🙏. Ahorita estamos fuera de horario: alguien de {{nombre_negocio}} te escribe en cuanto abramos.",
         "owner_alert_template": "⚠️ El bot no logró entender al cliente tras 2 intentos.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: \"{{last_message}}\"\nContáctalo directo desde el chat."
       },
       "transitions": [
@@ -233,6 +236,7 @@
       "type": "escape_to_human",
       "content": {
         "user_response": "💬 Claro, te conecto con alguien de {{nombre_negocio}}.",
+        "user_response_closed": "💬 Ahorita estamos fuera de horario. Alguien de {{nombre_negocio}} te escribe en cuanto abramos.",
         "owner_alert_template": "💬 Cliente pidió hablar con una persona.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: \"{{last_message}}\""
       },
       "transitions": [
@@ -256,6 +260,7 @@
       "transitions": []
     }
   ],
+  "hours": { "when_closed": "continue" },
   "escape": {
     "menu": { "words": ["menu", "inicio", "volver"] },
     "restart": { "words": ["reiniciar", "empezar de nuevo", "cancelar", "salir"] },

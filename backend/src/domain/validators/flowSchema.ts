@@ -262,6 +262,7 @@ const EscapeToHumanNodeSchema = z.object({
   type: z.literal('escape_to_human'),
   content: z.object({
     user_response: z.string().min(1),
+    user_response_closed: z.string().min(1).max(4096, 'Meta: text body ≤ 4096 chars').optional(),
     owner_alert_template: z.string().min(1),
   }),
   transitions: z.array(TransitionSchema),
@@ -503,6 +504,7 @@ export const FlowSchema = z
     studio: z.object({ wizard: z.unknown() }).optional(),
     // Palabras de escape (C-08). El validador de diseño revisa además que
     // haya baja y que la de persona lleve a una persona.
+    hours: z.object({ when_closed: z.enum(['block', 'continue']) }).optional(),
     escape: z
       .object({
         menu: z.object({ words: EscapeWordsSchema, node_id: z.string().min(1).optional() }).optional(),

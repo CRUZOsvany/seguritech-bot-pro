@@ -37,6 +37,7 @@ export function defaultWizardEscape(): NonNullable<WizardSpec['escape']> {
     handoff: {
       userResponse: '💬 Claro, te conecto con alguien de {{nombre_negocio}}.',
       ownerAlert: '💬 Cliente pidió hablar con una persona.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: "{{last_message}}"',
+      userResponseClosed: '💬 Ahorita estamos fuera de horario. Alguien de {{nombre_negocio}} te escribe en cuanto abramos.',
     },
   };
 }
@@ -64,6 +65,9 @@ const cerrajeria: StudioMold = {
   },
   spec: {
     version: 1,
+    // Emergencias 24/7: fuera de horario el bot sigue atendiendo, y el
+    // mensaje de "cerrado" sugerido promete justo eso.
+    hours: { whenClosed: 'continue' },
     menu: { listButtonLabel: 'Ver opciones', listSectionTitle: 'Opciones' },
     options: [
       {
@@ -99,6 +103,8 @@ const cerrajeria: StudioMold = {
         handoff: {
           userResponse: '🛠️ Listo. Un cerrajero de {{nombre_negocio}} te marca en unos minutos. Ten tu teléfono a la mano.',
           ownerAlert: '🚨 EMERGENCIA: {{tipo_emergencia}}\n📍 {{datos_emergencia}}\n📱 WhatsApp: {{phone}}',
+          // Emergencias 24/7: el mismo texto a cualquier hora, a propósito.
+          userResponseClosed: '🛠️ Listo. Un cerrajero de {{nombre_negocio}} te marca en unos minutos. Ten tu teléfono a la mano.',
         },
       },
       {
@@ -133,6 +139,7 @@ const cerrajeria: StudioMold = {
         handoff: {
           userResponse: '✅ Gracias. Un cerrajero de {{nombre_negocio}} te contactará para agendar y darte tu cotización.',
           ownerAlert: '📅 AGENDAR: {{servicio}}\n📝 {{detalle_servicio}}\n📱 WhatsApp: {{phone}}',
+          userResponseClosed: '✅ Gracias. Ahorita estamos fuera de horario: un cerrajero de {{nombre_negocio}} te contacta en cuanto abramos para agendar y darte tu cotización.',
         },
       },
       {
@@ -154,6 +161,7 @@ const cerrajeria: StudioMold = {
       retryText: 'Sigo sin entenderte 😕. Elige una opción o te conecto directo con alguien:',
       handoff: {
         userResponse: 'No logré entenderte 🙏. Te conecto con alguien de {{nombre_negocio}} para que te ayude directo.',
+        userResponseClosed: 'No logré entenderte 🙏. Ahorita estamos fuera de horario: alguien de {{nombre_negocio}} te escribe en cuanto abramos.',
         ownerAlert:
           '⚠️ El bot no logró entender al cliente tras 2 intentos.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: "{{last_message}}"\nContáctalo directo desde el chat.',
       },

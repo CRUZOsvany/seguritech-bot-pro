@@ -145,6 +145,10 @@ function explainGate(
     return 'Pasó demasiado tiempo desde el último mensaje, o el negocio cerró en medio: se avisa y la conversación empieza de nuevo.';
   case 'out_of_hours':
     return 'Está fuera del horario del negocio: se manda el mensaje de "cerrado" y la conversación se queda donde iba.';
+  case 'out_of_hours_notice':
+    return 'Está fuera del horario del negocio, pero este flujo sigue atendiendo: primero va el mensaje de "cerrado" y la conversación empieza.';
+  case 'out_of_hours_handoff':
+    return 'Fuera de horario, el paso a persona usa su texto de fuera de horario. El aviso al dueño se manda igual.';
   case 'no_flow':
     return 'El negocio no tiene un flujo publicado: se contesta "en mantenimiento".';
   }

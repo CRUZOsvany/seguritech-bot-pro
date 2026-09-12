@@ -260,6 +260,11 @@ export interface EscapeToHumanNode extends FlowNodeBase {
   type: 'escape_to_human';
   content: {
     user_response: string;
+    /**
+     * Lo que ve el cliente si pasa a una persona con el negocio cerrado
+     * (solo con `hours.when_closed: 'continue'`). Sin él, `user_response`.
+     */
+    user_response_closed?: string;
     owner_alert_template: string;
   };
 }
@@ -488,6 +493,14 @@ export interface BotFlow {
    * clave, el motor usa las de siempre (ver domain/conversation/escapeWords).
    */
   escape?: FlowEscape;
+  /**
+   * Qué hace el bot fuera del horario del negocio (Fase 5). `block` (o sin
+   * esta clave): solo manda el mensaje de "cerrado" y no corre el flow, como
+   * siempre. `continue`: el flow atiende igual; una conversación nueva
+   * empieza con el mensaje de "cerrado" y cada paso a persona usa su
+   * `user_response_closed`.
+   */
+  hours?: { when_closed: 'block' | 'continue' };
 }
 
 /**
