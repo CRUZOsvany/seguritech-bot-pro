@@ -37,7 +37,6 @@ function buildApp(update: jest.Mock) {
     requireAdmin,
     assignMoldeUseCase: noop,
     setTenantStatusUseCase: noop,
-    simulateMessageUseCase: noop,
     simulateConversationUseCase: noop,
     createTenantUseCase: noop,
     tenantRepository: { update } as unknown as TenantRepository,

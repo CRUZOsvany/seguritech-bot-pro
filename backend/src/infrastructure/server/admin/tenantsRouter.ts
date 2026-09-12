@@ -3,7 +3,6 @@ import type pino from 'pino';
 import { z } from 'zod';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
-import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 import { OwnerDataIncompleteError } from '@/domain/ports/TenantRepository';
@@ -18,14 +17,15 @@ import { ctx, errMsg } from './helpers';
 
 /**
  * Sub-router del CRUD base de tenants + endpoints transversales que cuelgan del
- * tenant (templates, molde, status, mensajes, audit-log, simulador).
- * Rutas: /api/admin/tenants[...], /api/admin/templates, /api/admin/audit-log,
- * /api/admin/simulate[...].
+ * tenant (templates, molde, status, mensajes, audit-log).
+ * Rutas: /api/admin/tenants[...], /api/admin/templates, /api/admin/audit-log.
+ *
+ * El simulador viejo (POST /api/admin/simulate[/reset]) se borró el
+ * 2026-09-11; el del Studio vive en studioRouter.
  */
 export function createTenantsRouter(params: {
   assignMoldeUseCase: AssignMoldeUseCase;
   setTenantStatusUseCase: SetTenantStatusUseCase;
-  simulateMessageUseCase: SimulateMessageUseCase;
   createTenantUseCase: CreateTenantUseCase;
   tenantRepository: TenantRepository;
   tenantServiceRepository: TenantServiceRepository;
@@ -41,7 +41,6 @@ export function createTenantsRouter(params: {
   const {
     assignMoldeUseCase,
     setTenantStatusUseCase,
-    simulateMessageUseCase,
     createTenantUseCase,
     tenantRepository,
     tenantServiceRepository,
@@ -520,141 +519,6 @@ export function createTenantsRouter(params: {
     } catch (err) {
       logger.error({ err }, 'GET /api/admin/audit-log failed');
       res.status(500).json({ error: 'Error interno' });
-    }
-  });
-
-  // ============================================================
-  // POST /api/admin/simulate
-  // ============================================================
-  router.post('/simulate', async (req: Request, res: Response) => {
-    const {
-      tenantId,
-      phoneNumber,
-      content,
-      persist,
-      source,
-      flowId,
-      versionId,
-      state,
-      simulateAt,
-      simulatedElapsedMinutes,
-    } = req.body ?? {};
-
-    if (typeof tenantId !== 'string' || tenantId.trim() === '') {
-      res.status(400).json({ error: 'tenantId requerido (string)' });
-      return;
-    }
-    // Aislamiento multi-tenant: un admin_operator solo puede simular sobre SU
-    // propio tenant. tenantId viene del body (no de :id), así que
-    // requireTenantScope no aplica tal cual — chequeo equivalente inline.
-    if (req.admin?.role !== 'super_admin' && req.admin?.tenantId !== tenantId) {
-      res.status(403).json({ error: 'No autorizado para este tenant' });
-      return;
-    }
-    if (typeof phoneNumber !== 'string' || phoneNumber.trim() === '') {
-      res.status(400).json({ error: 'phoneNumber requerido (string)' });
-      return;
-    }
-    if (typeof content !== 'string' || content.trim() === '') {
-      res.status(400).json({ error: 'content requerido (string)' });
-      return;
-    }
-    // Bloque A1: selección de fuente del flow (opcional, default 'active').
-    if (source !== undefined && !['active', 'draft', 'version'].includes(source)) {
-      res.status(400).json({ error: "source debe ser 'active' | 'draft' | 'version'" });
-      return;
-    }
-    if (source === 'draft' && (typeof flowId !== 'string' || flowId.trim() === '')) {
-      res.status(400).json({ error: "source='draft' requiere flowId (string)" });
-      return;
-    }
-    if (source === 'version' && (typeof versionId !== 'string' || versionId.trim() === '')) {
-      res.status(400).json({ error: "source='version' requiere versionId (string)" });
-      return;
-    }
-    // Estado encadenado del turno anterior (modo efímero). Opcional y, de venir,
-    // debe ser un objeto plano; `currentNodeId`/`context` se validan por forma.
-    if (state !== undefined && (typeof state !== 'object' || state === null || Array.isArray(state))) {
-      res.status(400).json({ error: 'state debe ser un objeto { currentNodeId?, context? }' });
-      return;
-    }
-    // Fase 4 (reconexión Designer/Simulador): ISO 8601 opcional — hora a la
-    // que se simula el mensaje, para probar el gate de horario de atención.
-    if (
-      simulateAt !== undefined &&
-      (typeof simulateAt !== 'string' || Number.isNaN(new Date(simulateAt).getTime()))
-    ) {
-      res.status(400).json({ error: 'simulateAt debe ser una fecha ISO 8601 válida' });
-      return;
-    }
-    // Fase 3 (depuración motor+simulador): minutos a "avanzar" desde el turno
-    // anterior para probar el gate de expiración de sesión (DEC-07) sin
-    // esperar 2h reales. Opcional; de venir, número finito y no negativo.
-    if (
-      simulatedElapsedMinutes !== undefined &&
-      (typeof simulatedElapsedMinutes !== 'number' ||
-        !Number.isFinite(simulatedElapsedMinutes) ||
-        simulatedElapsedMinutes < 0)
-    ) {
-      res
-        .status(400)
-        .json({ error: 'simulatedElapsedMinutes debe ser un número de minutos >= 0' });
-      return;
-    }
-
-    try {
-      const result = await simulateMessageUseCase.execute({
-        tenantId,
-        phoneNumber,
-        content,
-        persist: persist === true,
-        source,
-        flowId,
-        versionId,
-        state: state as { currentNodeId?: string; context?: Record<string, unknown> } | undefined,
-        simulateAt,
-        simulatedElapsedMinutes,
-      });
-
-      if (result.error) {
-        res.status(404).json({ error: result.error });
-        return;
-      }
-
-      res.json({
-        outputs: result.outputs,
-        nextNodeId: result.nextNodeId,
-        context: result.context,
-        flowEnded: result.flowEnded,
-      });
-    } catch (err: unknown) {
-      logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate failed');
-      res.status(500).json({ error: 'Error en simulate' });
-    }
-  });
-
-  // ============================================================
-  // POST /api/admin/simulate/reset
-  // ============================================================
-  router.post('/simulate/reset', async (req: Request, res: Response) => {
-    const { tenantId, phoneNumber } = req.body ?? {};
-
-    if (typeof tenantId !== 'string' || typeof phoneNumber !== 'string') {
-      res.status(400).json({ error: 'tenantId y phoneNumber requeridos' });
-      return;
-    }
-    // Mismo aislamiento multi-tenant que en POST /simulate (ver comentario ahí).
-    if (req.admin?.role !== 'super_admin' && req.admin?.tenantId !== tenantId) {
-      res.status(403).json({ error: 'No autorizado para este tenant' });
-      return;
-    }
-
-    try {
-      await simulateMessageUseCase.reset(tenantId, phoneNumber);
-      res.json({ success: true });
-    } catch (err: unknown) {
-      logger.error({ err, tenantId, phoneNumber }, 'POST /api/admin/simulate/reset failed');
-      res.status(500).json({ error: 'Error reseteando' });
     }
   });
 

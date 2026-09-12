@@ -274,7 +274,6 @@ export class Bootstrap {
         requireAdmin,
         assignMoldeUseCase: this.container.getAssignMoldeUseCase(),
         setTenantStatusUseCase: this.container.getSetTenantStatusUseCase(),
-        simulateMessageUseCase: this.container.getSimulateMessageUseCase(),
         simulateConversationUseCase: this.container.getSimulateConversationUseCase(),
         createTenantUseCase: this.container.getCreateTenantUseCase(),
         tenantRepository,

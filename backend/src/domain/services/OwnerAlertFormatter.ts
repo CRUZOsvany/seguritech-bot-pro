@@ -1,10 +1,10 @@
 /**
  * Formato compartido de la alerta que recibe el dueño cuando el bot escala
  * una conversación a humano (escape_to_human). Antes vivía como método
- * privado de BotController.enrichOwnerAlert — se extrae aquí (depuración
- * motor+simulador, Fase 2) para que SimulateMessageUseCase (el panel de
- * simulación) genere EXACTAMENTE el mismo texto que el dueño recibiría de
- * verdad, en vez de mostrar el owner_alert_template crudo del flow.
+ * privado de BotController.enrichOwnerAlert — se extrajo aquí (depuración
+ * motor+simulador, Fase 2) para que el simulador muestre EXACTAMENTE el
+ * mismo texto que el dueño recibiría de verdad, en vez del
+ * owner_alert_template crudo del flow. Hoy lo llama ConversationEngine.
  *
  * Agrega al alert escrito a mano en el flow un pie fijo con: link wa.me al
  * cliente, hora actual, y el código para reanudarlo con #listo — sin

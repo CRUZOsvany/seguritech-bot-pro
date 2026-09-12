@@ -27,7 +27,7 @@ Estas reglas existen porque un agente de codificación sin ellas tiende a "compl
 
    Si un método que necesitas no está ahí, **es una tarea nueva que hay que diseñar y anotar en este plan**, no un método que "seguro ya existe en otro lado".
 
-2. **Un caso de uso, un archivo, un test.** Sigue el patrón exacto de `backend/src/domain/use-cases/SimulateMessageUseCase.ts` y su test en `backend/src/tests/unit/SimulateMessageUseCase.test.ts`. Ninguna pieza de dominio nueva se marca "hecha" sin su test unitario en el mismo commit.
+2. **Un caso de uso, un archivo, un test.** Sigue el patrón exacto de `backend/src/domain/use-cases/SimulateConversationUseCase.ts` y su test en `backend/src/tests/unit/SimulateConversationUseCase.test.ts` (el ejemplo anterior, `SimulateMessageUseCase`, se borró el 2026-09-11). Ninguna pieza de dominio nueva se marca "hecha" sin su test unitario en el mismo commit.
 
 3. **`tenantId` siempre, como primer argumento.** Sin excepción, replicando el patrón ya usado en `UserRepository` y `NotificationPort`. Cualquier tabla nueva sin `tenant_id` + RLS no se mergea.
 

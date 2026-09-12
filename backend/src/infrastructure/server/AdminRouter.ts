@@ -2,7 +2,6 @@ import { Router } from 'express';
 import type pino from 'pino';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
-import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 import type { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository } from '@/domain/ports/TenantRepository';
@@ -50,7 +49,6 @@ export function createAdminRouter(params: {
   requireAdmin: Mw;
   assignMoldeUseCase: AssignMoldeUseCase;
   setTenantStatusUseCase: SetTenantStatusUseCase;
-  simulateMessageUseCase: SimulateMessageUseCase;
   /** Simulador del Studio (Fase 1): el motor real con adaptadores falsos. */
   simulateConversationUseCase: SimulateConversationUseCase;
   createTenantUseCase: CreateTenantUseCase;
@@ -85,7 +83,6 @@ export function createAdminRouter(params: {
     requireAdmin,
     assignMoldeUseCase,
     setTenantStatusUseCase,
-    simulateMessageUseCase,
     simulateConversationUseCase,
     createTenantUseCase,
     tenantRepository,
@@ -166,7 +163,6 @@ export function createAdminRouter(params: {
     createTenantsRouter({
       assignMoldeUseCase,
       setTenantStatusUseCase,
-      simulateMessageUseCase,
       createTenantUseCase,
       tenantRepository,
       tenantServiceRepository,

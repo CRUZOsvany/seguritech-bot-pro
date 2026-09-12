@@ -201,7 +201,7 @@ Numeración heredada de la auditoría del 2026-08-26. Lo cerrado no se repite aq
 | ID | Qué falta |
 |---|---|
 | E-01 | **Cero tests en frontend, sin runner instalado.** Alcance decidido (DEC-11): ValidationPanel + serialización + hooks de TanStack Query |
-| D-03 | `/simulate` con `persist:true` no registra en audit log (cobertura 27/29) |
+| D-03 | ~~`/simulate` con `persist:true` no registra en audit log~~ **Cerrado el 2026-09-11:** el endpoint se borró. El simulador del Studio no escribe en la base |
 | — | 28 ramas mergeadas sin podar (§7.4), y el PR #55 lleva desde el 2026-08-21 abierto y 49 commits atrás |
 | — | **Sin regla escrita sobre la rama base de un PR.** Es lo que permitió §7.1: cinco PRs contra una rama ya mergeada, con el CI verde validando el merge equivocado |
 | — | Supabase CLI sin enlazar → cada migración mergeada puede quedar sin aplicar |

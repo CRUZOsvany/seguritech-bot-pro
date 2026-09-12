@@ -126,7 +126,7 @@ Es lo que convierte "diseñar mejor los bots" en algo verificable, y da más val
 
 - [ ] Tabla `bot_flow_test_cases`
 - [ ] UI mínima en el Designer: `inputs[] → expected last_node + outputs contains`
-- [ ] Runner contra `SimulateMessageUseCase`
+- [x] Runner con el motor real: `StudioFlowTestRunner` sobre `SimulateConversationUseCase` (Studio, Fase 4). `SimulateMessageUseCase` se borró el 2026-09-11
 - [ ] **Gate:** no se publica una versión con un caso en rojo
 - [ ] 3–5 casos para el flow del tenant cero como primer ejemplo
 
@@ -161,7 +161,7 @@ El flow más maduro usa 6 de los 14 tipos de nodo. Esto es ganancia disponible s
 - [ ] CRUD de catálogo producto a producto (E-03). Hoy solo hay import CSV, y eso obliga a que un desarrollador intervenga en cada ajuste
 - [ ] Tests del frontend (E-01, alcance DEC-11): ValidationPanel, serialización, hooks de TanStack Query. Hoy no hay ni runner instalado
 - [ ] Completar el espejo de tipos en `designer/flow-types.ts` — le faltan `TransitionCondition` de `service_directory_match`, `catalog_found` y `catalog_not_found`
-- [ ] Audit log en `/simulate` con `persist:true` (D-03)
+- [x] ~~Audit log en `/simulate` con `persist:true` (D-03)~~ Ya no aplica: el endpoint se borró el 2026-09-11
 
 ### Moldes por industria
 
