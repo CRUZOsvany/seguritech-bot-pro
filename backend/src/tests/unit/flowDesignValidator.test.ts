@@ -273,6 +273,76 @@ describe('validateFlowDesign', () => {
       expect(validateFlowDesign(f).issues).toContainEqual(expect.objectContaining({ code: 'V-CUMP-01', nodeId: 'encierro' }));
     });
 
+    describe('con palabras de escape (C-08)', () => {
+      /** Un paso sin salida a una persona, cubierto solo por la palabra de escape. */
+      const escaped = (escape: BotFlow['escape']) => flowWith((f) => {
+        node(f, 'info').transitions = [{ condition: { type: 'default' }, next_node_id: 'encierro' }];
+        f.nodes.push({
+          id: 'encierro',
+          type: 'send_buttons',
+          content: { text: '¿Algo más?', buttons: [{ id: 'no', title: 'No' }] },
+          transitions: [{ condition: { type: 'default' }, next_node_id: 'fin' }],
+        });
+        f.escape = escape;
+      });
+      const HUMAN = { words: ['asesor'], node_id: 'humano' };
+      /** Sin V-COSTO-01: el fixture manda un texto justo antes de un menú, a propósito. */
+      const relevant = (f: BotFlow) => codes(f).filter((c) => c !== 'warning:V-COSTO-01');
+      const relevantIssues = (f: BotFlow) => validateFlowDesign(f).issues.filter((i) => i.code !== 'V-COSTO-01');
+
+      it('V-CUMP-01: la palabra para hablar con una persona cubre todos los pasos', () => {
+        expect(relevant(escaped({ human: HUMAN }))).toEqual([]);
+      });
+
+      it('V-CUMP-01: la palabra lleva a un paso que no pasa a una persona', () => {
+        expect(validateFlowDesign(escaped({ human: { words: ['asesor'], node_id: 'fin' } })).issues).toContainEqual(
+          expect.objectContaining({ code: 'V-CUMP-01', level: 'error', message: expect.stringContaining('«fin»') }),
+        );
+      });
+
+      it('V-CUMP-01: un paso atrapa la palabra con una salida propia que no llega a una persona', () => {
+        const f = escaped({ human: HUMAN });
+        node(f, 'encierro').transitions.unshift({ condition: { type: 'keyword', values: ['asesor'] }, next_node_id: 'fin' });
+
+        expect(validateFlowDesign(f).issues).toContainEqual(expect.objectContaining({ code: 'V-CUMP-01', nodeId: 'encierro' }));
+      });
+
+      it('V-CUMP-01: si la salida propia sí llega a una persona, está bien', () => {
+        const f = escaped({ human: HUMAN });
+        node(f, 'encierro').transitions.unshift({ condition: { type: 'keyword', values: ['asesor'] }, next_node_id: 'humano' });
+
+        expect(relevant(f)).toEqual([]);
+      });
+
+      it('V-CUMP-02: sin palabra de baja', () => {
+        expect(relevant(escaped({ human: HUMAN, opt_out: { words: [] } }))).toEqual(['error:V-CUMP-02']);
+        expect(relevant(escaped({ human: HUMAN, opt_out: { words: ['baja'] } }))).toEqual([]);
+      });
+
+      it('V-EST-02: la palabra lleva a un paso que no existe (y el schema no publica)', () => {
+        const report = validateFlowDesign(escaped({ human: { words: ['asesor'], node_id: 'nadie' }, menu: { words: ['menu'], node_id: 'tampoco' } }));
+
+        expect(report.issues.filter((i) => i.code === 'V-EST-02')).toHaveLength(2);
+        expect(report.schema.ok).toBe(false);
+      });
+
+      it('V-EST-03: un paso al que solo se llega con la palabra no es inalcanzable', () => {
+        const f = flowWith((f) => {
+          node(f, 'menu').transitions = node(f, 'menu').transitions.filter((t) => t.next_node_id !== 'humano');
+          node(f, 'menu').content.buttons = [{ id: 'info', title: 'Info' }];
+          f.escape = { human: HUMAN };
+        });
+
+        expect(relevant(f)).toEqual([]);
+      });
+
+      it('V-EST-07: la misma palabra en dos grupos', () => {
+        expect(relevantIssues(escaped({ human: HUMAN, restart: { words: ['Cancelar'] }, opt_out: { words: ['cancelar'] } }))).toEqual([
+          expect.objectContaining({ code: 'V-EST-07', level: 'warning', message: 'La palabra "cancelar" está en baja y en empezar de nuevo: se usa solo como baja.' }),
+        ]);
+      });
+    });
+
     it.each([
       ['Mándanos el número de tu tarjeta para cobrarte', true],
       ['Pásanos tu CLABE y te depositamos', true],

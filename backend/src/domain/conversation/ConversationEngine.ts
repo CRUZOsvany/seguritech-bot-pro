@@ -13,6 +13,7 @@ import { enrichOwnerAlert } from '@/domain/services/OwnerAlertFormatter';
 import type { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import type { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import type { DecisionStep } from './trace';
+import { matchEscape, resolveEscape } from './escapeWords';
 import {
   representativeText,
   type MessengerPort,
@@ -28,21 +29,6 @@ import {
  * auto-probando su propio bot como si fuera cliente.
  */
 const OWNER_RESUME_COMMANDS = ['#listo', '#reanudar'] as const;
-
-/**
- * Palabras de opt-out real (Bloque 2.2, cumplimiento Meta). Distinto de
- * ESCAPE_WORDS del FlowInterpreter ("cancelar" ahí solo resetea el flow):
- * estas marcan `bot_users.opted_out_at` y cortan CUALQUIER envío al número
- * hasta que el cliente vuelva a escribir voluntariamente. Match exacto
- * (trim + lowercase), mismo criterio que ESCAPE_WORDS.
- */
-const OPT_OUT_WORDS = [
-  'stop',
-  'baja',
-  'no molestar',
-  'cancelar suscripcion',
-  'cancelar suscripción',
-] as const;
 
 export const OPT_OUT_CONFIRMATION =
   'Listo, no volverás a recibir mensajes de este número. ' +
@@ -101,7 +87,7 @@ export interface ConversationEngineDeps {
  * Orden de los gates, el mismo de siempre:
  *   1. sin configuración → nada
  *   2. comando del dueño (#listo)
- *   3. opt-out / opt-in implícito
+ *   3. opt-out / opt-in implícito (palabras de baja del flow, C-08)
  *   4. sin flow → "en mantenimiento"
  *   5. pausa por paso a humano → silencio
  *   6. sesión expirada → aviso y reinicio
@@ -168,11 +154,24 @@ export class ConversationEngine {
         expiresAt: new Date(message.timestamp.getTime() + SERVICE_WINDOW_MS).toISOString(),
       });
 
+      // 3. Cargar el flow activo. Va antes de la baja porque las palabras de
+      // baja son del flow (C-08); sin flow aplican las de siempre.
+      let flow: BotFlow | null = null;
+      try {
+        flow = await this.deps.flows.findActive(tenantId);
+      } catch (err) {
+        logger.error(
+          { err, tenantId },
+          'Error cargando bot_flow — respondiendo "en mantenimiento"',
+        );
+      }
+
       const isOwner = !!config.ownerPhone && isSamePhone(from, config.ownerPhone);
       if (!isOwner) {
-        if (isOptOutWord(content)) {
+        const escape = matchEscape(resolveEscape(flow), content);
+        if (escape?.category === 'opt_out') {
           await this.deps.sessions.setOptOut(tenantId, from, message.timestamp);
-          turn.trace.push({ kind: 'gate', gate: 'opt_out', detail: content.trim().toLowerCase() });
+          turn.trace.push({ kind: 'gate', gate: 'opt_out', detail: escape.word });
           await turn.send({ to: from, audience: 'customer', content: { kind: 'text', text: OPT_OUT_CONFIRMATION } });
           this.deps.audit.log({
             actorLabel: `whatsapp:${from}`,
@@ -201,17 +200,6 @@ export class ConversationEngine {
           });
           logger.info({ tenantId, from }, 'Opt-in implícito — usuario reactivado');
         }
-      }
-
-      // 3. Intentar cargar bot_flow activo
-      let flow: BotFlow | null = null;
-      try {
-        flow = await this.deps.flows.findActive(tenantId);
-      } catch (err) {
-        logger.error(
-          { err, tenantId },
-          'Error cargando bot_flow — respondiendo "en mantenimiento"',
-        );
       }
 
       // 5. Sin bot_flow activo — respuesta de mantenimiento (ADR-012).
@@ -546,12 +534,6 @@ function isSamePhone(from: string, ownerPhone: string): boolean {
   const a = normalizeDigits(from);
   const b = normalizeDigits(ownerPhone);
   return a.length > 0 && a === b;
-}
-
-/** Match exacto (trim + lowercase) contra OPT_OUT_WORDS (Bloque 2.2). */
-function isOptOutWord(content: string): boolean {
-  const trimmed = content.trim().toLowerCase();
-  return (OPT_OUT_WORDS as readonly string[]).includes(trimmed);
 }
 
 /**

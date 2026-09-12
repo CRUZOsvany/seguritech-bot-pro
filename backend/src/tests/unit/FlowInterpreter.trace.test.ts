@@ -40,10 +40,10 @@ async function execute(flow: BotFlow, nodeId: string | undefined, content: strin
 
 describe('FlowInterpreter · traza', () => {
   it('palabra de escape sin transición local: la registra, reinicia y lo dice', async () => {
-    const result = await execute(loadMold('cerrajeria'), 'menu_emergencia', 'menu');
+    const result = await execute(loadMold('cerrajeria'), 'menu_emergencia', 'cancelar');
 
     expect(result.trace?.slice(0, 2)).toEqual([
-      { kind: 'escape_word', word: 'menu', handledLocally: false },
+      { kind: 'escape_word', word: 'cancelar', category: 'restart', target: 'bienvenida', handledLocally: false },
       { kind: 'session_start', startNodeId: 'bienvenida', reason: 'escape_word' },
     ]);
     // El pre-chequeo de la palabra de escape no se reporta como la decisión del turno.
@@ -54,8 +54,17 @@ describe('FlowInterpreter · traza', () => {
     // bienvenida de papelería tiene keyword "salir" → despedida.
     const result = await execute(loadMold('papeleria'), 'bienvenida', 'salir');
 
-    expect(result.trace?.[0]).toEqual({ kind: 'escape_word', word: 'salir', handledLocally: true });
+    expect(result.trace?.[0]).toEqual({ kind: 'escape_word', word: 'salir', category: 'restart', target: 'bienvenida', handledLocally: true });
     expect(result.nextNodeId).toBe('end');
+  });
+
+  it('volver al menú: pasa al menú sin reiniciar la sesión', async () => {
+    const result = await execute(loadMold('securitech'), 'rama_camaras', '¡Menú!');
+
+    expect(result.trace?.slice(0, 2)).toEqual([
+      { kind: 'escape_word', word: 'menu', category: 'menu', target: 'menu_principal', handledLocally: false },
+      { kind: 'node_entered', nodeId: 'menu_principal', nodeType: 'send_buttons' },
+    ]);
   });
 
   it('validación numérica fallida: validación inválida y espera en el mismo nodo', async () => {

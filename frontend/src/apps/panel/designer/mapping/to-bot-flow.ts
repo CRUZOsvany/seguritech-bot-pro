@@ -15,6 +15,8 @@ export function graphToBotFlow(
   nodes: DesignerRFNode[],
   edges: DesignerRFEdge[],
   startNodeId: string,
+  /** Configuración del flow que no vive en el grafo (C-08). Se devuelve tal cual. */
+  escape?: unknown,
 ): BotFlow {
   // Índice: source -> sourceHandle -> next_node_id (último edge gana).
   const wiring = new Map<string, Map<string, string>>();
@@ -49,5 +51,6 @@ export function graphToBotFlow(
     version: '1.0',
     start_node_id: startNodeId,
     nodes: rebuilt,
+    ...(escape !== undefined ? { escape } : {}),
   };
 }

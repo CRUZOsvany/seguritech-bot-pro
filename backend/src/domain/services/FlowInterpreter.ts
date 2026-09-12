@@ -15,6 +15,7 @@ import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatch
 import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { fuzzyIncludes } from '@/domain/services/textMatch';
 import type { DecisionStep } from '@/domain/conversation/trace';
+import { matchEscape, resolveEscape } from '@/domain/conversation/escapeWords';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -96,8 +97,6 @@ export interface InterpreterResult {
 // CONSTANTES
 // ============================================================================
 
-const ESCAPE_WORDS = ['menu', 'salir', 'cancelar', 'inicio'] as const;
-
 // Nodos que SIEMPRE esperan input del usuario (paran el avance del intérprete).
 // request_call_permission espera la respuesta de permiso (granted/denied).
 // Los demás v23.0 (cta_url, reaction, location_request, whatsapp_flow) NO
@@ -166,7 +165,13 @@ export class FlowInterpreter {
     // nodo sí sabe qué hacer con él, gana la intención local — el escape
     // global vuelve a ser lo que siempre debió ser: un fallback para cuando
     // nada más matchea, no un atajo que se adelanta a todo.
-    if (this.isEscapeWord(message.content)) {
+    //
+    // C-08: las palabras son del flow (`flow.escape`) y hay tres grupos:
+    // volver al menú (conserva lo capturado), empezar de nuevo (lo borra) y
+    // hablar con una persona. La baja la resuelve ConversationEngine antes.
+    const resolvedEscape = resolveEscape(flow);
+    const escape = matchEscape(resolvedEscape, message.content);
+    if (escape && escape.category !== 'opt_out') {
       const localTransition = currentNode
         ? this.evaluateTransitions(currentNode, message, tenantConfig, {})
         : null;
@@ -180,11 +185,34 @@ export class FlowInterpreter {
         localTransition.condition.type !== 'default' &&
         localTransition.condition.type !== 'catalog_not_found';
 
+      const target =
+        escape.category === 'human'
+          ? resolvedEscape.human!.target
+          : escape.category === 'menu'
+            ? resolvedEscape.menu.target
+            : flow.start_node_id;
       trace.push({
         kind: 'escape_word',
-        word: message.content.trim().toLowerCase(),
+        word: escape.word,
+        category: escape.category,
+        target,
         handledLocally: nodeHandlesItLocally,
       });
+
+      if (!nodeHandlesItLocally && escape.category !== 'restart') {
+        // Menú y persona: siguen desde su paso sin borrar lo capturado (la
+        // alerta al dueño puede usar lo que el cliente ya dijo).
+        return this.advanceFrom({
+          flow,
+          startNodeId: target,
+          user,
+          message,
+          tenantConfig,
+          contextUpdates,
+          trace,
+          orderIdFactory,
+        });
+      }
 
       if (!nodeHandlesItLocally) {
         this.logger.debug(
@@ -1116,11 +1144,6 @@ export class FlowInterpreter {
       return node.content.cards?.[0]?.buttons[0]?.type === 'quick_reply';
     }
     return WAIT_NODE_TYPES.has(node.type);
-  }
-
-  private isEscapeWord(content: string): boolean {
-    const trimmed = content.trim().toLowerCase();
-    return (ESCAPE_WORDS as readonly string[]).includes(trimmed);
   }
 
   private maybeGenerateOrderId(node: FlowNode, orderIdFactory: () => string): string | null {

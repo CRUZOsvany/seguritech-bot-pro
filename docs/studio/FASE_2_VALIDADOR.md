@@ -57,6 +57,7 @@ Cada una tiene un test que la dispara y otro que no (`flowDesignValidator.test.t
 | V-META-05 | error | Imagen, documento, encabezado o enlace sin `https://` |
 | V-CUMP-01 | error | Ningún camino lleva a una persona, o hay un paso donde el cliente puede quedarse sin forma de llegar a una. La política de WhatsApp exige esa vía |
 | V-CUMP-06 | error | Un texto que pide datos que la política prohíbe pedir por chat: número de tarjeta, CVV/NIP, CLABE, cuenta bancaria, contraseña, identificación oficial (INE, CURP, pasaporte). Detección por frases, sin acentos ni mayúsculas; "aceptamos pago con tarjeta" no la dispara |
+| V-CUMP-02 | error | La baja del flow quedó sin palabras (Fase 5, C-08: la baja es del flow). Sin la clave `escape`, el motor usa las de siempre y se cumple |
 | V-CUMP-07 | aviso | Más de 3 mensajes seguidos del bot sin esperar respuesta, contados por turno |
 | V-COSTO-01 | aviso | Un texto suelto justo antes de otro texto o de un menú: se pueden fusionar en un mensaje |
 | V-COSTO-02 | aviso | Un turno que manda exactamente 3 mensajes (con más de 3 salta V-CUMP-07) |
@@ -72,7 +73,6 @@ Regla 2 de la especificación: si el motor no lo hace, el validador no lo revisa
 | V-EST-09 | Respuesta por tipo de entrada (audio, imagen…): el motor ignora esos mensajes, así que el flow no tiene dónde declararla (hallazgo H-8) |
 | V-META-03 | El modelo de nodos no tiene encabezados en los tipos donde Meta los prohíbe; no hay nada que revisar |
 | V-META-06 | No existe nodo de address message |
-| V-CUMP-02 | La palabra de baja es global en el motor (`stop`, `baja`…), no depende del flow: siempre se cumple |
 | V-CUMP-03, 04, 05, 08 | El motor no programa envíos, recordatorios ni plantillas. Llegan con la Fase 5 y la Fase 7 |
 
 ---

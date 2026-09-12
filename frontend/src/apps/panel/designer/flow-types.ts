@@ -226,6 +226,12 @@ export interface BotFlow {
   version: '1.0';
   start_node_id: string;
   nodes: FlowNode[];
+  /**
+   * Palabras de escape del flow (C-08). El Designer no las edita (se editan
+   * en el Studio), pero las conserva al guardar: sin ellas el bot volvería en
+   * silencio a las palabras de siempre.
+   */
+  escape?: unknown;
 }
 
 /** Flow vacío que carga el canvas cuando el flow no tiene draft (DEC-1/Fase 4). */

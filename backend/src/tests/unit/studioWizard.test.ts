@@ -118,7 +118,38 @@ describe('compileWizard', () => {
 
     expect(compileWizard(spec).studio).toEqual({ wizard: spec });
   });
+
+  it('palabras de escape (C-08): un paso de persona propio y la configuración del flow', () => {
+    const flow = compileWizard(minimal({ escape: ESCAPE }));
+
+    expect(flow.escape).toEqual({
+      menu: { words: ['menu'] },
+      human: { words: ['asesor', 'persona'], node_id: 'hablar_persona' },
+      opt_out: { words: ['baja'] },
+    });
+    expect(flow.nodes.find((n) => n.id === 'hablar_persona')).toMatchObject({
+      type: 'escape_to_human',
+      content: { user_response: 'Te comunico con alguien.', owner_alert_template: 'Pide persona: {{phone}}' },
+    });
+    expect(validateFlow(flow)).toBeTruthy();
+    expect(validateFlowDesign(flow).ok).toBe(true);
+  });
+
+  it('sin palabras de escape en la especificación, el flow tampoco las trae (el motor usa las de siempre)', () => {
+    const flow = compileWizard(minimal());
+
+    expect(flow.escape).toBeUndefined();
+    expect(flow.nodes.some((n) => n.id === 'hablar_persona')).toBe(false);
+  });
 });
+
+const ESCAPE: NonNullable<WizardSpec['escape']> = {
+  menuWords: ['menu'],
+  restartWords: [],
+  humanWords: ['asesor', 'persona'],
+  optOutWords: ['baja'],
+  handoff: { userResponse: 'Te comunico con alguien.', ownerAlert: 'Pide persona: {{phone}}' },
+};
 
 describe('readWizardSpec', () => {
   it('lee de vuelta lo que compiló, aunque Postgres reordene las claves', () => {
@@ -139,6 +170,13 @@ describe('readWizardSpec', () => {
     expect(readWizardSpec(flow)).toEqual({ ok: false, reason: 'edited_elsewhere' });
   });
 
+  it('detecta también un cambio en las palabras de escape hecho fuera del asistente', () => {
+    const flow = compileWizard(minimal({ escape: ESCAPE }));
+    flow.escape!.opt_out = { words: ['baja', 'alto'] };
+
+    expect(readWizardSpec(flow)).toEqual({ ok: false, reason: 'edited_elsewhere' });
+  });
+
   it('una especificación que ya no es válida', () => {
     expect(readWizardSpec({ ...compileWizard(minimal()), studio: { wizard: { version: 99 } } })).toEqual({
       ok: false,
@@ -155,6 +193,9 @@ describe('WizardSpecSchema', () => {
     ['botón de información a una opción que no existe', (s: WizardSpec) => {
       s.options.push({ id: 'info', title: 'Info', kind: 'info', keywords: [], text: 'x', actions: [{ title: 'Ir', goto: 'fantasma' }] });
     }, 'no existe'],
+    ['escape sin palabra de baja', (s: WizardSpec) => { s.escape = { ...ESCAPE, optOutWords: [] }; }, 'darse de baja'],
+    ['escape sin palabra para una persona', (s: WizardSpec) => { s.escape = { ...ESCAPE, humanWords: [] }; }, 'hablar con una persona'],
+    ['opción con el id del paso de persona', (s: WizardSpec) => { s.options[0].id = 'hablar_persona'; }, 'reservado'],
   ])('rechaza %s', (_name, change, message) => {
     const spec = minimal();
     change(spec);

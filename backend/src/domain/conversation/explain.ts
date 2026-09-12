@@ -46,11 +46,7 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
       lines.push(explainGate(step.gate, step.detail, when));
       break;
     case 'escape_word':
-      lines.push(
-        step.handledLocally
-          ? `"${step.word}" es palabra de escape, pero este paso tiene su propia respuesta para ella: se respeta el paso.`
-          : `"${step.word}" es palabra de escape: la conversación vuelve al inicio y se borra lo capturado.`,
-      );
+      lines.push(explainEscape(step));
       break;
     case 'session_start':
       lines.push(explainStart(step.reason, step.startNodeId));
@@ -142,6 +138,21 @@ function explainGate(
     return 'Está fuera del horario del negocio: se manda el mensaje de "cerrado" y la conversación se queda donde iba.';
   case 'no_flow':
     return 'El negocio no tiene un flujo publicado: se contesta "en mantenimiento".';
+  }
+}
+
+function explainEscape(step: Extract<DecisionStep, { kind: 'escape_word' }>): string {
+  const what = { menu: 'volver al menú', restart: 'empezar de nuevo', human: 'hablar con una persona' }[step.category];
+  if (step.handledLocally) {
+    return `"${step.word}" es la palabra para ${what}, pero este paso tiene su propia respuesta para ella: se respeta el paso.`;
+  }
+  switch (step.category) {
+  case 'menu':
+    return `"${step.word}" es la palabra para volver al menú: pasa a ${q(step.target)} y conserva lo capturado.`;
+  case 'restart':
+    return `"${step.word}" es la palabra para empezar de nuevo: se borra lo capturado.`;
+  case 'human':
+    return `"${step.word}" es la palabra para hablar con una persona: pasa a ${q(step.target)}.`;
   }
 }
 

@@ -75,6 +75,8 @@ interface DesignerState {
   flowId: string | null;
   selectedId: string | null;
   dirty: boolean;
+  /** `escape` del flow cargado (C-08): no se edita aquí, se conserva al guardar. */
+  escape: unknown;
 
   /**
    * `markDirty` (P6): por default false — cargar el draft persistido al abrir
@@ -130,7 +132,8 @@ interface DesignerState {
   moveTransition: (nodeId: string, fromIdx: number, toIdx: number) => void;
 }
 
-const EMPTY: Pick<DesignerState, 'nodes' | 'edges' | 'startNodeId' | 'flowId' | 'selectedId' | 'dirty'> = {
+const EMPTY: Pick<DesignerState, 'nodes' | 'edges' | 'startNodeId' | 'flowId' | 'selectedId' | 'dirty' | 'escape'> = {
+  escape: undefined,
   nodes: [],
   edges: [],
   startNodeId: '',
@@ -148,6 +151,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       nodes,
       edges,
       startNodeId: flow.start_node_id,
+      escape: flow.escape,
       flowId,
       selectedId: null,
       dirty: markDirty,
@@ -155,8 +159,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   },
 
   toBotFlow: () => {
-    const { nodes, edges, startNodeId } = get();
-    return graphToBotFlow(nodes, edges, startNodeId);
+    const { nodes, edges, startNodeId, escape } = get();
+    return graphToBotFlow(nodes, edges, startNodeId, escape);
   },
 
   onNodesChange: (changes) => {

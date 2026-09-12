@@ -160,12 +160,26 @@ export interface WizardHumanOption extends WizardOptionBase {
 
 export type WizardOption = WizardCaptureOption | WizardInfoOption | WizardHumanOption;
 
+/** Palabras que funcionan en cualquier paso (C-08). */
+export interface WizardEscape {
+  /** Vuelven al menú sin borrar lo que el cliente ya dijo. */
+  menuWords: string[];
+  /** Borran lo capturado y empiezan desde el saludo. */
+  restartWords: string[];
+  humanWords: string[];
+  optOutWords: string[];
+  /** El paso de persona al que llevan las palabras de persona. */
+  handoff: WizardHandoff;
+}
+
 export interface WizardSpec {
   version: 1;
   menu: { listButtonLabel: string; listSectionTitle: string };
   options: WizardOption[];
   notUnderstood: { attempts: number; retryText: string; handoff: WizardHandoff };
   farewell: { text: string; keywords: string[] };
+  /** Sin ella el bot usa las palabras de siempre y no tiene palabra para pedir una persona. */
+  escape?: WizardEscape;
 }
 
 export interface StudioMold {
@@ -181,9 +195,14 @@ export interface StudioMold {
   };
 }
 
-export async function getMolds(): Promise<StudioMold[]> {
-  const res = await apiFetch<{ molds: StudioMold[] }>('GET', '/api/admin/studio/molds');
-  return res.molds;
+export interface StudioMolds {
+  molds: StudioMold[];
+  /** Palabras de escape que propone el Studio a un bot que no las tiene. */
+  escapeDefaults: WizardEscape;
+}
+
+export function getMolds(): Promise<StudioMolds> {
+  return apiFetch<StudioMolds>('GET', '/api/admin/studio/molds');
 }
 
 export interface WizardState {

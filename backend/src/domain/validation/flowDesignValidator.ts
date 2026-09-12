@@ -1,15 +1,24 @@
 import type { BotFlow, FlowNode, Transition, TransitionCondition } from '@/domain/entities/flow';
 import { WHATSAPP_LIMITS as L } from '@/domain/whatsapp/limits';
 import { FlowSchema } from '@/domain/validators/flowSchema';
+import { resolveEscape, wordsOf, type EscapeCategory, type ResolvedEscape } from '@/domain/conversation/escapeWords';
+import { fuzzyIncludes, normalizePhrase } from '@/domain/services/textMatch';
+
+const ESCAPE_CATEGORIES: EscapeCategory[] = ['opt_out', 'human', 'restart', 'menu'];
+const ESCAPE_LABEL: Record<EscapeCategory, string> = {
+  opt_out: 'baja',
+  human: 'hablar con una persona',
+  restart: 'empezar de nuevo',
+  menu: 'volver al menú',
+};
 
 /**
  * Validador de diseño del Studio (Fase 2): las reglas V-* de la
  * especificación que el motor puede cumplir hoy.
  *
- * Es el mismo en el editor (en vivo), en CI (moldes) y, a partir de la Fase 4,
- * en la publicación. Hoy INFORMA: publicar sigue decidiéndolo FlowSchema.
- * Por eso el reporte trae aparte `schema`, que dice si el flow se podría
- * publicar ahora mismo.
+ * Es el mismo en el editor (en vivo), en CI (moldes) y en la publicación
+ * (Fase 4: un error la bloquea). El reporte trae aparte `schema`, el
+ * contrato mínimo del motor (FlowSchema).
  *
  * Límites de Meta: de domain/whatsapp/limits.ts, nunca escritos aquí.
  *
@@ -17,9 +26,8 @@ import { FlowSchema } from '@/domain/validators/flowSchema';
  * hace lo que revisan: V-EST-09 (respuesta por tipo de entrada: el motor
  * ignora audio, imagen y demás, hallazgo H-8), V-META-03 (el modelo de nodos
  * no tiene encabezados donde Meta los prohíbe), V-META-06 (no hay nodo de
- * address message), V-CUMP-02 (la palabra de baja es global en el motor, no
- * del flow), V-CUMP-03/04/05/08 (el motor no programa envíos, recordatorios
- * ni plantillas). Detalle: docs/studio/FASE_2_VALIDADOR.md.
+ * address message), V-CUMP-03/04/05/08 (el motor no programa envíos,
+ * recordatorios ni plantillas). Detalle: docs/studio/FASE_2_VALIDADOR.md.
  */
 
 export type IssueLevel = 'error' | 'warning';
@@ -112,6 +120,7 @@ function runRules(flow: BotFlow): ValidationIssue[] {
     ...ruleCarouselConsistency(ctx),
     ...ruleMedia(ctx),
     ...ruleHumanPath(ctx),
+    ...ruleOptOut(ctx),
     ...ruleSensitiveData(ctx),
     ...ruleBursts(ctx),
     ...ruleMergeable(ctx),
@@ -121,10 +130,18 @@ function runRules(flow: BotFlow): ValidationIssue[] {
 class GraphContext {
   readonly byId = new Map<string, FlowNode>();
   readonly reachable: Set<string>;
+  readonly escape: ResolvedEscape;
+  /** Pasos a los que se llega con una palabra de escape desde cualquier paso. */
+  readonly escapeTargets: string[];
 
   constructor(readonly flow: BotFlow) {
     for (const n of flow.nodes) if (!this.byId.has(n.id)) this.byId.set(n.id, n);
-    this.reachable = this.reachFrom([flow.start_node_id]);
+    this.escape = resolveEscape(flow);
+    this.escapeTargets = [
+      ...(this.escape.menu.words.length ? [this.escape.menu.target] : []),
+      ...(this.escape.human ? [this.escape.human.target] : []),
+    ];
+    this.reachable = this.reachFrom([flow.start_node_id, ...this.escapeTargets]);
   }
 
   /** Nodos alcanzables siguiendo cualquier salida. */
@@ -151,7 +168,7 @@ class GraphContext {
    * que espera al cliente (tras su respuesta, el motor avanza desde ahí).
    */
   turnEntries(): string[] {
-    const entries = new Set<string>([this.flow.start_node_id]);
+    const entries = new Set<string>([this.flow.start_node_id, ...this.escapeTargets]);
     for (const n of this.reachableNodes()) {
       if (!isWaitNode(n)) continue;
       for (const t of transitionsOf(n)) entries.add(t.next_node_id);
@@ -225,6 +242,15 @@ function ruleStart(ctx: GraphContext): ValidationIssue[] {
 /** V-EST-02: una salida apunta a un paso que no existe. */
 function ruleDestinations(ctx: GraphContext): ValidationIssue[] {
   const out: ValidationIssue[] = [];
+  const escapeTargets: Array<[string, string | undefined]> = [
+    ['volver al menú', ctx.flow.escape?.menu?.node_id],
+    ['hablar con una persona', ctx.flow.escape?.human?.node_id],
+  ];
+  for (const [what, target] of escapeTargets) {
+    if (target && !ctx.byId.has(target)) {
+      out.push(issue('V-EST-02', 'error', `La palabra para ${what} lleva a ${q(target)}, que no existe.`));
+    }
+  }
   for (const n of ctx.flow.nodes) {
     for (const t of transitionsOf(n)) {
       if (!ctx.byId.has(t.next_node_id)) {
@@ -358,6 +384,20 @@ function ruleAutoLoop(ctx: GraphContext): ValidationIssue[] {
 /** V-EST-07: dos salidas del mismo paso que responden a lo mismo con la misma prioridad. */
 function ruleTies(ctx: GraphContext): ValidationIssue[] {
   const out: ValidationIssue[] = [];
+  // La misma palabra de escape en dos grupos: gana baja > persona > empezar
+  // de nuevo > menú, sin que se note.
+  const groupOf = new Map<string, EscapeCategory>();
+  for (const category of ESCAPE_CATEGORIES) {
+    for (const w of ctx.flow.escape ? wordsOf(ctx.escape, category) : []) {
+      const word = normalizePhrase(w);
+      const other = groupOf.get(word);
+      if (other && other !== category) {
+        out.push(issue('V-EST-07', 'warning', `La palabra "${word}" está en ${ESCAPE_LABEL[other]} y en ${ESCAPE_LABEL[category]}: se usa solo como ${ESCAPE_LABEL[other]}.`));
+      } else {
+        groupOf.set(word, category);
+      }
+    }
+  }
   for (const n of ctx.reachableNodes()) {
     const seen = new Map<string, string>();
     const words = new Map<string, string>();
@@ -570,18 +610,80 @@ function ruleMedia(ctx: GraphContext): ValidationIssue[] {
 function ruleHumanPath(ctx: GraphContext): ValidationIssue[] {
   const humans = ctx.flow.nodes.filter((n) => n.type === 'escape_to_human').map((n) => n.id);
   const reachableHumans = humans.filter((id) => ctx.reachable.has(id));
+  const leadsToHuman = (id: string) => {
+    const from = ctx.reachFrom([id]);
+    return reachableHumans.some((h) => from.has(h));
+  };
+
+  // Con palabra para hablar con una persona (C-08), la vía existe desde
+  // cualquier paso. Solo falla si lleva a otra cosa, o si un paso atrapa esa
+  // palabra con una salida propia que no lleva a una persona.
+  const human = ctx.escape.human;
+  if (human) {
+    const target = ctx.byId.get(human.target);
+    if (!target) return []; // V-EST-02 ya lo dice
+    if (!leadsToHuman(human.target)) {
+      return [issue('V-CUMP-01', 'error', `La palabra para hablar con una persona lleva a ${q(human.target)}, que no pasa a una persona.`)];
+    }
+    const out: ValidationIssue[] = [];
+    for (const n of ctx.reachableNodes()) {
+      if (!isWaitNode(n)) continue;
+      for (const word of human.words) {
+        const local = transitionsOf(n).find((t) => catchesWord(t.condition, n, word));
+        if (local && !leadsToHuman(local.next_node_id)) {
+          out.push(issue('V-CUMP-01', 'error', `En ${q(n.id)}, "${word}" tiene su propia salida a ${q(local.next_node_id)}, que no llega a una persona: el cliente no puede pedir ayuda desde ahí.`, n.id));
+          break;
+        }
+      }
+    }
+    return out;
+  }
+
   if (reachableHumans.length === 0) {
     return [issue('V-CUMP-01', 'error', 'Ningún camino lleva a hablar con una persona. WhatsApp exige ofrecer esa vía.')];
   }
   const out: ValidationIssue[] = [];
   for (const n of ctx.reachableNodes()) {
     if (!isWaitNode(n)) continue;
-    const fromHere = ctx.reachFrom([n.id]);
-    if (!reachableHumans.some((id) => fromHere.has(id))) {
+    if (!leadsToHuman(n.id)) {
       out.push(issue('V-CUMP-01', 'error', `Desde ${q(n.id)} ya no hay forma de llegar a una persona.`, n.id));
     }
   }
   return out;
+}
+
+/**
+ * ¿Una salida del paso se queda con esta palabra antes que el escape? Mismo
+ * criterio que el motor: botón o fila por id o título, palabra clave difusa.
+ */
+function catchesWord(c: TransitionCondition, n: FlowNode, word: string): boolean {
+  const w = normalizePhrase(word);
+  switch (c.type) {
+  case 'keyword':
+    return c.values.some((kw) => fuzzyIncludes(word, kw));
+  case 'button': {
+    const title = n.type === 'send_buttons' ? n.content.buttons.find((b) => b.id === c.value)?.title : undefined;
+    return normalizePhrase(c.value) === w || (!!title && normalizePhrase(title) === w);
+  }
+  case 'list_item': {
+    const title =
+      n.type === 'send_list'
+        ? n.content.sections.flatMap((s) => (s.type === 'static' ? s.items : [])).find((i) => i.id === c.value)?.title
+        : undefined;
+    return normalizePhrase(c.value) === w || (!!title && normalizePhrase(title) === w);
+  }
+  default:
+    return false;
+  }
+}
+
+/** V-CUMP-02: la baja es obligatoria en todo flujo. */
+function ruleOptOut(ctx: GraphContext): ValidationIssue[] {
+  const optOut = ctx.flow.escape?.opt_out;
+  if (optOut && optOut.words.length === 0) {
+    return [issue('V-CUMP-02', 'error', 'No hay palabra para darse de baja. WhatsApp exige que el cliente pueda dejar de recibir mensajes.')];
+  }
+  return [];
 }
 
 const SENSITIVE_PATTERNS: Array<{ re: RegExp; what: string }> = [

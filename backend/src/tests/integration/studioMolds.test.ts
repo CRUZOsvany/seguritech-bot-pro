@@ -67,4 +67,23 @@ describe('molde de cerrajería del asistente', () => {
 
     expect(await payloads(wizardFlow, conversation)).toEqual(await payloads(loadMold('cerrajeria'), conversation));
   });
+
+  it('y con las palabras de escape: menú, empezar de nuevo y persona (C-08)', async () => {
+    const conversation = {
+      ...loadConversation('cerrajeria'),
+      events: [
+        { type: 'text' as const, text: 'hola' },
+        { type: 'text' as const, text: 'urgente' },
+        { type: 'text' as const, text: 'Menú' },
+        { type: 'text' as const, text: 'cita' },
+        { type: 'text' as const, text: 'cancelar' },
+        { type: 'text' as const, text: 'info' },
+        { type: 'text' as const, text: '¡Asesor!' },
+      ],
+    };
+
+    const fromJson = await payloads(loadMold('cerrajeria'), conversation);
+    expect(fromJson.at(-2)).toMatchObject({ ok: true, payload: { text: { body: expect.stringContaining('te conecto con alguien') } } });
+    expect(await payloads(wizardFlow, conversation)).toEqual(fromJson);
+  });
 });

@@ -97,8 +97,26 @@ const HumanOptionSchema = z.object({
 
 const OptionSchema = z.discriminatedUnion('kind', [CaptureOptionSchema, InfoOptionSchema, HumanOptionSchema]);
 
+/**
+ * Palabras de escape (C-08): funcionan en cualquier paso. Opcional para que
+ * las especificaciones guardadas antes sigan abriendo igual; sin ella el
+ * motor usa las palabras de siempre.
+ */
+const EscapeSpecSchema = z.object({
+  /** Vuelven al menú principal sin borrar lo que el cliente ya dijo. */
+  menuWords: keywordsSchema,
+  /** Borran lo capturado y empiezan desde el saludo. */
+  restartWords: keywordsSchema,
+  /** Pasan a una persona desde cualquier paso (WhatsApp exige esta vía). */
+  humanWords: keywordsSchema.min(1, 'Hace falta al menos una palabra para hablar con una persona'),
+  /** Baja: el bot deja de escribirle al cliente. Obligatoria. */
+  optOutWords: keywordsSchema.min(1, 'Hace falta al menos una palabra para darse de baja'),
+  handoff: HandoffSchema,
+});
+
 /** Ids que usa el compilador para sus propios pasos. */
-const RESERVED_IDS = new Set(['bienvenida', 'no_entendi', 'despedida', 'fin', 'farewell']);
+const HUMAN_ESCAPE = 'hablar_persona';
+const RESERVED_IDS = new Set(['bienvenida', 'no_entendi', 'despedida', 'fin', 'farewell', HUMAN_ESCAPE]);
 export const FAREWELL = 'farewell';
 
 export const WizardSpecSchema = z
@@ -121,6 +139,7 @@ export const WizardSpecSchema = z
       text: textSchema,
       keywords: keywordsSchema,
     }),
+    escape: EscapeSpecSchema.optional(),
   })
   .superRefine((spec, ctx) => {
     const ids = new Set<string>();
@@ -321,13 +340,29 @@ export function compileWizard(spec: WizardSpec): BotFlow {
     );
   }
   nodes.push(handoffNode(ids.notUnderstoodHandoff, spec.notUnderstood.handoff));
+  if (spec.escape) nodes.push(handoffNode(HUMAN_ESCAPE, spec.escape.handoff));
 
   if (farewellUsed) {
     nodes.push({ id: FAREWELL_NODE, type: 'send_text', content: { text: spec.farewell.text }, transitions: [byDefault(END)] });
   }
   nodes.push({ id: END, type: 'end', content: {}, transitions: [] });
 
-  return { version: '1.0', start_node_id: START, nodes, studio: { wizard: spec } };
+  return {
+    version: '1.0',
+    start_node_id: START,
+    nodes,
+    ...(spec.escape ? { escape: compileEscape(spec.escape) } : {}),
+    studio: { wizard: spec },
+  };
+}
+
+function compileEscape(e: NonNullable<WizardSpec['escape']>): NonNullable<BotFlow['escape']> {
+  return {
+    ...(e.menuWords.length ? { menu: { words: e.menuWords } } : {}),
+    ...(e.restartWords.length ? { restart: { words: e.restartWords } } : {}),
+    human: { words: e.humanWords, node_id: HUMAN_ESCAPE },
+    opt_out: { words: e.optOutWords },
+  };
 }
 
 // ============================================================================
@@ -354,9 +389,11 @@ export function readWizardSpec(flow: unknown): WizardReadResult {
   if (!parsed.success) return { ok: false, reason: 'invalid_spec' };
 
   const expected = compileWizard(parsed.data);
-  const actual = flow as { start_node_id?: unknown; nodes?: unknown };
+  const actual = flow as { start_node_id?: unknown; nodes?: unknown; escape?: unknown };
   const same =
-    actual.start_node_id === expected.start_node_id && deepEqual(actual.nodes, expected.nodes);
+    actual.start_node_id === expected.start_node_id &&
+    deepEqual(actual.nodes, expected.nodes) &&
+    deepEqual(actual.escape, expected.escape);
   return same ? { ok: true, spec: parsed.data } : { ok: false, reason: 'edited_elsewhere' };
 }
 

@@ -473,6 +473,8 @@ export const FlowNodeSchema = z
 // FLOW (con validación cruzada de referencias)
 // ============================================================================
 
+const EscapeWordsSchema = z.array(z.string().trim().min(1).max(40)).max(20);
+
 export const FlowSchema = z
   .object({
     version: z.literal('1.0'),
@@ -483,9 +485,29 @@ export const FlowSchema = z
     // pueda reabrir lo publicado. Antes una clave extra se descartaba en
     // silencio, así que ningún flow deja de ser publicable por esto.
     studio: z.object({ wizard: z.unknown() }).optional(),
+    // Palabras de escape (C-08). El validador de diseño revisa además que
+    // haya baja y que la de persona lleve a una persona.
+    escape: z
+      .object({
+        menu: z.object({ words: EscapeWordsSchema, node_id: z.string().min(1).optional() }).optional(),
+        restart: z.object({ words: EscapeWordsSchema }).optional(),
+        human: z.object({ words: EscapeWordsSchema, node_id: z.string().min(1) }).optional(),
+        opt_out: z.object({ words: EscapeWordsSchema }).optional(),
+      })
+      .optional(),
   })
   .superRefine((flow, ctx) => {
     const ids = new Set(flow.nodes.map((n) => n.id));
+
+    for (const [group, target] of [['menu', flow.escape?.menu?.node_id], ['human', flow.escape?.human?.node_id]] as const) {
+      if (target && !ids.has(target)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['escape', group, 'node_id'],
+          message: `La palabra de escape "${group}" lleva a "${target}", que no existe`,
+        });
+      }
+    }
 
     if (ids.size !== flow.nodes.length) {
       ctx.addIssue({

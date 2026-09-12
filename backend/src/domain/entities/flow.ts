@@ -474,6 +474,30 @@ export interface BotFlow {
    * avanzado deja de ser editable desde el asistente (ver domain/studio/wizard).
    */
   studio?: { wizard: unknown };
+  /**
+   * Palabras de escape del flow (C-08): funcionan en cualquier paso. Sin esta
+   * clave, el motor usa las de siempre (ver domain/conversation/escapeWords).
+   */
+  escape?: FlowEscape;
+}
+
+/**
+ * Palabras de escape por tenant (C-08). Se comparan contra el mensaje
+ * completo, normalizado (sin acentos, signos ni mayúsculas).
+ *
+ * - `menu`: vuelve al menú (`node_id`, o el inicio) y conserva lo capturado.
+ * - `restart`: borra lo capturado y empieza desde el inicio.
+ * - `human`: pasa a `node_id`, un paso de "hablar con una persona".
+ * - `opt_out`: baja del cliente; el bot deja de escribirle.
+ *
+ * Menú, empezar de nuevo y persona ceden ante una salida propia del paso
+ * que maneje esa palabra; la baja nunca cede.
+ */
+export interface FlowEscape {
+  menu?: { words: string[]; node_id?: string };
+  restart?: { words: string[] };
+  human?: { words: string[]; node_id: string };
+  opt_out?: { words: string[] };
 }
 
 // ============================================================================

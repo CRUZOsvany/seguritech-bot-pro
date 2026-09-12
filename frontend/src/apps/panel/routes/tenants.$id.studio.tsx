@@ -61,7 +61,8 @@ function StudioPage() {
       flowId={flowId}
       tenant={tenantQ.data}
       wizard={wizardQ.data}
-      molds={moldsQ.data}
+      molds={moldsQ.data.molds}
+      escapeDefaults={moldsQ.data.escapeDefaults}
       limits={limitsQ.data.limits}
       isSuperAdmin={isSuperAdmin}
     />

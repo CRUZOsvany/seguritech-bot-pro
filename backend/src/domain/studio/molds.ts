@@ -1,3 +1,4 @@
+import { RECOMMENDED_ESCAPE_WORDS } from '@/domain/conversation/escapeWords';
 import type { WizardSpec } from './wizard';
 
 /**
@@ -19,6 +20,24 @@ export interface StudioMold {
     mensaje_menu_principal: string;
     mensaje_no_entendio: string;
     mensaje_fuera_horario: string;
+  };
+}
+
+/**
+ * Palabras de escape que el asistente propone (C-08): las recomendadas y un
+ * paso de persona genérico. Es lo que usan los moldes y lo que el panel
+ * ofrece a un bot armado antes de C-08.
+ */
+export function defaultWizardEscape(): NonNullable<WizardSpec['escape']> {
+  return {
+    menuWords: [...RECOMMENDED_ESCAPE_WORDS.menu],
+    restartWords: [...RECOMMENDED_ESCAPE_WORDS.restart],
+    humanWords: [...RECOMMENDED_ESCAPE_WORDS.human],
+    optOutWords: [...RECOMMENDED_ESCAPE_WORDS.opt_out],
+    handoff: {
+      userResponse: '💬 Claro, te conecto con alguien de {{nombre_negocio}}.',
+      ownerAlert: '💬 Cliente pidió hablar con una persona.\n📱 WhatsApp: {{phone}}\n💬 Último mensaje: "{{last_message}}"',
+    },
   };
 }
 
@@ -143,6 +162,7 @@ const cerrajeria: StudioMold = {
       text: 'Gracias por contactar a {{nombre_negocio}}. Estamos 24/7. 🔐',
       keywords: ['salir', 'no', 'gracias', 'adios', 'adiós'],
     },
+    escape: defaultWizardEscape(),
   },
 };
 

@@ -193,8 +193,9 @@ export function optionOfNode(nodeId: string | undefined, spec: WizardSpec): stri
 
 /** En qué paso del asistente se arregla un hallazgo del validador. */
 export function stepForIssue(issue: ValidationIssue, spec: WizardSpec): StepKey {
-  if (issue.code === 'V-EST-07') return 'reconocimiento';
+  if (issue.code === 'V-EST-07' || issue.code === 'V-CUMP-02') return 'reconocimiento';
   const node = issue.nodeId ?? '';
+  if (node === 'hablar_persona') return 'humano';
   if (node === 'bienvenida') return 'primer-mensaje';
   if (node.startsWith('no_entendi')) return 'no-entiende';
   if (node === 'despedida') return 'despedida';
