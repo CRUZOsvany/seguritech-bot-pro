@@ -1,6 +1,7 @@
 import { NotificationPort, MetaCredentialsRepository } from '@/domain/ports';
 import type { OutboundContent } from '@/domain/conversation/OutboundMessage';
 import { buildMetaPayload, type MetaSendPayload, buildTypingPayload, type MetaTypingPayload } from './meta/metaPayloads';
+import type { DeliveryPacer } from './meta/deliveryPacer';
 import pino from 'pino';
 import { Request, Response } from 'express';
 
@@ -65,6 +66,7 @@ interface MetaWebhookPayload {
           id: string;
           status: string;
           timestamp: string;
+          recipient_id?: string;
         }>;
       };
     }>;
@@ -211,6 +213,25 @@ export function parseMetaWebhook(
   }
 }
 
+/**
+ * Estados de los mensajes que mandó el bot (sent, delivered, read, failed),
+ * de todas las entradas del webhook. Un webhook de estados no trae
+ * `messages`, así que parseMetaWebhook lo ignora; esto lo lee aparte.
+ */
+export function parseMetaStatuses(requestBody: unknown): Array<{ id: string; status: string; recipientId?: string }> {
+  const payload = requestBody as Partial<MetaWebhookPayload> | null;
+  const out: Array<{ id: string; status: string; recipientId?: string }> = [];
+  for (const entry of payload?.entry ?? []) {
+    for (const change of entry?.changes ?? []) {
+      for (const s of change?.value?.statuses ?? []) {
+        if (typeof s?.id !== 'string' || typeof s?.status !== 'string') continue;
+        out.push({ id: s.id, status: s.status, ...(s.recipient_id ? { recipientId: s.recipient_id } : {}) });
+      }
+    }
+  }
+  return out;
+}
+
 export class MetaWhatsAppAdapter implements NotificationPort {
   private readonly metaApiUrl: string;
 
@@ -218,6 +239,8 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     private readonly logger: pino.Logger,
     private readonly credsRepo: MetaCredentialsRepository,
     metaApiUrl?: string,
+    /** Orden de entrega (§7.7) y pausa de DEC-08. Sin él, se manda sin esperar, como antes. */
+    private readonly pacer?: DeliveryPacer,
   ) {
     this.metaApiUrl = metaApiUrl || 'https://graph.facebook.com/v23.0';
   }
@@ -259,6 +282,12 @@ export class MetaWhatsAppAdapter implements NotificationPort {
 
   parseIncomingMessage(requestBody: unknown): ParsedIncomingMessage | null {
     return parseMetaWebhook(requestBody, this.logger);
+  }
+
+  /** Estados de los mensajes enviados: le avisan al marcapasos qué ya se entregó. */
+  handleStatuses(requestBody: unknown): void {
+    if (!this.pacer) return;
+    for (const s of parseMetaStatuses(requestBody)) this.pacer.onStatus(s.id, s.status);
   }
 
   // ========================================================================
@@ -493,7 +522,12 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       return;
     }
 
-    await this.sendToMeta(creds, built.payload, phoneNumber);
+    // §7.7: Meta no garantiza el orden de entrega. Antes de mandar otro
+    // mensaje al mismo cliente se espera el "entregado" del anterior (con
+    // tope) y la pausa de DEC-08.
+    await this.pacer?.beforeSend(built.payload.to);
+    const wamid = await this.sendToMeta(creds, built.payload, phoneNumber);
+    this.pacer?.sent(built.payload.to, wamid);
   }
 
   // ========================================================================
@@ -507,7 +541,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
     },
     payload: MetaSendPayload | MetaTypingPayload,
     phoneNumber: string,
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     // `payload.to` ya viene normalizado (MX/AR sin el dígito legacy, #131030)
     // desde buildMetaPayload.
     const url = `${this.metaApiUrl}/${creds.phoneNumberId}/messages`;
@@ -543,6 +577,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
         { phoneNumber, messageId: data.messages?.[0]?.id },
         '✅ Mensaje enviado a Meta',
       );
+      return data.messages?.[0]?.id;
     } catch (error) {
       this.logger.error(
         { err: error, phoneNumber, phoneNumberId: creds.phoneNumberId },

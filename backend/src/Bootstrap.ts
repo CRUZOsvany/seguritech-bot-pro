@@ -31,6 +31,7 @@ import { createPosAuthMiddleware } from '@/infrastructure/auth/PosAuthMiddleware
 import { createRequireModule } from '@/infrastructure/auth/ModuleGuard';
 import { ConsoleNotificationAdapter } from '@/infrastructure/adapters/ConsoleNotificationAdapter';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
+import { DeliveryPacer } from '@/infrastructure/adapters/meta/deliveryPacer';
 import { ReadlineAdapter } from '@/infrastructure/adapters/ReadlineAdapter';
 import { ExpressServer } from '@/infrastructure/server/ExpressServer';
 import { getSupabaseClient } from '@/infrastructure/services/SupabaseClientFactory';
@@ -100,6 +101,8 @@ export class Bootstrap {
           this.logger,
           metaCredentialsRepository,
           config.meta.apiUrl,
+          // §7.7 orden de entrega + DEC-08 (600–1200 ms entre mensajes).
+          new DeliveryPacer({ logger: this.logger }),
         );
         notificationPort = metaAdapter;
         this.logger.info('✅ MetaWhatsAppAdapter activo (multi-tenant)');

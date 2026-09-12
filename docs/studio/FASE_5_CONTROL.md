@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, fusión (`feat/studio-fase-5-fusion`, #96) sobre horario, y "escribiendo" (`feat/studio-fase-5-escribiendo`) sobre fusión.
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, fusión (`feat/studio-fase-5-fusion`, #96) sobre horario, "escribiendo" (`feat/studio-fase-5-escribiendo`, #97) sobre fusión, y orden de entrega (`feat/studio-fase-5-orden-entrega`) sobre "escribiendo".
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -14,8 +14,8 @@
 | Inactividad con ventana | Pendiente |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
 | Fusión de mensajes | Hecha: #96 |
-| Indicador de "escribiendo" | Hecha: PR apilado sobre el de fusión (sin probar contra un número real, A-01) |
-| Orden de entrega | Pendiente |
+| Indicador de "escribiendo" | Hecha: #97 (sin probar contra un número real, A-01) |
+| Orden de entrega | Hecha: PR apilado sobre el de C-07 (sin probar contra un número real, A-01) |
 
 ---
 
@@ -285,3 +285,37 @@ Cuando el bot va a contestar, marca como leído el mensaje del cliente y le mues
 **[no verificado]:** no se probó contra un número real, porque Meta sigue sin conectar (A-01). Lo que sí está probado es el payload exacto y la llamada HTTP.
 
 **Fuera de este PR:** el retraso de 600–1200 ms entre mensajes (DEC-08) va con el orden de entrega.
+
+---
+
+## 7. Orden de entrega (§7.7) y pausa entre mensajes (DEC-08)
+
+> §7.7: *Meta no garantiza que varios mensajes lleguen en el orden de envío. Para secuencias, el adaptador de salida espera el estado `delivered` del webhook (con timeout) antes de enviar el siguiente mensaje, o los fusiona en uno.*
+
+### Qué hace
+
+Antes de mandarle otro mensaje a un mismo cliente, el adaptador de Meta espera el estado "entregado" del anterior, **con tope de 2 s**, y deja la pausa de **600–1200 ms** que decidió DEC-08. La otra salida de §7.7, fusionar, es la funcionalidad 5.
+
+- **"Leído"** también cuenta como entregado. **"Fallido"** deja seguir: esperar no lo va a entregar. **"Enviado"** no cuenta.
+- **Cada cliente va por su lado:** la alerta al dueño no espera al cliente.
+- Si el mensaje anterior es de hace más de 15 s, ya no se espera: es de otro turno.
+- **"Escribiendo…"** no espera ni hace esperar.
+- **Estados del webhook:** un webhook que solo trae `statuses` antes se descartaba. Ahora `parseMetaStatuses` los lee y `handleStatuses` los pasa al marcapasos, en las dos rutas del webhook. En `/webhook/:tenantId` va después de la firma HMAC.
+
+| Pieza | Dónde |
+|---|---|
+| Marcapasos | `infrastructure/adapters/meta/deliveryPacer.ts` (`DeliveryPacer`) |
+| Adaptador | `MetaWhatsAppAdapter`: parámetro opcional `pacer`, `handleStatuses`, `parseMetaStatuses`; `sendToMeta` ahora devuelve el id del mensaje |
+| Webhook | `ExpressServer`, en las dos rutas, antes de parsear el mensaje |
+| Arranque | `Bootstrap` lo activa junto con el adaptador de Meta |
+
+El motor no cambia. El simulador y la paridad arman el adaptador sin marcapasos, así que no esperan.
+
+### Límites
+
+- **Tiempo del turno:** el webhook responde a Meta cuando termina el turno, con un timeout de 15 s. Con 2 s de tope por mensaje, un turno de 3 mensajes espera como mucho unos 6 s (4 s de tope y 2.4 s de pausas). V-CUMP-07 ya avisa de más de 3 mensajes seguidos.
+- **En memoria:** el estado tiene que llegar al mismo proceso que mandó el mensaje. Hoy corre una sola instancia. Con varias, el estado podría caer en otra y aquí se cumpliría el tope: el mensaje sale igual, solo sin la garantía.
+- **Documentación de Meta:** confirma `id`, `status` y `recipient_id`, pero no dice si los estados pueden llegar desordenados o repetidos. Por eso "leído" cuenta igual y un estado repetido no hace nada.
+- **Valores fijos en el código** (2 s, 600–1200 ms, 15 s), no variables de entorno. Si hace falta ajustarlos en producción, son opciones del constructor.
+
+**[no verificado]:** no se probó contra un número real (A-01). Lo que sí está probado, con relojes y HTTP falsos: que el segundo mensaje no sale antes del "entregado" del primero, que sale al cumplirse el tope, y la pausa.
