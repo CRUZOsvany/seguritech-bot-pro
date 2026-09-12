@@ -8,7 +8,7 @@
 --   2. Pegá el hash en la línea password_hash de abajo.
 --   3. Ejecutá este SQL una sola vez en Supabase SQL Editor.
 --
--- En primer login, must_change_password=true te redirige a /panel/change-password.html
+-- En primer login, must_change_password=true te redirige a /app/change-password
 -- para que cambies la contraseña antes de emitir cookie de sesión.
 -- ============================================================================
 

@@ -10,7 +10,7 @@
 #     resuelto por phone_number_id contra tenant_meta_credentials, no un
 #     {phoneNumber, message} inventado. Probar el webhook de verdad requiere
 #     un tenant con credenciales Meta reales sembradas — usa el simulador
-#     (/simulator/<uuid>) para eso, no este script.
+#     del Studio (/app/tenants/<uuid>/studio) para eso, no este script.
 #
 # Este smoke test cubre lo que SÍ se puede validar sin datos de negocio
 # reales: que el server levanta, y el flujo de auth documentado en el

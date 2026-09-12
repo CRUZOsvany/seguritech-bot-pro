@@ -67,7 +67,7 @@ npm run build                                 # frontend build:panel + backend b
 npm run lint
 ```
 
-Panel React en `/app/`, panel HTML legacy en `/panel/`, simulador en `/simulator/<uuid>`, webhook en `/webhook`, salud en `/health`.
+Panel React en `/app/` (el simulador vive en el Studio y el Designer de cada cliente), PWA del cajero en `/caja/<tenantId>/`, webhook en `/webhook`, salud en `/health`. El panel HTML de `/panel/` y el simulador suelto de `/simulator/` se retiraron el 2026-09-11; sus rutas redirigen a `/app/`.
 
 ## Entorno
 

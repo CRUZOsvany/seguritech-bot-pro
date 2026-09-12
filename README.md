@@ -24,7 +24,7 @@ Documentación técnica complementaria en [`docs/INDEX.md`](docs/INDEX.md). Si d
 
 ## Arquitectura
 
-**Monorepo backend + frontend.** El backend Express sirve el panel admin HTML estático, el simulador y la SPA React del workspace `frontend/` desde `backend/public/`.
+**Monorepo backend + frontend.** El backend Express sirve desde `backend/public/` los dos builds de Vite del workspace `frontend/`: el panel React (`/app`) y la PWA del cajero (`/caja`).
 
 ```
 seguritech-bot-pro/
@@ -46,9 +46,8 @@ seguritech-bot-pro/
 │   │   ├── Bootstrap.ts
 │   │   └── index.ts
 │   ├── public/
-│   │   ├── panel/                      # HTML del cuarto de mandos (index/new/tenant/messages)
-│   │   ├── simulator/                  # HTML del simulador WhatsApp (iPhone frame + chat)
-│   │   └── app/                        # SPA React build de Vite
+│   │   ├── app/                        # panel React (build de Vite)
+│   │   └── caja/                       # PWA del cajero (build de Vite)
 │   ├── supabase/migrations/            # 001 → 020
 │   └── package.json
 ├── frontend/                           # Vite + React 19 + TanStack + Tailwind 4
@@ -89,14 +88,14 @@ npm run dev
 
 | URL | Descripción |
 |---|---|
-| http://127.0.0.1:3001/panel/ | Panel admin (lista de clientes) |
-| http://127.0.0.1:3001/panel/new.html | Crear cliente nuevo |
-| http://127.0.0.1:3001/panel/tenant.html?id=&lt;uuid&gt; | Editar cliente |
-| http://127.0.0.1:3001/app/ | SPA React del panel |
-| http://127.0.0.1:3001/simulator/&lt;uuid&gt; | Simulador WhatsApp del tenant |
+| http://127.0.0.1:3001/app/ | Panel (lista de clientes) |
+| http://127.0.0.1:3001/app/tenants/new | Crear cliente nuevo |
+| http://127.0.0.1:3001/app/tenants/&lt;uuid&gt;/studio | Studio del cliente, con el simulador (corre el motor de producción) |
 | http://127.0.0.1:3001/health | Liveness check |
 | http://127.0.0.1:3001/webhook | Webhook Meta (verify + receive) |
 | http://127.0.0.1:3001/api/admin/* | API admin (modularizada en sub-routers: flows, meta, services, tenants, pos-catalog, service-directory, audit-log) |
+
+El panel HTML de `/panel/` y el simulador suelto de `/simulator/<uuid>` se retiraron el 2026-09-11: sus rutas redirigen a `/app/`.
 
 ---
 
@@ -104,7 +103,7 @@ npm run dev
 
 Tres caminos válidos (basta uno), por orden de preferencia:
 
-1. **Cookie JWT HTTPOnly** — el camino principal del panel HTML y la SPA React. POST a `/api/auth/login` con `{email, password}` emite cookie `seguritech_session` (8h por defecto). Validada server-side con denylist (`admin_sessions_revoked`).
+1. **Cookie JWT HTTPOnly** — el camino principal del panel React. POST a `/api/auth/login` con `{email, password}` emite cookie `seguritech_session` (8h por defecto). Validada server-side con denylist (`admin_sessions_revoked`).
 2. **`Cf-Access-Authenticated-User-Email: <user@<CLOUDFLARE_ALLOWED_DOMAIN>>`** — el panel en prod tras Cloudflare Access. Encadena con el JWT, no lo reemplaza.
 3. **`x-api-key: <BACKEND_API_KEY>`** — para CLI, curl, scripts.
 
@@ -118,8 +117,8 @@ Si ninguno aplica → **401 Unauthorized**. El antiguo bypass loopback (`NODE_EN
    npx ts-node backend/scripts/generate-admin-hash.ts 'TuPasswordAquí'
    ```
 3. Pega el hash en `backend/supabase/migrations/seed_admin_user.sql` y ejecútalo una sola vez en Supabase SQL Editor.
-4. Arranca el backend (`npm run dev`) y entra a http://127.0.0.1:3001/panel/login.html con el email seedeado y la password elegida.
-5. El primer login pide cambiar contraseña (`must_change_password=true`) antes de emitir la cookie de sesión.
+4. Arranca el backend (`npm run dev`) y entra a http://127.0.0.1:3001/app/login con el email seedeado y la password elegida.
+5. El primer login pide cambiar contraseña (`must_change_password=true`, pantalla `/app/change-password`) antes de emitir la cookie de sesión.
 
 ### RBAC
 
@@ -137,14 +136,12 @@ Rotación de credenciales Meta exige cookie JWT (no x-api-key ni CF Access) — 
 
 ## Crear un cliente nuevo (flujo manual)
 
-1. `npm run dev` y abre http://127.0.0.1:3001/panel/
-2. Click **"+ Nuevo"**
-3. Llena nombre, giro, número WhatsApp asignado, mensaje bienvenida. Opcionalmente elige un template (molde).
-4. **"Crear cliente"** → redirige al detalle.
-5. En el detalle, sección **"Credenciales Meta WhatsApp"**: pega `phone_number_id`, `waba_id`, `display_phone_number`, `access_token`. El token se cifra con `TokenCrypto` (AES-256-GCM) antes de persistir y nunca se devuelve descifrado al panel.
-6. **"Activar bot"** desde la sección "Acciones".
-7. Click **"Abrir simulador"** para probar sin tocar Meta.
-8. Cuando el simulador responde como esperas, configura el webhook en Meta apuntando a `https://tu-dominio/webhook` con el `META_VERIFY_TOKEN` que tienes en `.env`.
+1. `npm run dev` y abre http://127.0.0.1:3001/app/
+2. En `/app/tenants/new` (**"Nuevo cliente"**) llena nombre del negocio y giro; dirección y horario son opcionales. **"Crear cliente"**.
+3. En el detalle del cliente, **"WhatsApp"**: en **"Identidad"** va el número WhatsApp asignado, y en **"Credenciales Meta"** el Phone number ID, el WABA ID, el número visible y el access token. El token se cifra con `TokenCrypto` (AES-256-GCM) antes de persistir y nunca se devuelve descifrado al panel.
+4. Activa el servicio del bot con **"Activar"** en su tarjeta de servicio.
+5. **"Studio del bot"** para armarlo y probarlo en el simulador, que corre el motor de producción sin tocar Meta.
+6. Cuando el simulador responde como esperas, configura el webhook en Meta apuntando a `https://tu-dominio/webhook` con el `META_VERIFY_TOKEN` que tienes en `.env`.
 
 ---
 
