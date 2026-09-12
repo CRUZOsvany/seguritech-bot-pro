@@ -45,6 +45,7 @@ describe('explainTrace', () => {
 
     expect(first).toEqual([
       'Llegó: "hola".',
+      'Se marca el mensaje como leído y el cliente ve "escribiendo…" mientras el bot arma la respuesta.',
       'Conversación nueva: empieza en «saludo».',
       'Recorre «saludo» → «menu_principal».',
       'Espera la respuesta del cliente en «menu_principal».',
@@ -54,7 +55,7 @@ describe('explainTrace', () => {
   it('explica qué opción coincidió y por qué ganó sobre otra', async () => {
     const [, tap] = await why('cerrajeria', [say('hola'), say('🚨 Emergencia')]);
 
-    expect(tap[1]).toMatch(
+    expect(tap[2]).toMatch(
       /^En «bienvenida» coincide el botón "emergencia": sigue a «menu_emergencia»\. También coincidía la palabra clave \(emergencia, emergencias, .+\); gana la más específica\.$/,
     );
   });

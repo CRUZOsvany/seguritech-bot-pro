@@ -210,6 +210,23 @@ export type BuildResult =
  * (52 1 NNNNNNNNNN / 54 9 NNNNNNNNNN) pero el ENVÍO debe ir sin él, o Meta
  * responde (#131030) recipient not in allowed list. Normalizamos al enviar.
  */
+/**
+ * "Escribiendo…" (C-07): no es un mensaje, es un cambio de estado sobre el
+ * mensaje que mandó el cliente. Lo marca como leído y muestra el indicador
+ * hasta que el bot responde o pasan 25 s. Meta pide mostrarlo solo si el bot
+ * va a contestar. Doc: developers.facebook.com/docs/whatsapp/cloud-api/typing-indicators
+ */
+export interface MetaTypingPayload {
+  messaging_product: 'whatsapp';
+  status: 'read';
+  message_id: string;
+  typing_indicator: { type: 'text' };
+}
+
+export function buildTypingPayload(messageId: string): MetaTypingPayload {
+  return { messaging_product: 'whatsapp', status: 'read', message_id: messageId, typing_indicator: { type: 'text' } };
+}
+
 export function normalizeWaId(to: string): string {
   const d = to.replace(/\D/g, '');
   if (d.startsWith('521') && d.length === 13) return '52' + d.slice(3);

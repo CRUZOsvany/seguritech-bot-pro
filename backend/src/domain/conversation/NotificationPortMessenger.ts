@@ -12,6 +12,10 @@ import type { MessengerPort, OutboundMessage } from './OutboundMessage';
 export class NotificationPortMessenger implements MessengerPort {
   constructor(private readonly notificationPort: NotificationPort) {}
 
+  async typing(tenantId: string, input: { to: string; messageId: string }): Promise<void> {
+    await this.notificationPort.sendTypingIndicator?.(tenantId, input.to, input.messageId);
+  }
+
   async send(tenantId: string, message: OutboundMessage): Promise<void> {
     const to = message.to;
     const c = message.content;

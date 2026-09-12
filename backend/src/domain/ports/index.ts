@@ -245,6 +245,12 @@ export interface NotificationPort {
       flow_action_payload?: { screen?: string; data?: Record<string, unknown> };
     },
   ): Promise<void>;
+  /**
+   * C-07: marca como leído el mensaje `messageId` del cliente y muestra
+   * "escribiendo…" hasta la respuesta (o 25 s). Opcional: un adaptador que
+   * no lo soporta simplemente no lo muestra.
+   */
+  sendTypingIndicator?(tenantId: string, phoneNumber: string, messageId: string): Promise<void>;
 }
 
 /**

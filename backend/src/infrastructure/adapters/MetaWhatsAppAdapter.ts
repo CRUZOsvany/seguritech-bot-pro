@@ -1,6 +1,6 @@
 import { NotificationPort, MetaCredentialsRepository } from '@/domain/ports';
 import type { OutboundContent } from '@/domain/conversation/OutboundMessage';
-import { buildMetaPayload, type MetaSendPayload } from './meta/metaPayloads';
+import { buildMetaPayload, type MetaSendPayload, buildTypingPayload, type MetaTypingPayload } from './meta/metaPayloads';
 import pino from 'pino';
 import { Request, Response } from 'express';
 
@@ -457,6 +457,19 @@ export class MetaWhatsAppAdapter implements NotificationPort {
   }
 
   /**
+   * C-07: marca como leído el mensaje del cliente y muestra "escribiendo…".
+   * Sin credenciales no hace nada, como los envíos.
+   */
+  async sendTypingIndicator(tenantId: string, phoneNumber: string, messageId: string): Promise<void> {
+    const creds = await this.credsRepo.findByTenantId(tenantId);
+    if (!creds) {
+      this.logger.warn({ tenantId, phoneNumber }, '⚠️  Sin credenciales — escribiendo… no enviado');
+      return;
+    }
+    await this.sendToMeta(creds, buildTypingPayload(messageId), phoneNumber);
+  }
+
+  /**
    * Credenciales → payload → Meta. Sin credenciales o con un mensaje que
    * Meta rechazaría por forma (lista o carrusel fuera de rango), se registra
    * y no se envía, igual que antes.
@@ -492,7 +505,7 @@ export class MetaWhatsAppAdapter implements NotificationPort {
       phoneNumberId: string;
       accessToken: string;
     },
-    payload: MetaSendPayload,
+    payload: MetaSendPayload | MetaTypingPayload,
     phoneNumber: string,
   ): Promise<void> {
     // `payload.to` ya viene normalizado (MX/AR sin el dígito legacy, #131030)

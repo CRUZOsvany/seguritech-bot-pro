@@ -20,6 +20,8 @@ export type DecisionStep =
   | { kind: 'input_ignored'; reason: 'unsupported_type'; detail: string }
   /** Cada mensaje del cliente abre o reinicia la ventana de servicio de 24 h. */
   | { kind: 'window'; open: true; expiresAt: string }
+  /** C-07: el mensaje del cliente se marcó como leído y se mostró "escribiendo…". */
+  | { kind: 'typing'; messageId: string }
   /** Una regla previa al flow decidió el turno, o lo dejó pasar. */
   | { kind: 'gate'; gate: GateName; detail?: string }
   /**

@@ -142,6 +142,13 @@ export class CapturingMessenger implements MessengerPort {
   async send(tenantId: string, message: OutboundMessage): Promise<void> {
     this.sent.push({ tenantId, message });
   }
+
+  /** Cada "escribiendo…" que el motor habría mostrado. No se manda nada. */
+  readonly typingShown: Array<{ tenantId: string; to: string; messageId: string }> = [];
+
+  async typing(tenantId: string, input: { to: string; messageId: string }): Promise<void> {
+    this.typingShown.push({ tenantId, ...input });
+  }
 }
 
 /** Auditoría de simulación: una prueba no deja rastro en admin_audit_log. */

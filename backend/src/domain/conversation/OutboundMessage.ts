@@ -23,6 +23,11 @@ export interface OutboundMessage {
 /** Puerto de envío del motor. Un mensaje a la vez, en el orden en que el motor los emite. */
 export interface MessengerPort {
   send(tenantId: string, message: OutboundMessage): Promise<void>;
+  /**
+   * C-07: "escribiendo…" sobre el mensaje del cliente, mientras el bot arma
+   * la respuesta. Opcional: sin él, el cliente no ve el indicador.
+   */
+  typing?(tenantId: string, input: { to: string; messageId: string }): Promise<void>;
 }
 
 /**

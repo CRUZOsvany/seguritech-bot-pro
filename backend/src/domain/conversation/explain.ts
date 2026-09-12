@@ -42,6 +42,9 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
       break;
     case 'window':
       break;
+    case 'typing':
+      lines.push('Se marca el mensaje como leído y el cliente ve "escribiendo…" mientras el bot arma la respuesta.');
+      break;
     case 'gate':
       lines.push(explainGate(step.gate, step.detail, when));
       break;

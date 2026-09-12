@@ -310,6 +310,18 @@ export class ConversationEngine {
         }
       }
 
+      // C-07: marca el mensaje como leído y muestra "escribiendo…" mientras
+      // el flow arma la respuesta. Solo aquí, donde el bot sí va a contestar
+      // (Meta pide no mostrarlo si no), y sin frenar el turno si falla.
+      if (metaMessageId && this.deps.messenger.typing) {
+        try {
+          await this.deps.messenger.typing(tenantId, { to: from, messageId: metaMessageId });
+          turn.trace.push({ kind: 'typing', messageId: metaMessageId });
+        } catch (err) {
+          logger.warn({ err, tenantId }, 'No se pudo mostrar "escribiendo…" — el turno sigue');
+        }
+      }
+
       const result = await this.deps.interpreter.execute({
         flow,
         user: effectiveUser,
