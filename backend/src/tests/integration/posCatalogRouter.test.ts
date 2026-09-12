@@ -60,7 +60,6 @@ function buildApp() {
     requireAdmin,
     assignMoldeUseCase: noop,
     setTenantStatusUseCase: noop,
-    simulateMessageUseCase: noop,
     simulateConversationUseCase: noop,
     createTenantUseCase: noop,
     tenantRepository: noop,

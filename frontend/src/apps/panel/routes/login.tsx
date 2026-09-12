@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { FormEvent } from 'react';
-import { createLazyRoute, useSearch } from '@tanstack/react-router';
+import { createLazyRoute, useNavigate, useSearch } from '@tanstack/react-router';
 import { useMutation } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { login, type LoginResponse } from '@/shared/api/auth';
@@ -23,6 +23,7 @@ interface LoginSearch {
 
 function LoginPage() {
   const search = useSearch({ from: '/login' }) as LoginSearch;
+  const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [totpCode, setTotpCode] = useState('');
@@ -43,8 +44,7 @@ function LoginPage() {
         return;
       }
       if (resp.kind === 'must_change_password') {
-        const qsEmail = encodeURIComponent(email.trim());
-        window.location.href = `/panel/change-password.html?email=${qsEmail}`;
+        void navigate({ to: '/change-password', search: { email: email.trim() } });
         return;
       }
       const next = search.next ? decodeURIComponent(search.next) : '/app/dashboard';

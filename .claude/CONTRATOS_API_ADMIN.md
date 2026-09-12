@@ -67,24 +67,14 @@
 
 ## 4. Simulador de conversaciones
 
-`POST /api/admin/simulate`
+`POST /api/admin/simulate` y `POST /api/admin/simulate/reset` **ya no
+existen**: se borraron el 2026-09-11 junto con el simulador suelto de
+`/simulator/<uuid>`, que era lo único que los llamaba.
 
-- El campo del mensaje es `content`, **no** `message`.
-- **Sin `persist: true` en el body, cada llamada es un turno aislado desde
-  cero** — no encadena con llamadas anteriores para el mismo
-  `tenantId`+`phoneNumber`. Con `persist: true`, sí persiste el estado de la
-  conversación (`currentNodeId`, `context`) entre llamadas, igual que un
-  mensaje real de WhatsApp.
-- El **primer mensaje** de una conversación nueva (sin `currentNodeId`
-  previo) siempre solo **renderiza el nodo `start_node_id`** — no evalúa su
-  contenido contra las transiciones de ese nodo. Para probar una transición
-  keyword/condición del nodo de arranque hace falta un **segundo** mensaje en
-  la misma conversación persistida.
-- No hay forma de forzar la hora simulada — `BusinessHoursService` (gate de
-  "fuera de horario") solo está cableado en `BotController` (webhook real),
-  no en `SimulateMessageUseCase`. El simulador ignora horarios por completo.
-- `POST /api/admin/simulate/reset` con `{tenantId, phoneNumber}` limpia el
-  estado persistido para volver a probar desde cero.
+El simulador vive en el Studio:
+`POST /api/admin/tenants/:id/studio/flows/:flowId/simulate`
+(`studioRouter.ts`). Corre el motor de producción (`ConversationEngine`) con
+sesiones, reloj y envío falsos, así que no escribe en la base.
 
 ## 5. Borrar un tenant
 

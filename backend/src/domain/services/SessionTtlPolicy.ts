@@ -2,11 +2,9 @@ import type { BusinessHoursService, BusinessHours } from '@/domain/services/Busi
 
 /**
  * DEC-07 (auditoría 2026-08-26): TTL de sesión conversacional a media
- * captura. Compartido entre BotController (mensajes reales) y
- * SimulateMessageUseCase (panel de simulación) — depuración motor+
- * simulador Fase 3 — para que ambos usen EXACTAMENTE el mismo umbral y el
- * mismo texto de aviso. Antes solo vivía en BotController y el simulador
- * no lo probaba en absoluto.
+ * captura. Lo aplica ConversationEngine, el mismo código para los mensajes
+ * reales y para el simulador del Studio, así que los dos usan el mismo
+ * umbral y el mismo texto de aviso.
  */
 export const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 

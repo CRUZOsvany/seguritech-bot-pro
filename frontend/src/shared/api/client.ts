@@ -1,7 +1,7 @@
 /**
  * Cliente HTTP del panel.
  *
- * Replica el comportamiento del backend/public/panel/_api.js legacy:
+ * Mismo comportamiento que tenía el _api.js del panel HTML (retirado):
  *   - credentials: 'same-origin' (cookie JWT HTTPOnly)
  *   - 401 fuera de /api/auth → redirige a /app/login?next=<actual>
  *   - El propio /api/auth puede devolver 401 sin redirigir (login fallido,

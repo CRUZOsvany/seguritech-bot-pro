@@ -233,7 +233,7 @@ Recuerda: **`NODE_ENV=production` hace que Express bindee a `0.0.0.0:3001`** (ve
 ## 10. Cloudflare Access (Zero Trust) sobre el panel admin
 
 1. Cloudflare Dashboard → Zero Trust → Access → Applications → **Add an application** → Self-hosted.
-2. Dominio: `tudominio.com` (o una ruta específica como `tudominio.com/panel` si quieres dejar `/webhook` fuera de Access — el webhook de Meta no puede pasar por un login).
+2. Dominio: `tudominio.com` (o rutas específicas, `tudominio.com/app` para el panel y `tudominio.com/api/admin` para su API, si quieres dejar `/webhook` fuera de Access — el webhook de Meta no puede pasar por un login). El panel HTML de `/panel` se retiró el 2026-09-11; esa ruta solo redirige a `/app`.
 3. Policy: **Allow** → Include → Emails ending in → tu dominio de equipo (el mismo valor que pusiste en `CLOUDFLARE_ALLOWED_DOMAIN`).
 4. El backend ya sabe leer el header `Cf-Access-Authenticated-User-Email` que Cloudflare inyecta tras el login (ver `AuthMiddleware.ts` — encadena con el JWT, no lo reemplaza, según README §"Autenticación del panel admin").
 5. **Importante:** excluye `/webhook` de la policy de Access (Meta necesita pegarle sin pasar por el login de Cloudflare) y `/health` si vas a apuntar UptimeRobot ahí.

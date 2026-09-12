@@ -1269,7 +1269,7 @@ function conditionDetail(condition: TransitionCondition): { detail?: string } {
 
 /**
  * Folio de siempre, para quien llama a execute() sin orderIdFactory
- * (SimulateMessageUseCase y tests anteriores a la Fase 1). El motor nuevo
+ * (tests anteriores a la Fase 1). El motor nuevo
  * usa IdGenerator.orderId(), que genera el mismo formato.
  */
 function legacyOrderId(): string {

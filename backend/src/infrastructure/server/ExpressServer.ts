@@ -360,25 +360,16 @@ export class ExpressServer {
   }
 
   /**
-   * Sirve assets estáticos del panel admin y del simulador WhatsApp.
-   *
-   * Estructura esperada en disco (poblada por FASE 6 y 7):
-   *   backend/public/panel/      — index.html, new.html, tenant.html, etc.
-   *   backend/public/simulator/  — index.html (lee tenantId del query string)
+   * Sirve el panel React (/app) y la PWA del cajero (/caja), los dos builds
+   * de Vite del workspace frontend/.
    *
    * Path resolution: __dirname al runtime es
    *   - dev (ts-node): backend/src/infrastructure/server
    *   - build:         backend/dist/infrastructure/server
    * 3 niveles arriba aterriza en backend/ en ambos casos.
-   *
-   * Para conveniencia, /simulator/:tenantId redirige a la SPA con tenantId en el
-   * query string. Registrado DESPUÉS del static para que /simulator/index.html
-   * y /simulator/*.css se sirvan tal cual.
    */
   setupStaticAssets(): void {
     const publicDir = path.resolve(__dirname, '..', '..', '..', 'public');
-    const panelDir = path.join(publicDir, 'panel');
-    const simulatorDir = path.join(publicDir, 'simulator');
     const appDir = path.join(publicDir, 'app');
     const cajaDir = path.join(publicDir, 'caja');
 
@@ -386,14 +377,7 @@ export class ExpressServer {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     };
 
-    this.app.use(
-      '/panel',
-      express.static(panelDir, { index: 'index.html', setHeaders: noCache }),
-    );
-    this.app.use(
-      '/simulator',
-      express.static(simulatorDir, { index: false, setHeaders: noCache }),
-    );
+    this.setupRetiredRedirects();
 
     // /app — SPA React (build de Vite del workspace frontend/). Sprint 6.
     // Los assets hasheados (index-XXX.js) se cachean; index.html no.
@@ -414,19 +398,42 @@ export class ExpressServer {
     // /caja/<tenantId>/ — PWA del cajero (POS Lite). Build aparte de Vite.
     mountCajaApp(this.app, cajaDir);
 
-    // /simulator/:tenantId  →  /simulator/index.html?tenantId=<uuid>
-    this.app.get('/simulator/:tenantId', (req: Request, res: Response, next) => {
-      const raw = String(req.params.tenantId ?? '');
-      if (raw === 'index.html') {
-        return next();
-      }
-      res.redirect(`/simulator/index.html?tenantId=${encodeURIComponent(raw)}`);
-    });
-
     this.logger.info(
       { publicDir },
-      '📂 Assets estáticos montados en /panel, /simulator, /app y /caja',
+      '📂 Assets estáticos montados en /app y /caja',
     );
+  }
+
+  /**
+   * /panel (el panel HTML de antes) y /simulator (el simulador suelto, con su
+   * copia de la orquestación, H-2) se retiraron el 2026-09-11. Sus rutas
+   * redirigen al panel React para no romper marcadores:
+   *   - /simulator/<uuid> y /simulator/index.html?tenantId=<uuid> van al
+   *     Studio de ese cliente, donde vive el simulador.
+   *   - /panel/change-password.html?email= va al cambio de contraseña de
+   *     React: era el paso obligatorio del primer login.
+   *   - Todo lo demás, a /app/.
+   */
+  private setupRetiredRedirects(): void {
+    const toApp = (res: Response, tenantId?: string): void => {
+      res.redirect(302, tenantId ? `/app/tenants/${encodeURIComponent(tenantId)}/studio` : '/app/');
+    };
+    const queryString = (req: Request, key: string): string | undefined => {
+      const value = req.query[key];
+      return typeof value === 'string' && value !== '' ? value : undefined;
+    };
+
+    this.app.get('/panel/change-password.html', (req: Request, res: Response) => {
+      const email = queryString(req, 'email');
+      res.redirect(302, email ? `/app/change-password?email=${encodeURIComponent(email)}` : '/app/change-password');
+    });
+    this.app.get('/simulator/:tenantId', (req: Request, res: Response) => {
+      const raw = String(req.params.tenantId ?? '');
+      toApp(res, raw === 'index.html' ? queryString(req, 'tenantId') : raw);
+    });
+    this.app.use(['/panel', '/simulator'], (_req: Request, res: Response) => {
+      toApp(res);
+    });
   }
 
   /**

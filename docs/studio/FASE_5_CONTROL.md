@@ -223,7 +223,7 @@ Por lo mismo, la conversación grabada de cerrajería ahora pasa por `out_of_hou
 |---|---|---|
 | Condición en el saludo | Aviso al empezar una conversación nueva, no un paso de condición | Una condición de horario como paso implica que el motor evalúe salidas en pasos que no esperan al cliente. El aviso cubre el caso real (avisar que está cerrado y seguir) sin tocar cómo avanza el motor |
 | Zona horaria del tenant | Sigue `America/Mexico_City` para todos | Ver D-5.3 |
-| Simulador viejo (`/simulator/<uuid>`) | Conserva el gate de siempre | Usa su propia copia de la orquestación (H-2) y está por retirarse |
+| Simulador viejo (`/simulator/<uuid>`) | Conservaba el gate de siempre | Usaba su propia copia de la orquestación (H-2). Se retiró el 2026-09-11: la ruta redirige al Studio del cliente (`/app/tenants/<uuid>/studio`) |
 
 ### Decisiones para OVY
 

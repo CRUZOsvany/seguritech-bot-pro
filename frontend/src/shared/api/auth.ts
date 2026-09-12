@@ -57,6 +57,22 @@ export async function login(req: LoginRequest): Promise<LoginResponse> {
   }
 }
 
+export interface ChangePasswordRequest {
+  email: string;
+  currentPassword: string;
+  newPassword: string;
+}
+
+/**
+ * POST /api/auth/change-password. No necesita sesión: re-valida la
+ * contraseña actual, así que sirve para el cambio obligatorio del primer
+ * login. Errores como ApiError: 401 'Credenciales inválidas', 400 con el
+ * motivo, 429 si se pasa del límite de intentos (el mismo del login).
+ */
+export async function changePassword(req: ChangePasswordRequest): Promise<void> {
+  await apiFetch<{ ok: true }>('POST', '/api/auth/change-password', req);
+}
+
 export async function logout(): Promise<void> {
   await apiFetch<void>('POST', '/api/auth/logout');
 }
