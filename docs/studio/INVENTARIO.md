@@ -317,7 +317,7 @@ Nuevas, salidas de este inventario:
 | D-2 | ¿Versionado sobre las tablas existentes o tabla `flow_versions` nueva como dice el documento? | Existentes. Dos fuentes de verdad es justo lo que el proyecto ya pagó caro |
 | D-3 | ¿Prefijo de los endpoints: `/api/admin/tenants/:id/studio/...`? | Sí: hereda `requireTenantScope` y el audit log sin código nuevo |
 | D-4 | El carrusel dinámico lee `catalog_items` (legacy) porque `pos_products` no tiene imagen. ¿Agregamos `imagen_url` a `pos_products` o el Studio no ofrece carrusel dinámico por ahora? | Columna en `pos_products`, en su propia migración, antes de la Fase 6 |
-| D-5 | ¿Se decide el ADR del contador de reintentos? El paso 5 del asistente ("intentos antes de escalar") no se puede construir sin él | Decidirlo antes de la Fase 5 |
+| D-5 ✅ | ¿Se decide el ADR del contador de reintentos? El paso 5 del asistente ("intentos antes de escalar") no se puede construir sin él | **Decidida el 2026-09-11 (D-5.2):** un contador por captura, como se hizo en #93 |
 | D-6 | El cobro de octubre no está en la doc oficial. ¿V-COSTO-01/02 igual como avisos? | Sí, como avisos: fusionar mensajes es buena práctica cobren o no. La métrica contra la cuota, hasta que Meta lo publique |
 | D-7 | "Botón de llamada" del documento (CTA de voz) contra `request_call_permission` (pedir permiso para llamar). ¿Cuál quieres? | Aclarar antes de la Fase 6 |
 
