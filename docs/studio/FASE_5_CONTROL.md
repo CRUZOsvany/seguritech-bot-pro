@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, y horario (`feat/studio-fase-5-horario`) sobre B-02.
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, y fusión (`feat/studio-fase-5-fusion`) sobre horario.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -10,10 +10,10 @@
 | C-08 · Palabras de escape por tenant | Hecha: #92 |
 | C-04 · Validación de capturas | Hecha: #93 |
 | B-02 · Desambiguación | Hecha: #94 |
-| Horario en el saludo y en el paso a humano | Hecha: PR apilado sobre el de B-02 (sin zona horaria por tenant, D-5.3) |
+| Horario en el saludo y en el paso a humano | Hecha: #95 (sin zona horaria por tenant, D-5.3) |
 | Inactividad con ventana | Pendiente |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
-| Fusión de mensajes | Pendiente |
+| Fusión de mensajes | Hecha: PR apilado sobre el de horario |
 | Indicador de "escribiendo" | Pendiente |
 | Orden de entrega | Pendiente |
 
@@ -228,3 +228,34 @@ Por lo mismo, la conversación grabada de cerrajería ahora pasa por `out_of_hou
 ### Decisiones para OVY
 
 - **D-5.3 · Zona horaria por tenant.** `bot_configurations` es una tabla con columnas, así que necesita la migración 024 (`zona_horaria`) y el campo en el PATCH y en el panel. Leerla es seguro aunque la migración no esté (el servicio lee con `select('*')`); escribirla no. Hoy todos los tenants están en Chilpancingo. Para el horario, la zona del contenedor no importa: `BusinessHoursService` le pasa la zona a `Intl` explícitamente. ¿La agrego ahora o cuando haya un tenant en otra zona? Recomiendo esperar, porque ya hay dos migraciones sin aplicar (021 y 023).
+
+---
+
+## 5. Fusión de mensajes
+
+> §6: *El editor muestra cuántos mensajes envía cada paso y propone fusionar. Ejemplo: saludo de texto + menú se convierten en un solo mensaje interactivo con el saludo en el cuerpo.*
+
+### Qué hace
+
+- **Mensajes por turno.** El reporte del validador trae `turns`: desde cada inicio de turno, cuántos mensajes manda el bot hasta esperar al cliente, y por qué pasos. El Studio los muestra en el paso 8 y el Designer en su panel de validación (solo los turnos con más de uno).
+- **Propone fusionar.** V-COSTO-01 (un texto suelto justo antes de otro texto o de un menú) trae un arreglo (`fix`) cuando se puede hacer solo, o el motivo cuando no.
+- **Fusiona sin mover flechas.** El texto se convierte **en su lugar** en el mensaje que le sigue, con el texto arriba: conserva su id, así lo que llegaba a él no cambia. El mensaje de después se queda si algo más lo usa (otra salida, el inicio, una palabra de escape, un tope de intentos) y se quita si ya no.
+- **No fusiona** si juntos pasan del límite del cuerpo (de `limits.ts`), si uno de los dos textos es del negocio (`config_bound`) y el otro no, o si el texto tiene más de una salida. Si los dos son del negocio, junta sus claves, como el saludo del asistente.
+- **En el Designer**, la sección «Revisión del Studio» valida lo que hay en el lienzo, sin guardar, con las mismas reglas que se aplican al publicar. «Fusionar» carga el resultado al lienzo como cambio sin guardar, y el operador guarda como siempre.
+
+| Pieza | Dónde |
+|---|---|
+| Fusión | `backend/src/domain/validation/mergeMessages.ts` (`planMerge`, pura) |
+| Validador | `turns` en el reporte; `fix` en V-COSTO-01 |
+| Endpoints | `POST /api/admin/tenants/:id/studio/validate` y `POST …/studio/merge`: devuelven, no guardan. No escriben nada, así que no pasan por el audit log |
+| Panel | Designer: `designer/validation/StudioReview.tsx`. Studio: paso 8 |
+
+Con securitech: fusionar «saludo» deja un solo mensaje (saludo + menú). «menu_principal» se queda porque lo usan «no_entendi» y la palabra «menú».
+
+### Desvíos
+
+| Especificación | Qué se hizo | Por qué |
+|---|---|---|
+| «Cuántos mensajes envía cada paso» | Por turno, no por paso | Lo que cuenta para el cliente y para el costo es cuántos llegan juntos; un paso casi siempre manda uno |
+| Proponer fusionar en el editor | En el Designer y en el reporte; el asistente no lo necesita | El asistente ya arma el saludo y el menú en un solo mensaje |
+| Los moldes JSON | Sin tocar | Fusionar el saludo de securitech cambia cómo se ve el primer mensaje: es decisión del negocio (ya estaba anotado en la Fase 2) |

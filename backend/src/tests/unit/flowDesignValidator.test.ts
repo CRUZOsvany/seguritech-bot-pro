@@ -55,6 +55,11 @@ describe('validateFlowDesign', () => {
       summary: { errors: 0, warnings: 0 },
       issues: [],
       schema: { ok: true, issues: [] },
+      turns: [
+        { entry: 'menu', messages: 1, path: ['menu'] },
+        { entry: 'info', messages: 1, path: ['info', 'fin'] },
+        { entry: 'humano', messages: 1, path: ['humano', 'fin'] },
+      ],
     });
   });
 

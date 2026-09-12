@@ -85,6 +85,15 @@ export interface ValidationIssue {
   level: 'error' | 'warning';
   message: string;
   nodeId?: string;
+  /** Arreglo que el Studio sabe hacer solo (fusionar un texto con el mensaje que le sigue). */
+  fix?: { kind: 'merge_next'; nodeId: string };
+}
+
+/** Cuántos mensajes manda el bot en un turno, desde `entry` hasta esperar al cliente. */
+export interface TurnMessages {
+  entry: string;
+  messages: number;
+  path: string[];
 }
 
 export interface ValidationReport {
@@ -93,6 +102,22 @@ export interface ValidationReport {
   issues: ValidationIssue[];
   /** ¿Se podría publicar hoy? (FlowSchema del backend) */
   schema: { ok: boolean; issues: Array<{ path: string; message: string }> };
+  /** Opcional: los reportes anteriores a la Fase 5 no lo traen. */
+  turns?: TurnMessages[];
+}
+
+/** Valida un flow sin guardarlo (el lienzo del Designer). */
+export function validateFlowJson(tenantId: string, flow: unknown): Promise<{ report: ValidationReport }> {
+  return apiFetch<{ report: ValidationReport }>('POST', `/api/admin/tenants/${tenantId}/studio/validate`, { flow });
+}
+
+/** Fusiona un texto con el mensaje que le sigue. Devuelve el flow nuevo; no guarda nada. */
+export function mergeNext(
+  tenantId: string,
+  flow: unknown,
+  nodeId: string,
+): Promise<{ flow: unknown; removed: string | null; report: ValidationReport }> {
+  return apiFetch('POST', `/api/admin/tenants/${tenantId}/studio/merge`, { flow, nodeId });
 }
 
 /** Límites de WhatsApp servidos por el backend (domain/whatsapp/limits.ts). */

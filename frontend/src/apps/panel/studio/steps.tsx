@@ -16,6 +16,7 @@ import type {
   WizardSpec,
 } from '@/shared/api/studio';
 import { EngineNote, KeywordsField, Section, TextField, VariableChips } from './fields';
+import { busyTurns } from './testing-model';
 import {
   CAPTURE_TYPES,
   STEPS,
@@ -760,6 +761,12 @@ export function StepPublicar({ spec, report, goTo, actions }: StepProps & { acti
         {report && report.issues.length > 0 && <IssueList issues={report.issues} onGo={goTo} spec={spec} />}
         {report && !report.schema.ok && (
           <p className="text-xs text-red-700">El flujo todavía no se puede publicar: {report.schema.issues[0]?.message}</p>
+        )}
+        {busyTurns(report?.turns).length > 0 && (
+          <p className="text-xs text-muted-foreground">
+            Mensajes por turno (cada uno cuenta):{' '}
+            {busyTurns(report?.turns).map((t) => `desde «${t.entry}» ${t.messages}`).join(' · ')}
+          </p>
         )}
       </Section>
       <Section title="Probar">
