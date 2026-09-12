@@ -8,9 +8,16 @@ import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchem
 import { requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
 import { SimEventSchema, eventToStep, toApiTurn } from './studioSimulation';
 import { errMsg } from './helpers';
+import { validateFlowDesign } from '@/domain/validation/flowDesignValidator';
+import { WHATSAPP_LIMITS, WHATSAPP_LIMITS_VERIFIED_AT } from '@/domain/whatsapp/limits';
 
 /** Mismo teléfono de prueba que el simulador del panel. */
 const DEFAULT_SIM_PHONE = '5210000000000';
+
+const SourceSchema = z.object({
+  source: z.enum(['draft', 'active', 'version']).default('draft'),
+  versionId: z.string().min(1).optional(),
+});
 
 const SimulateBodySchema = z.object({
   events: z.array(SimEventSchema).min(1).max(100),
@@ -29,7 +36,7 @@ const SimulateBodySchema = z.object({
 });
 
 /**
- * Endpoints del Studio (Fase 1: simulación). Rutas bajo
+ * Endpoints del Studio: simulación (Fase 1), validación y límites (Fase 2). Rutas bajo
  * /api/admin/tenants/:id/studio/... (decisión D-3): heredan requireTenantScope,
  * así que un admin_operator solo simula flows de su propio tenant.
  *
@@ -101,20 +108,62 @@ export function createStudioRouter(params: {
     },
   );
 
+  // POST /tenants/:id/studio/flows/:flowId/validate — reporte del validador
+  // de diseño (Fase 2). Informa; la publicación la sigue decidiendo el schema.
+  // El borrador se valida tal cual está, sin exigir antes que pase el schema:
+  // es justo lo que se quiere revisar.
+  router.post(
+    '/tenants/:id/studio/flows/:flowId/validate',
+    requireTenantScope,
+    async (req: Request, res: Response) => {
+      const tenantId = String(req.params.id);
+      const flowId = String(req.params.flowId);
+      const parsed = SourceSchema.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        const first = parsed.error.issues[0];
+        res.status(400).json({ error: `${first.path.join('.')}: ${first.message}` });
+        return;
+      }
+      const { source, versionId } = parsed.data;
+      if (source === 'version' && !versionId) {
+        res.status(400).json({ error: "versionId: requerido con source 'version'" });
+        return;
+      }
+      try {
+        const loaded = await loadFlow(botFlowRepository, tenantId, flowId, source, versionId);
+        if (!loaded.ok) {
+          res.status(loaded.status).json(loaded.body);
+          return;
+        }
+        res.json({ source, flowId, report: validateFlowDesign(loaded.flow) });
+      } catch (err) {
+        logger.error({ err: errMsg(err), tenantId, flowId }, 'POST studio validate failed');
+        res.status(500).json({ error: 'Error validando el flujo' });
+      }
+    },
+  );
+
+  // GET /studio/limits — los límites de WhatsApp que usa el validador, para
+  // que el panel no escriba ningún número a mano (regla 4).
+  router.get('/studio/limits', (_req: Request, res: Response) => {
+    res.json({ verifiedAt: WHATSAPP_LIMITS_VERIFIED_AT, limits: WHATSAPP_LIMITS });
+  });
+
   return router;
 }
 
-type Resolved =
-  | { ok: true; flow: BotFlow }
+type Loaded =
+  | { ok: true; flow: unknown }
   | { ok: false; status: number; body: Record<string, unknown> };
 
-async function resolveFlow(
+/** El JSON del flow según la fuente, sin validarlo. */
+async function loadFlow(
   repo: BotFlowRepository,
   tenantId: string,
   flowId: string,
   source: 'draft' | 'active' | 'version',
   versionId?: string,
-): Promise<Resolved> {
+): Promise<Loaded> {
   if (source === 'version') {
     // getVersionFlow filtra por tenant: una versión de otro tenant no existe aquí.
     const flow = await repo.getVersionFlow(versionId!, tenantId);
@@ -125,18 +174,7 @@ async function resolveFlow(
   if (source === 'draft') {
     const editable = await repo.getEditableFlow(flowId, tenantId);
     if (!editable) return { ok: false, status: 404, body: { error: 'Flow no encontrado' } };
-    try {
-      return { ok: true, flow: validateFlow(editable.flow) };
-    } catch (err) {
-      if (err instanceof FlowValidationError) {
-        return {
-          ok: false,
-          status: 400,
-          body: { error: `El borrador no es válido: ${err.message}`, issues: err.issues },
-        };
-      }
-      throw err;
-    }
+    return { ok: true, flow: editable.flow };
   }
 
   const flows = await repo.listFlowsByTenant(tenantId);
@@ -152,4 +190,32 @@ async function resolveFlow(
   const active = await repo.findActiveByTenant(tenantId);
   if (!active) return { ok: false, status: 404, body: { error: 'El tenant no tiene flow publicado' } };
   return { ok: true, flow: active };
+}
+
+/**
+ * Para simular, un borrador tiene que pasar el schema (el motor no corre un
+ * flow mal formado). Lo publicado y las versiones ya lo pasaron al publicarse.
+ */
+async function resolveFlow(
+  repo: BotFlowRepository,
+  tenantId: string,
+  flowId: string,
+  source: 'draft' | 'active' | 'version',
+  versionId?: string,
+): Promise<{ ok: true; flow: BotFlow } | { ok: false; status: number; body: Record<string, unknown> }> {
+  const loaded = await loadFlow(repo, tenantId, flowId, source, versionId);
+  if (!loaded.ok) return loaded;
+  if (source !== 'draft') return { ok: true, flow: loaded.flow as BotFlow };
+  try {
+    return { ok: true, flow: validateFlow(loaded.flow) };
+  } catch (err) {
+    if (err instanceof FlowValidationError) {
+      return {
+        ok: false,
+        status: 400,
+        body: { error: `El borrador no es válido: ${err.message}`, issues: err.issues },
+      };
+    }
+    throw err;
+  }
 }
