@@ -42,6 +42,7 @@ import { AuditLogService } from '@/infrastructure/services/AuditLogService';
 import { JwtService } from '@/infrastructure/auth/JwtService';
 import { createAuthMiddleware } from '@/infrastructure/auth/AuthMiddleware';
 import { NotificationPort } from '@/domain/ports';
+import { InactivityScheduler } from '@/infrastructure/scheduling/InactivityScheduler';
 
 /**
  * Bootstrap — Operación Búnker v2 (Sprint F).
@@ -312,6 +313,21 @@ export class Bootstrap {
       this.expressServer.setupStaticAssets();
 
       await this.expressServer.start();
+
+      // Inactividad (Studio, Fase 5): recordatorio y cierre de conversaciones
+      // que se quedaron a medias, cada minuto, sobre los tenants con el bot
+      // activo. Lo que sale queda en `messages`, como las respuestas del webhook.
+      if (config.bot.inactivitySweep) {
+        new InactivityScheduler({
+          sweeper: this.container.getInactivitySweeper(),
+          listTenants: () => tenantServiceRepository.listTenantIdsByStatus('whatsapp_bot', 'active'),
+          logOutbound: (tenantId, toPhone, content) => messageLogService.logOutbound({ tenantId, toPhone, content }),
+          logger: this.logger,
+        }).start();
+        this.logger.info('✅ Barrido de inactividad activo (cada minuto)');
+      } else {
+        this.logger.info('⏸️  Barrido de inactividad apagado (INACTIVITY_SWEEP=off, o fuera de producción sin valor)');
+      }
 
       // CLI multi-tenant SOLO en desarrollo. En prod no hay stdin real.
       if (config.isDevelopment) {

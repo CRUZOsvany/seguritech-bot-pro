@@ -501,6 +501,25 @@ export interface BotFlow {
    * `user_response_closed`.
    */
   hours?: { when_closed: 'block' | 'continue' };
+  /**
+   * Inactividad (Fase 5): si el cliente deja de contestar a media
+   * conversación. Sin esta clave, el bot espera sin escribir, como siempre.
+   * Reglas en domain/conversation/inactivity.ts.
+   */
+  inactivity?: FlowInactivity;
+}
+
+/**
+ * Recordatorio y cierre por inactividad, contados desde el último mensaje
+ * del cliente. Los dos tiempos van de 1 a 120 minutos: a las 2 h la sesión
+ * vence sola (SessionTtlPolicy), y así nada sale con la ventana de 24 h
+ * cerrada. Los textos van tal cual: no resuelven {{variables}}.
+ */
+export interface FlowInactivity {
+  /** Un solo recordatorio por silencio (V-CUMP-04). */
+  reminder?: { after_minutes: number; text: string };
+  /** Cierra la conversación: borra el paso y lo capturado. Si trae `text`, lo manda al cerrar. */
+  close: { after_minutes: number; text?: string };
 }
 
 /**

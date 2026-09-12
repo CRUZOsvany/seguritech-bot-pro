@@ -56,4 +56,11 @@ export interface TenantServiceRepository {
     tenantId: string,
     serviceType: ServiceType,
   ): Promise<ServiceStatus | null>;
+
+  /**
+   * Tenants con el servicio en ese status, para procesos que no nacen de un
+   * mensaje (el barrido de inactividad, Fase 5). Es el único listado entre
+   * tenants del puerto: por eso no lleva tenantId.
+   */
+  listTenantIdsByStatus(serviceType: ServiceType, status: ServiceStatus): Promise<string[]>;
 }

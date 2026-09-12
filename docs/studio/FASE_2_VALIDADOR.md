@@ -73,7 +73,7 @@ Regla 2 de la especificación: si el motor no lo hace, el validador no lo revisa
 | V-EST-09 | Respuesta por tipo de entrada (audio, imagen…): el motor ignora esos mensajes, así que el flow no tiene dónde declararla (hallazgo H-8) |
 | V-META-03 | El modelo de nodos no tiene encabezados en los tipos donde Meta los prohíbe; no hay nada que revisar |
 | V-META-06 | No existe nodo de address message |
-| V-CUMP-03, 04, 05, 08 | El motor no programa envíos, recordatorios ni plantillas. Llegan con la Fase 5 y la Fase 7 |
+| V-CUMP-08 | El motor no manda plantillas. Llega con la Fase 7. (V-CUMP-05 llegó con el horario y V-CUMP-03/04 con la inactividad, en la Fase 5: `FASE_5_CONTROL.md` §4 y §8) |
 
 ---
 

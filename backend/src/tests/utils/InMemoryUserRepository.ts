@@ -90,6 +90,41 @@ export class InMemoryUserRepository implements UserRepository {
     }
   }
 
+  async listAwaitingReply(tenantId: string, lastInboundFrom: Date, lastInboundTo: Date): Promise<User[]> {
+    return [...this.users.values()].filter(
+      (u) =>
+        u.tenantId === tenantId &&
+        !!u.currentNodeId &&
+        u.currentNodeId !== 'end' &&
+        !u.optedOutAt &&
+        !!u.lastInboundAt &&
+        u.lastInboundAt >= lastInboundFrom &&
+        u.lastInboundAt <= lastInboundTo,
+    );
+  }
+
+  async markInactivityReminder(tenantId: string, phoneNumber: string, lastInboundAt: Date, at: Date): Promise<boolean> {
+    for (const user of this.users.values()) {
+      if (user.tenantId !== tenantId || user.phoneNumber !== phoneNumber) continue;
+      if (user.lastInboundAt?.getTime() !== lastInboundAt.getTime()) return false;
+      if (user.inactivityRemindedAt && user.inactivityRemindedAt >= lastInboundAt) return false;
+      user.inactivityRemindedAt = at;
+      return true;
+    }
+    return false;
+  }
+
+  async closeInactiveSession(tenantId: string, phoneNumber: string, lastInboundAt: Date): Promise<boolean> {
+    for (const user of this.users.values()) {
+      if (user.tenantId !== tenantId || user.phoneNumber !== phoneNumber) continue;
+      if (!user.currentNodeId || user.lastInboundAt?.getTime() !== lastInboundAt.getTime()) return false;
+      user.currentNodeId = undefined;
+      user.context = {};
+      return true;
+    }
+    return false;
+  }
+
   // Para tests: limpiar todos los datos
   clear(): void {
     this.users.clear();

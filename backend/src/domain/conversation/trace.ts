@@ -73,7 +73,12 @@ export type DecisionStep =
   /** Paso a humano: el bot se silencia hasta `pausedUntil`. */
   | { kind: 'escalation'; pausedUntil: string; ownerNotified: boolean }
   /** Solo en simulación: el reloj se adelantó. */
-  | { kind: 'clock_advanced'; minutes: number; now: string };
+  | { kind: 'clock_advanced'; minutes: number; now: string }
+  /**
+   * Inactividad (Fase 5): el cliente dejó de contestar en `nodeId`. `sent`
+   * dice si salió un mensaje (un cierre sin texto no manda nada).
+   */
+  | { kind: 'inactivity'; action: 'reminder' | 'close'; afterMinutes: number; nodeId: string; sent: boolean };
 
 export type GateName =
   | 'no_config'

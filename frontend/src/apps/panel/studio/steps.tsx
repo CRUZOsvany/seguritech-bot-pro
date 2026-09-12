@@ -12,6 +12,7 @@ import type {
   WizardCaptureOption,
   WizardEscape,
   WizardHandoff,
+  WizardInactivity,
   WizardOption,
   WizardSpec,
 } from '@/shared/api/studio';
@@ -19,6 +20,7 @@ import { EngineNote, KeywordsField, Section, TextField, VariableChips } from './
 import { busyTurns } from './testing-model';
 import {
   CAPTURE_TYPES,
+  DEFAULT_INACTIVITY,
   STEPS,
   availableVariables,
   checkForType,
@@ -732,13 +734,77 @@ export function StepHumano({ spec, setSpec, business, limits, canEditStructure, 
 
 export function StepDespedida({ spec, setSpec, limits, canEditStructure, report }: StepProps) {
   const used = spec.options.some((o) => o.kind === 'info' && o.actions.some((a) => a.goto === 'farewell'));
+  const disabled = !canEditStructure;
+  const inactivity = spec.inactivity;
+  const setInactivity = (next: WizardInactivity | undefined) => setSpec((s) => ({ ...s, inactivity: next }));
   return (
     <>
       <StepIssues report={report} spec={spec} step="despedida" />
       <Section title="Despedida">
-        <TextField label="Mensaje" value={spec.farewell.text} max={limits.text.bodyMax} multiline rows={2} disabled={!canEditStructure} onChange={(v) => setSpec((s) => ({ ...s, farewell: { ...s.farewell, text: v } }))} />
+        <TextField label="Mensaje" value={spec.farewell.text} max={limits.text.bodyMax} multiline rows={2} disabled={disabled} onChange={(v) => setSpec((s) => ({ ...s, farewell: { ...s.farewell, text: v } }))} />
         <VariableChips vars={['nombre_negocio']} />
         {!used && <p className="text-xs text-amber-700">Ningún botón lleva a la despedida todavía: agrega uno en una opción de información.</p>}
+      </Section>
+      <Section title="Si el cliente deja de contestar">
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={!!inactivity} disabled={disabled} onChange={(e) => setInactivity(e.target.checked ? DEFAULT_INACTIVITY : undefined)} />
+          Recordarle y cerrar la conversación si se queda a medias
+        </label>
+        {inactivity && (
+          <>
+            <label className="flex items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={!!inactivity.reminder}
+                disabled={disabled}
+                onChange={(e) => setInactivity({ ...inactivity, reminder: e.target.checked ? DEFAULT_INACTIVITY.reminder : undefined })}
+              />
+              Mandar un recordatorio antes de cerrar (uno solo)
+            </label>
+            {inactivity.reminder && (
+              <div className="grid gap-2 sm:grid-cols-[9rem_1fr]">
+                <NumberField
+                  label="Recordatorio a los (min)"
+                  value={inactivity.reminder.afterMinutes}
+                  disabled={disabled}
+                  onChange={(v) => setInactivity({ ...inactivity, reminder: { text: inactivity.reminder?.text ?? '', afterMinutes: v ?? 0 } })}
+                />
+                <TextField
+                  label="Recordatorio"
+                  value={inactivity.reminder.text}
+                  max={limits.text.bodyMax}
+                  multiline
+                  rows={2}
+                  disabled={disabled}
+                  onChange={(v) => setInactivity({ ...inactivity, reminder: { afterMinutes: inactivity.reminder?.afterMinutes ?? 0, text: v } })}
+                />
+              </div>
+            )}
+            <div className="grid gap-2 sm:grid-cols-[9rem_1fr]">
+              <NumberField
+                label="Cierra a los (min)"
+                value={inactivity.close.afterMinutes}
+                disabled={disabled}
+                onChange={(v) => setInactivity({ ...inactivity, close: { ...inactivity.close, afterMinutes: v ?? 0 } })}
+              />
+              <TextField
+                label="Mensaje al cerrar (opcional)"
+                value={inactivity.close.text ?? ''}
+                max={limits.text.bodyMax}
+                multiline
+                rows={2}
+                disabled={disabled}
+                onChange={(v) => setInactivity({ ...inactivity, close: { ...inactivity.close, text: v || undefined } })}
+              />
+            </div>
+          </>
+        )}
+        <EngineNote>
+          Cuenta desde el último mensaje del cliente, solo a media conversación, y nunca con la baja activa ni con una persona atendiendo.
+          El recordatorio sale una sola vez por silencio; el cierre borra lo capturado y el próximo mensaje empieza de nuevo.
+          Los dos tiempos van hasta 120 min: a las 2 h la sesión vence sola. Los mensajes salen tal cual, sin {'{{variables}}'}.
+          Pruébalo en el simulador con «+30 min».
+        </EngineNote>
       </Section>
       <EngineNote>
         Lo que el motor hace solo, sin configurar: si el cliente escribe «baja» o «stop», deja de recibir mensajes y se le confirma una vez; si vuelve a escribir, se reactiva.

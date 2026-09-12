@@ -159,6 +159,19 @@ export const WizardSpecSchema = z
     escape: EscapeSpecSchema.optional(),
     /** Fuera de horario: `block` solo avisa que está cerrado; `continue` atiende igual. Sin él, `block`. */
     hours: z.object({ whenClosed: z.enum(['block', 'continue']) }).optional(),
+    /**
+     * Si el cliente deja de contestar a media conversación (Fase 5): un
+     * recordatorio opcional y el cierre, en minutos desde su último mensaje.
+     * Sin ella el bot espera sin escribir. Los topes los pone el schema del
+     * flow (y el validador los explica); aquí solo se piden enteros para que
+     * el panel siempre pueda compilar y mostrar el error.
+     */
+    inactivity: z
+      .object({
+        reminder: z.object({ afterMinutes: z.number().int(), text: z.string().trim() }).optional(),
+        close: z.object({ afterMinutes: z.number().int(), text: z.string().trim().optional() }),
+      })
+      .optional(),
   })
   .superRefine((spec, ctx) => {
     const ids = new Set<string>();
@@ -384,7 +397,15 @@ export function compileWizard(spec: WizardSpec): BotFlow {
     nodes,
     ...(spec.escape ? { escape: compileEscape(spec.escape) } : {}),
     ...(spec.hours ? { hours: { when_closed: spec.hours.whenClosed } } : {}),
+    ...(spec.inactivity ? { inactivity: compileInactivity(spec.inactivity) } : {}),
     studio: { wizard: spec },
+  };
+}
+
+function compileInactivity(i: NonNullable<WizardSpec['inactivity']>): NonNullable<BotFlow['inactivity']> {
+  return {
+    ...(i.reminder ? { reminder: { after_minutes: i.reminder.afterMinutes, text: i.reminder.text } } : {}),
+    close: { after_minutes: i.close.afterMinutes, ...(i.close.text ? { text: i.close.text } : {}) },
   };
 }
 
@@ -421,12 +442,13 @@ export function readWizardSpec(flow: unknown): WizardReadResult {
   if (!parsed.success) return { ok: false, reason: 'invalid_spec' };
 
   const expected = compileWizard(parsed.data);
-  const actual = flow as { start_node_id?: unknown; nodes?: unknown; escape?: unknown; hours?: unknown };
+  const actual = flow as { start_node_id?: unknown; nodes?: unknown; escape?: unknown; hours?: unknown; inactivity?: unknown };
   const same =
     actual.start_node_id === expected.start_node_id &&
     deepEqual(actual.nodes, expected.nodes) &&
     deepEqual(actual.escape, expected.escape) &&
-    deepEqual(actual.hours, expected.hours);
+    deepEqual(actual.hours, expected.hours) &&
+    deepEqual(actual.inactivity, expected.inactivity);
   return same ? { ok: true, spec: parsed.data } : { ok: false, reason: 'edited_elsewhere' };
 }
 

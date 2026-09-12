@@ -139,4 +139,18 @@ export class SupabaseTenantServiceRepository implements TenantServiceRepository 
     }
     return data ? (data.status as ServiceStatus) : null;
   }
+
+  async listTenantIdsByStatus(serviceType: ServiceType, status: ServiceStatus): Promise<string[]> {
+    const { data, error } = await this.supabase
+      .from('tenant_services')
+      .select('tenant_id')
+      .eq('service_type', serviceType)
+      .eq('status', status);
+
+    if (error) {
+      this.logger.error({ error, serviceType, status }, 'listTenantIdsByStatus failed');
+      throw new Error(`listTenantIdsByStatus failed: ${error.message}`);
+    }
+    return ((data ?? []) as Array<{ tenant_id: string }>).map((row) => row.tenant_id);
+  }
 }

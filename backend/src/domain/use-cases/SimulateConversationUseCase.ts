@@ -7,6 +7,8 @@ import { ConversationEngine } from '@/domain/conversation/ConversationEngine';
 import type { OutboundMessage } from '@/domain/conversation/OutboundMessage';
 import type { DecisionStep } from '@/domain/conversation/trace';
 import { explainTrace } from '@/domain/conversation/explain';
+import { InactivitySweeper } from '@/domain/conversation/InactivitySweeper';
+import { inactivityCheckpoints } from '@/domain/conversation/inactivity';
 import {
   CapturingMessenger,
   FakeClock,
@@ -84,19 +86,31 @@ export class SimulateConversationUseCase {
     const clock = new FakeClock(input.startAt);
     const sessions = new InMemorySessionRepository(clock);
     const messenger = new CapturingMessenger();
+    // El log de una simulación no es un evento de producción.
+    const logger = this.logger.child({ simulation: true }, { level: 'silent' });
+    const flows = { findActive: async () => input.flow };
     const engine = new ConversationEngine({
       sessions,
       messenger,
       tenantConfig: this.tenantConfigPort,
-      flows: { findActive: async () => input.flow },
+      flows,
       interpreter: this.interpreter,
       businessHours: this.businessHours,
       audit: noopAudit,
       clock,
       ids: new SequentialIdGenerator(),
       handoffPauseMs: this.handoffPauseMs,
-      // El log de una simulación no es un evento de producción.
-      logger: this.logger.child({ simulation: true }, { level: 'silent' }),
+      logger,
+    });
+    // Inactividad (Fase 5): el mismo barrido que corre cada minuto en producción.
+    const sweeper = new InactivitySweeper({
+      sessions,
+      messenger,
+      tenantConfig: this.tenantConfigPort,
+      flows,
+      businessHours: this.businessHours,
+      clock,
+      logger,
     });
 
     const turns: SimulatedTurn[] = [];
@@ -105,8 +119,20 @@ export class SimulateConversationUseCase {
       let trace: DecisionStep[];
 
       if (step.kind === 'advance_time') {
-        clock.advanceMinutes(step.minutes);
-        trace = [{ kind: 'clock_advanced', minutes: step.minutes, now: clock.now().toISOString() }];
+        const target = new Date(clock.now().getTime() + step.minutes * 60_000);
+        trace = [{ kind: 'clock_advanced', minutes: step.minutes, now: target.toISOString() }];
+        // Se corre el barrido en cada momento del intervalo en que a esta
+        // conversación le toca algo, como lo haría el de producción.
+        const user = sessions.snapshot(input.tenantId, input.from);
+        for (const at of user ? inactivityCheckpoints(input.flow.inactivity, user) : []) {
+          if (at <= clock.now() || at > target) continue;
+          clock.advanceTo(at);
+          for (const outcome of await sweeper.sweepTenant(input.tenantId)) {
+            outbound.push(...outcome.outbound);
+            trace.push(...outcome.trace);
+          }
+        }
+        clock.advanceTo(target);
       } else if (step.content === null) {
         trace = [{
           kind: 'input_ignored',
