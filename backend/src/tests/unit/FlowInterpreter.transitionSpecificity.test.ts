@@ -4,8 +4,8 @@
  * decidía el comportamiento del bot, invisible para quien edita el flow.
  * Ahora se evalúan todas las transiciones que matchean y gana la de mayor
  * especificidad (button > list_item > ... > default), sin importar el
- * orden del array. Empates entre transiciones del MISMO nivel sí respetan
- * el orden (comportamiento idéntico al de antes para ese caso).
+ * orden del array. Un empate de palabras clave a destinos distintos ya no
+ * lo decide el orden: el bot pregunta (B-02, ver disambiguation.test).
  *
  * Prueba el caso real del hallazgo: un flow con las transiciones en el
  * orden "equivocado" (más genérica primero) debe seguir contestando
@@ -102,7 +102,7 @@ describe('FlowInterpreter — scoring por especificidad de transiciones (DEC-06 
     expect(result.nextNodeId).toBe('via_button');
   });
 
-  it('empate entre dos transiciones del mismo tipo (keyword): gana la que va primero en el array', async () => {
+  it('empate entre dos palabras clave a destinos distintos: no adivina, pregunta cuál (B-02)', async () => {
     const flow: BotFlow = {
       version: '1.0',
       start_node_id: 'menu',
@@ -129,7 +129,10 @@ describe('FlowInterpreter — scoring por especificidad de transiciones (DEC-06 
       flow, user, message: makeMessage('ayuda'), tenantConfig: makeTenantConfig(),
     });
 
-    expect(result.nextNodeId).toBe('primero');
+    expect(result.nextNodeId).toBe('menu');
+    expect(result.outputs).toEqual([
+      { kind: 'buttons', text: '¿Te refieres a «Ayuda» o a «Ayuda»?', buttons: [{ id: 'desambiguar_1', title: 'Ayuda' }, { id: 'desambiguar_2', title: 'Ayuda' }] },
+    ]);
   });
 
   it('default nunca gana si algo más específico matchea, sin importar el orden', async () => {

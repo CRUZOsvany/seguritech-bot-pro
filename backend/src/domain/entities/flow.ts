@@ -81,7 +81,8 @@ export type CarouselCardsSource = 'catalog_items';
  * mayor especificidad: button 100 > list_item 90 > call_permission_* 85 >
  * catalog_found 80 > service_directory_match 70 > list_item_any/card_any 60 >
  * keyword 50 > catalog_not_found 20 > default 0. El orden del array solo
- * desempata entre transiciones del MISMO nivel. Ver ADR-016 en
+ * desempata entre transiciones del MISMO nivel, salvo palabras clave a
+ * destinos distintos: ahí el bot pregunta cuál (B-02). Ver ADR-016 en
  * .claude/SEGURITECH_PROYECTO_MAESTRO.md y FlowInterpreter.transitionSpecificity().
  *
  * En nodos send_list mixtos (sección estática + sección dinámica), los

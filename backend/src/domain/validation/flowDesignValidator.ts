@@ -425,7 +425,7 @@ function ruleTies(ctx: GraphContext): ValidationIssue[] {
         for (const w of t.condition.values.map(normalize)) {
           const other = words.get(w);
           if (other && other !== t.next_node_id) {
-            out.push(issue('V-EST-07', 'warning', `En ${q(n.id)} la palabra "${w}" lleva a ${q(other)} y a ${q(t.next_node_id)}: gana la primera en la lista.`, n.id));
+            out.push(issue('V-EST-07', 'warning', `En ${q(n.id)} la palabra "${w}" lleva a ${q(other)} y a ${q(t.next_node_id)}: el bot tendrá que preguntar cuál de las dos (B-02).`, n.id));
           }
           words.set(w, t.next_node_id);
         }

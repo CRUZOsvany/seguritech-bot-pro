@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), y C-04 (`feat/studio-fase-5-capturas`) sobre C-08.
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, y B-02 (`feat/studio-fase-5-desambiguacion`) sobre C-04.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -8,8 +8,8 @@
 | Funcionalidad | Estado |
 |---|---|
 | C-08 · Palabras de escape por tenant | Hecha: #92 |
-| C-04 · Validación de capturas | Hecha: PR apilado sobre el de C-08 |
-| B-02 · Desambiguación | Pendiente |
+| C-04 · Validación de capturas | Hecha: #93 |
+| B-02 · Desambiguación | Hecha: PR apilado sobre el de C-04 |
 | Horario en el saludo y en el paso a humano | Pendiente |
 | Inactividad con ventana | Pendiente |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
@@ -146,3 +146,41 @@ Un paso `wait_input` puede declarar `validation`. Si la respuesta no sirve, el b
 ### Decisiones para OVY
 
 - **D-5.2 · ADR del contador de reintentos** (`.claude/ADR_CONTADOR_REINTENTOS.md`, "propuesto, sin decidir"). La especificación exige reintentos en capturas, así que implementé la parte mínima: un contador **solo para capturas con validación**, en la sesión, sin condición nueva de transición. No es la opción B del ADR (contar los "no entendí" de cualquier paso); los menús del asistente ya tienen su escalera con pasos. ¿Das el ADR por decidido así, o lo reviso con los datos del piloto como proponía?
+
+---
+
+## 3. B-02 · Desambiguación
+
+> §6: *Si dos reglas empatan, el bot pregunta ("¿Te refieres a A o a B?") en lugar de elegir. El validador marca los empates que se pueden detectar en diseño.*
+
+### Qué hace
+
+Cuando un mensaje coincide con **palabras clave** de dos o más salidas del mismo paso, con la misma prioridad y hacia destinos distintos, el bot no adivina. Manda botones: «¿Te refieres a «Información» o a «Agendar cita»?».
+
+- **Cómo se llama cada opción:** el botón o la fila del mismo paso que lleva a ese destino (el cliente ya lo vio); si no hay, la palabra que coincidió.
+- **Cuántas:** una por destino, hasta el máximo de botones de WhatsApp (`limits.ts`). Los títulos se recortan al largo que permite Meta.
+- **La respuesta:** tocar un botón, o escribir el título de una opción, sigue a esa opción. Cualquier otra cosa descarta la pregunta y el paso se evalúa normal. Una palabra de escape también la descarta.
+- **Dónde no aplica:** botones y filas (coinciden exacto, no empatan); un empate que incluye otra condición (se sigue desempatando por especificidad); dos palabras al mismo destino; y las capturas (`wait_input`), donde el texto es la respuesta y no una elección.
+- La pregunta pendiente vive en la sesión (clave reservada `__disambiguation`). El simulador no la muestra como variable.
+
+| Pieza | Dónde |
+|---|---|
+| Opciones, pregunta y respuesta | `backend/src/domain/conversation/disambiguation.ts` |
+| Motor | `FlowInterpreter`: `ambiguousOptions` en `evaluateTransitions`, y la pregunta pendiente al empezar el "Caso 3" |
+| "Por qué" | «Coinciden A y B con la misma prioridad: en vez de adivinar, el bot pregunta cuál» y «El cliente eligió A» |
+| Validador | V-EST-07 avisa la misma palabra en dos salidas: ahora dice que el bot tendrá que preguntar |
+| Panel | La nota del paso 4 explica la pregunta |
+
+### Cambio de una decisión anterior
+
+DEC-06 / ADR-016 decía que un empate entre salidas del mismo nivel lo desempata el orden (gana la primera). Para palabras clave a destinos distintos ya no: el bot pregunta. El test que fijaba «gana la primera» (`FlowInterpreter.transitionSpecificity.test.ts`) ahora fija la pregunta. Para cualquier otro empate, el orden sigue desempatando como antes.
+
+Ninguna conversación grabada de los moldes cambió: ninguna tenía un empate así.
+
+### Desvíos
+
+| Especificación | Qué se hizo | Por qué |
+|---|---|---|
+| «Si dos reglas empatan» | Solo empates de palabras clave | Botones y filas coinciden exacto; los demás tipos (catálogo, directorio) tienen prioridades distintas y no empatan entre sí |
+| El validador marca los empates detectables | V-EST-07 marca la misma palabra en dos salidas | Dos palabras distintas que aparecen en el mismo mensaje («precio de la cita») no se pueden prever en diseño |
+| Texto de la pregunta | Fijo en el motor | Igual que la confirmación de baja. Si hace falta por negocio, es un campo más del flow |
