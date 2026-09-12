@@ -37,6 +37,11 @@ const loginRoute = createRoute({
 const changePasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/change-password',
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { email?: string } => ({
+    email: typeof search.email === 'string' ? search.email : undefined,
+  }),
 }).lazy(() =>
   import('./routes/change-password').then((d) => d.Route),
 );
