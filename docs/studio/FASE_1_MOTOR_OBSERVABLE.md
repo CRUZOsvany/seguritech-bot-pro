@@ -153,6 +153,6 @@ Pide correo y contraseña del panel en la terminal, sin guardarlos. `--json` imp
 
 ## 6. Lo que queda pendiente
 
-- ~~**El endpoint viejo sigue vivo.**~~ **Resuelto el 2026-09-11:** se borraron `POST /api/admin/simulate` (y `/reset`), `SimulateMessageUseCase` (la copia paralela de H-2) y la página suelta `/simulator/<uuid>`, que era lo único que los usaba. La ruta redirige a `/app/`.
+- ~~**El endpoint viejo sigue vivo.**~~ **Resuelto el 2026-09-11:** se borraron `POST /api/admin/simulate` (y `/reset`), `SimulateMessageUseCase` (la copia paralela de H-2) y la página suelta `/simulator/<uuid>`, que era lo único que los usaba. `/simulator/<uuid>` redirige al Studio del cliente (`/app/tenants/<uuid>/studio`).
 - **La paridad se prueba con sesiones en memoria en los dos lados.** No hay base de datos en los tests. La fidelidad del repositorio falso con `bot_users` queda fijada en `simulationFakes.test.ts`, contrastada contra `SupabaseUserRepository` por lectura de código, no contra la base real.
 - **Hora de la alerta al dueño** [no verificado]: `enrichOwnerAlert` formatea la hora con la zona del proceso. Si el contenedor corre en UTC, el dueño ve la hora UTC. No se corrigió porque cambiaría lo que recibe hoy; falta confirmar la zona del contenedor en el servidor.

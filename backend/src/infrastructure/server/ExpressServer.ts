@@ -408,14 +408,15 @@ export class ExpressServer {
    * /panel (el panel HTML de antes) y /simulator (el simulador suelto, con su
    * copia de la orquestación, H-2) se retiraron el 2026-09-11. Sus rutas
    * redirigen al panel React para no romper marcadores:
-   *   - /simulator/<uuid> y /simulator/index.html?tenantId=<uuid> conservan
-   *     el tenant en ?tenantId=, como hacía antes la ruta.
+   *   - /simulator/<uuid> y /simulator/index.html?tenantId=<uuid> van al
+   *     Studio de ese cliente, donde vive el simulador.
    *   - /panel/change-password.html?email= va al cambio de contraseña de
    *     React: era el paso obligatorio del primer login.
+   *   - Todo lo demás, a /app/.
    */
   private setupRetiredRedirects(): void {
     const toApp = (res: Response, tenantId?: string): void => {
-      res.redirect(302, tenantId ? `/app/?tenantId=${encodeURIComponent(tenantId)}` : '/app/');
+      res.redirect(302, tenantId ? `/app/tenants/${encodeURIComponent(tenantId)}/studio` : '/app/');
     };
     const queryString = (req: Request, key: string): string | undefined => {
       const value = req.query[key];
@@ -430,8 +431,8 @@ export class ExpressServer {
       const raw = String(req.params.tenantId ?? '');
       toApp(res, raw === 'index.html' ? queryString(req, 'tenantId') : raw);
     });
-    this.app.use(['/panel', '/simulator'], (req: Request, res: Response) => {
-      toApp(res, queryString(req, 'tenantId'));
+    this.app.use(['/panel', '/simulator'], (_req: Request, res: Response) => {
+      toApp(res);
     });
   }
 

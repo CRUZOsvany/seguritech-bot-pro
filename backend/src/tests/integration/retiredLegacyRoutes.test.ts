@@ -32,24 +32,28 @@ describe('Rutas retiradas: /panel y /simulator', () => {
     expect(res.headers.location).toBe('/app/');
   });
 
-  it('/simulator/<uuid> conserva el tenant en ?tenantId=, como antes', async () => {
+  it('/simulator/<uuid> va al Studio de ese cliente, donde vive el simulador', async () => {
     const res = await request(app).get(`/simulator/${TENANT}`);
 
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe(`/app/?tenantId=${TENANT}`);
+    expect(res.headers.location).toBe(`/app/tenants/${TENANT}/studio`);
   });
 
   it('/simulator/index.html?tenantId=<uuid> también', async () => {
     const res = await request(app).get(`/simulator/index.html?tenantId=${TENANT}`);
 
-    expect(res.headers.location).toBe(`/app/?tenantId=${TENANT}`);
+    expect(res.headers.location).toBe(`/app/tenants/${TENANT}/studio`);
   });
 
-  it('el tenant viaja codificado: no puede sacar el redirect de /app/', async () => {
-    const res = await request(app).get('/simulator/a%2F%2Fevil.example');
+  it.each([
+    ['barras codificadas', '/simulator/a%2F%2Fevil.example', '/app/tenants/a%2F%2Fevil.example/studio'],
+    ['un tenant ".."', '/simulator/..%2F..%2F..', '/app/tenants/..%2F..%2F../studio'],
+  ])('%s: el tenant viaja codificado y el redirect no sale de /app/', async (_caso, url, location) => {
+    const res = await request(app).get(url);
 
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe('/app/?tenantId=a%2F%2Fevil.example');
+    expect(res.headers.location).toBe(location);
+    expect(new URL(res.headers.location, 'https://panel.example').pathname.startsWith('/app/')).toBe(true);
   });
 
   it('el cambio de contraseña viejo lleva al de React, con el correo', async () => {
