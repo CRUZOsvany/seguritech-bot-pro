@@ -1,6 +1,6 @@
 # ADR — Estado numérico en el motor de flows
 
-> **Estado:** propuesto, sin decidir. **Fecha:** 2026-09-08.
+> **Estado:** decidido el 2026-09-11 para el contador (ver [Decisión](#decisión-2026-09-11-d-52)); el precio sigue fuera. **Fecha:** 2026-09-08.
 > Sale de construir los bloques compuestos (F1-a): dos cosas que el plan daba
 > por hechas resultaron no ser expresables con los 14 tipos de nodo.
 
@@ -112,6 +112,24 @@ las dos opciones.
    (hecho, en `BLOQUES_COMPUESTOS.md`).
 3. **Revisar este ADR cuando la papelería lleve dos semanas en producción**,
    con datos en la mano.
+
+## Decisión (2026-09-11, D-5.2)
+
+OVY aprobó lo que construyó la Fase 5 del Studio (C-04, #93), porque la
+especificación exige reintentos en las capturas:
+
+- Un contador **solo para capturas con validación**, uno por captura. Cuenta
+  las respuestas inválidas seguidas en la sesión (clave reservada
+  `__capture_attempts`) y una respuesta buena lo reinicia.
+- Al llegar a `max_attempts` (1 a 5) el paso sigue en `on_exhausted`. Es un
+  campo del nodo `wait_input`, no una condición nueva de transición.
+- **No es la opción B:** no se cuentan los "no entendí" de cualquier paso. Los
+  menús del asistente ya tienen su escalera con pasos.
+- **La opción D (precio en un puerto) sigue sin construirse**; el Cotizador
+  mantiene el límite documentado en `BLOQUES_COMPUESTOS.md`.
+
+La propuesta de arriba ("Lo que propongo decidir ahora") queda como
+antecedente. Detalle de la implementación: `docs/studio/FASE_5_CONTROL.md` §2.
 
 ## Lo que NO se decide aquí
 

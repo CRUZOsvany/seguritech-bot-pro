@@ -90,7 +90,7 @@ Los tres moldes JSON (`backend/scripts/*-flow.json`) y el molde de cerrajería d
 
 ### Decisiones para OVY
 
-- **D-5.1 · Plantillas de Supabase.** ¿Actualizo `flow_templates` con las palabras de escape (una migración que reescribe el JSON de cada plantilla) o se quedan como están? Recomiendo esperar a que se use el Studio para crear bots.
+- **D-5.1 · Plantillas de Supabase: pospuesta** (OVY, 2026-09-11). `flow_templates` se quedan sin palabras de escape. Se actualizan (una migración que reescribe el JSON de cada plantilla) cuando el Studio se use para crear un bot nuevo de verdad.
 
 ---
 
@@ -145,7 +145,7 @@ Un paso `wait_input` puede declarar `validation`. Si la respuesta no sirve, el b
 
 ### Decisiones para OVY
 
-- **D-5.2 · ADR del contador de reintentos** (`.claude/ADR_CONTADOR_REINTENTOS.md`, "propuesto, sin decidir"). La especificación exige reintentos en capturas, así que implementé la parte mínima: un contador **solo para capturas con validación**, en la sesión, sin condición nueva de transición. No es la opción B del ADR (contar los "no entendí" de cualquier paso); los menús del asistente ya tienen su escalera con pasos. ¿Das el ADR por decidido así, o lo reviso con los datos del piloto como proponía?
+- **D-5.2 · ADR del contador de reintentos: decidida** (OVY, 2026-09-11). Aprobado tal como se implementó: un contador **solo para capturas con validación**, uno por captura, en la sesión, sin condición nueva de transición. No es la opción B del ADR (contar los "no entendí" de cualquier paso); los menús del asistente ya tienen su escalera con pasos. El ADR (`.claude/ADR_CONTADOR_REINTENTOS.md`) queda cerrado con esta decisión.
 
 ---
 
@@ -227,7 +227,7 @@ Por lo mismo, la conversación grabada de cerrajería ahora pasa por `out_of_hou
 
 ### Decisiones para OVY
 
-- **D-5.3 · Zona horaria por tenant.** `bot_configurations` es una tabla con columnas, así que necesita la migración 024 (`zona_horaria`) y el campo en el PATCH y en el panel. Leerla es seguro aunque la migración no esté (el servicio lee con `select('*')`); escribirla no. Hoy todos los tenants están en Chilpancingo. Para el horario, la zona del contenedor no importa: `BusinessHoursService` le pasa la zona a `Intl` explícitamente. ¿La agrego ahora o cuando haya un tenant en otra zona? Recomiendo esperar, porque ya hay dos migraciones sin aplicar (021 y 023).
+- **D-5.3 · Zona horaria por tenant: pospuesta** (OVY, 2026-09-11). No se agrega la migración de `zona_horaria` todavía; todos los tenants siguen en `America/Mexico_City` (hoy todos están en Chilpancingo). Para el horario, la zona del contenedor no importa: `BusinessHoursService` le pasa la zona a `Intl` explícitamente. Cuando se retome necesita la columna en `bot_configurations`, el campo en el PATCH y en el panel, y lleva el siguiente número de migración libre: la 024 queda para la inactividad.
 
 ---
 

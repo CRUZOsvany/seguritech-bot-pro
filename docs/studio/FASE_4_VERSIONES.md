@@ -154,8 +154,12 @@ Pasos agregados y quitados, cambio de paso inicial y, por paso, qué cambió en 
 
 ---
 
-## 5. Decisiones para OVY
+## 5. Decisiones
 
-- **D-4.1 · Conversaciones en curso al publicar.** La especificación propone que terminen en la versión con la que empezaron, «decisión final en Fase 4». **Hoy no es así:** la sesión solo guarda el paso actual, así que al siguiente mensaje sigue en la versión nueva desde ese paso. Si el paso ya no existe, vuelve al saludo. Fijar la versión por sesión necesita una columna en `bot_users` y que el motor cargue esa versión: es una tarea aparte. Recomiendo dejarlo así y documentarlo; los cambios de texto, que son la mayoría, no se notan.
-- **D-4.2 · ¿El rollback corre las pruebas?** Hoy solo valida. Las pruebas se escriben para el borrador actual: una versión vieja puede fallarlas con razón, y un rollback es justo para cuando algo salió mal. La especificación dice «pasando por las mismas validaciones». Si se quiere, es una línea en `PublishFlowUseCase.rollback`.
-- **D-4.3 · Quién publica.** Publicar y rollback siguen siendo de super_admin. Sigue abierta la pregunta de si un admin_operator puede publicar cambios que solo tocan textos.
+Las tres las cerró OVY el 2026-09-11. Son decisiones explícitas, no pendientes: ninguna lleva cambios de código.
+
+- **D-4.1 · Conversaciones en curso al publicar: se queda como está.** La especificación proponía que terminaran en la versión con la que empezaron. No es así y no se va a construir: la sesión solo guarda el paso actual, así que al siguiente mensaje sigue en la versión nueva desde ese paso, y si el paso ya no existe vuelve al saludo. El fijado de versión por sesión (columna en `bot_users` y que el motor cargue esa versión) queda descartado. Los cambios de texto, que son la mayoría, no se notan.
+
+  **Regla que queda:** si un publish cambia la forma del flow (pasos quitados o renombrados, salidas que llevan a otro lado, no solo textos) y hay conversaciones activas, se avisa antes de publicar en vez de asumir que no se nota. El diff de §3 dice qué pasos se quitaron; una conversación activa es un contacto con `current_node_id` distinto de null y de `end` y `last_inbound_at` dentro de las últimas 2 h (el TTL de sesión).
+- **D-4.2 · El rollback no corre las pruebas: se queda así.** Solo valida. Un rollback es la salida de emergencia para cuando algo salió mal, y las pruebas están escritas para el borrador actual, no para versiones viejas: exigir que las pase trabaría la salida justo cuando más se necesita.
+- **D-4.3 · Quién publica: solo `super_admin`.** Publicar y rollback siguen siendo de `super_admin`. No se abre `admin_operator` a publicar cambios de solo texto: sería una puerta de permisos nueva para un caso que hoy no existe (ningún `admin_operator` lo está pidiendo). Se retoma el día que haya un caso real.
