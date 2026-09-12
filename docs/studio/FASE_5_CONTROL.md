@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, y fusión (`feat/studio-fase-5-fusion`) sobre horario.
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, fusión (`feat/studio-fase-5-fusion`, #96) sobre horario, y "escribiendo" (`feat/studio-fase-5-escribiendo`) sobre fusión.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -13,8 +13,8 @@
 | Horario en el saludo y en el paso a humano | Hecha: #95 (sin zona horaria por tenant, D-5.3) |
 | Inactividad con ventana | Pendiente |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
-| Fusión de mensajes | Hecha: PR apilado sobre el de horario |
-| Indicador de "escribiendo" | Pendiente |
+| Fusión de mensajes | Hecha: #96 |
+| Indicador de "escribiendo" | Hecha: PR apilado sobre el de fusión (sin probar contra un número real, A-01) |
 | Orden de entrega | Pendiente |
 
 ---
@@ -259,3 +259,29 @@ Con securitech: fusionar «saludo» deja un solo mensaje (saludo + menú). «men
 | «Cuántos mensajes envía cada paso» | Por turno, no por paso | Lo que cuenta para el cliente y para el costo es cuántos llegan juntos; un paso casi siempre manda uno |
 | Proponer fusionar en el editor | En el Designer y en el reporte; el asistente no lo necesita | El asistente ya arma el saludo y el menú en un solo mensaje |
 | Los moldes JSON | Sin tocar | Fusionar el saludo de securitech cambia cómo se ve el primer mensaje: es decisión del negocio (ya estaba anotado en la Fase 2) |
+
+---
+
+## 6. Indicador de "escribiendo" (C-07)
+
+### Qué hace
+
+Cuando el bot va a contestar, marca como leído el mensaje del cliente y le muestra "escribiendo…" mientras arma la respuesta. Meta lo quita al llegar la respuesta, o a los 25 s.
+
+- **Payload verificado contra la doc oficial** (2026-09-11, [typing indicators](https://developers.facebook.com/docs/whatsapp/cloud-api/typing-indicators)): `POST /{phone-number-id}/messages` con `{"messaging_product":"whatsapp","status":"read","message_id":"<wamid>","typing_indicator":{"type":"text"}}`. No es un mensaje: no lleva `to` ni `type`.
+- **Solo si el bot va a contestar**, como pide Meta: el motor lo manda justo antes de correr el flow. No lo manda si un gate decide el turno (baja, pausa por persona, cerrado en modo `block`, sin flow), ni si no hay id del mensaje.
+- **No frena el turno:** si falla, se registra y el cliente recibe su respuesta igual.
+- **Simulación:** el mensajero falso lo anota sin mandar nada. Aparece en la traza (`typing`) y en el "Por qué".
+
+| Pieza | Dónde |
+|---|---|
+| Payload | `buildTypingPayload` en `infrastructure/adapters/meta/metaPayloads.ts` |
+| Puertos | `MessengerPort.typing?` (dominio) y `NotificationPort.sendTypingIndicator?`, opcionales: un adaptador que no lo soporta no lo muestra |
+| Producción | `MetaWhatsAppAdapter.sendTypingIndicator`, por el mismo `sendToMeta` y las mismas credenciales |
+| Motor | `ConversationEngine`, antes de `interpreter.execute` |
+
+**Paridad:** la paridad de producción intercepta cada POST a Meta. Ahora compara aparte los de "escribiendo…" contra los pasos `typing` de la traza de la simulación: los dos lados lo muestran en los mismos turnos.
+
+**[no verificado]:** no se probó contra un número real, porque Meta sigue sin conectar (A-01). Lo que sí está probado es el payload exacto y la llamada HTTP.
+
+**Fuera de este PR:** el retraso de 600–1200 ms entre mensajes (DEC-08) va con el orden de entrega.

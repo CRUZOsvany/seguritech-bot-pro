@@ -360,7 +360,7 @@ describe('POST .../studio/flows/:flowId/simulate', () => {
 
     expect(res.status).toBe(200);
     expect(getVersionFlow).toHaveBeenCalledWith('ver-3', HARNESS_TENANT_ID);
-    expect(res.body.turns[0].why[1]).toBe('Conversación nueva: empieza en «saludo».');
+    expect(res.body.turns[0].why[2]).toBe('Conversación nueva: empieza en «saludo».');
   });
 
   it("source 'version' sin versionId → 400; versión inexistente → 404", async () => {

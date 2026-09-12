@@ -20,6 +20,7 @@
  * El webhook del lado de producción se arma aquí mismo, sin reutilizar el
  * del simulador, para que un error en ése no se esconda en los dos lados.
  */
+import { buildTypingPayload } from '@/infrastructure/adapters/meta/metaPayloads';
 import express from 'express';
 import request from 'supertest';
 import { BotController } from '@/app/controllers/BotController';
@@ -164,7 +165,7 @@ async function runSimulation(mold: Mold) {
     .post(`/tenants/${HARNESS_TENANT_ID}/studio/flows/${FLOW_ID}/simulate`)
     .send({ events: conversation.events, startAt: conversation.startAt, from: HARNESS_CUSTOMER_PHONE });
   expect(res.status).toBe(200);
-  return res.body as { turns: Array<{ outbound: Array<{ payload: unknown; audience: string }> ; trace: Array<{ kind: string; gate?: string }> }> };
+  return res.body as { turns: Array<{ outbound: Array<{ payload: unknown; audience: string }> ; trace: Array<{ kind: string; gate?: string; messageId?: string }> }> };
 }
 
 describe.each(MOLDS)('paridad simulador ↔ producción · %s', (mold) => {
@@ -172,9 +173,18 @@ describe.each(MOLDS)('paridad simulador ↔ producción · %s', (mold) => {
     const production = await runProduction(mold);
     const simulation = await runSimulation(mold);
     const simulated = simulation.turns.flatMap((t) => t.outbound.map((o) => o.payload));
+    // C-07: "escribiendo…" no es un mensaje. Se compara aparte, contra los
+    // pasos `typing` de la traza: los dos lados lo muestran en los mismos turnos.
+    const isTyping = (p: unknown) => !!p && typeof p === 'object' && 'typing_indicator' in p;
+    const productionMessages = production.filter((p) => !isTyping(p));
+    const simulatedTyping = simulation.turns.flatMap((t) =>
+      t.trace.filter((step) => step.kind === 'typing').map((step) => buildTypingPayload(String(step.messageId))),
+    );
 
-    expect(production.length).toBeGreaterThan(3);
-    expect(simulated).toEqual(production);
+    expect(productionMessages.length).toBeGreaterThan(3);
+    expect(simulated).toEqual(productionMessages);
+    expect(simulatedTyping.length).toBeGreaterThan(0);
+    expect(production.filter(isTyping)).toEqual(simulatedTyping);
   });
 });
 

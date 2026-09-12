@@ -102,6 +102,7 @@ describe('SimulateConversationUseCase', () => {
     expect(turn.trace.map((s) => s.kind)).toEqual([
       'input',
       'window',
+      'typing',
       'session_start',
       'node_entered',
       'wait',
