@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import type pino from 'pino';
 import type { BotFlow } from '@/domain/entities/flow';
-import { BotFlowRepository, BotFlowChannel } from '@/domain/ports/BotFlowRepository';
+import { BotFlowRepository, BotFlowChannel, DraftChangedError } from '@/domain/ports/BotFlowRepository';
 import { validateFlow } from '@/domain/validators/flowSchema';
 import {
   assertRestrictedGiroCatalogGuardrail,
@@ -17,6 +17,10 @@ import {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const toUuidOrNull = (id: string | null): string | null =>
   id && UUID_RE.test(id) ? id : null;
+
+/** PostgREST: la función RPC no existe en la base (migración sin aplicar). */
+const isMissingFunction = (error: { code?: string; message?: string }): boolean =>
+  error.code === 'PGRST202' || error.code === '42883' || /Could not find the function/i.test(error.message ?? '');
 
 /**
  * Adapter de BotFlowRepository contra Supabase.
@@ -299,7 +303,6 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
   }): Promise<{ versionNumber: number }> {
     const { flowId, tenantId, createdBy, note } = params;
 
-    // 1. Leer draft + channel del flow.
     const { data: row, error: readErr } = await this.supabase
       .from('bot_flows')
       .select('draft_json, channel')
@@ -318,43 +321,102 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
       throw new Error(`Flow "${flowId}" no tiene draft para publicar`);
     }
 
-    // 2. Validar (deja propagar FlowValidationError con detalle Meta).
+    // Deja propagar FlowValidationError con detalle Meta.
     const flow = validateFlow(row.draft_json);
+    return this.publishVersion({ flowId, tenantId, flow, createdBy, note, clearDraft: true });
+  }
 
-    // 2.5. DEC-12 (auditoría 2026-08-26): giros restringidos (medico,
-    // farmacia) no pueden publicar un flow que exponga catalog_items si el
-    // catálogo del tenant tiene categorías de medicamento controlado/con
-    // receta — deja propagar RestrictedGiroGuardrailError.
+  async publishVersion(params: {
+    flowId: string;
+    tenantId: string;
+    flow: BotFlow;
+    createdBy: string | null;
+    note?: string;
+    validationReport?: unknown;
+    testReport?: unknown;
+    clearDraft: boolean;
+    expectedDraftUpdatedAt?: string | null;
+  }): Promise<{ versionNumber: number }> {
+    const { flowId, tenantId, flow } = params;
+
+    // DEC-12 (auditoría 2026-08-26): giros restringidos (medico, farmacia) no
+    // pueden publicar un flow que exponga catalog_items si el catálogo del
+    // tenant tiene categorías restringidas — deja propagar el error.
     await this.enforceRestrictedGiroGuardrail(tenantId, flow);
 
-    // 3. Calcular siguiente version_number e insertar la versión.
-    //    NOTA: supabase-js no da transacción multi-statement. Insertamos la
-    //    versión ANTES de activar; si activar falla, la fila de versión queda
-    //    huérfana pero inocua (el historial nunca pierde, solo puede sobrar).
+    const { data, error } = await this.supabase.rpc('publish_flow_version', {
+      p_tenant_id: tenantId,
+      p_flow_id: flowId,
+      p_flow_json: flow,
+      p_created_by: toUuidOrNull(params.createdBy),
+      p_note: params.note ?? null,
+      p_validation_report: params.validationReport ?? null,
+      p_test_report: params.testReport ?? null,
+      p_clear_draft: params.clearDraft,
+      p_check_draft: params.expectedDraftUpdatedAt !== undefined,
+      p_expected_draft_updated_at: params.expectedDraftUpdatedAt ?? null,
+    });
+
+    if (error) {
+      if (isMissingFunction(error)) {
+        // Migración 023 sin aplicar: se publica por el camino de antes para
+        // no dejar el panel sin poder publicar, pero se grita en el log.
+        this.logger.error(
+          { flowId, tenantId, code: error.code },
+          '❌ publish_flow_version no existe: falta aplicar la migración 023. Publicando por el camino viejo (no atómico).',
+        );
+        return this.legacyPublish(params);
+      }
+      if (error.code === '40001' || /draft_changed/.test(error.message)) throw new DraftChangedError();
+      this.logger.error({ error, flowId }, 'publishVersion: rpc failed');
+      throw new Error(`publishVersion failed: ${error.message}`);
+    }
+
+    const versionNumber = Number(data);
+    this.logger.info({ flowId, tenantId, versionNumber }, '[SupabaseBotFlowRepository] versión publicada');
+    return { versionNumber };
+  }
+
+  /**
+   * El camino de antes de la migración 023: tres escrituras sueltas. Solo se
+   * usa si la función atómica no existe todavía en la base.
+   */
+  private async legacyPublish(params: {
+    flowId: string;
+    tenantId: string;
+    flow: BotFlow;
+    createdBy: string | null;
+    note?: string;
+    clearDraft: boolean;
+  }): Promise<{ versionNumber: number }> {
+    const { flowId, tenantId, flow } = params;
+    const { data: row, error: rowErr } = await this.supabase
+      .from('bot_flows')
+      .select('channel')
+      .eq('id', flowId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    if (rowErr) throw new Error(`legacyPublish read flow failed: ${rowErr.message}`);
+    if (!row) throw new Error(`Flow "${flowId}" no existe para el tenant "${tenantId}"`);
+
     const versionNumber = await this.nextVersionNumber(flowId);
     const { error: insErr } = await this.supabase.from('bot_flow_versions').insert({
       tenant_id: tenantId,
       flow_id: flowId,
       version_number: versionNumber,
       flow_json: flow,
-      created_by: toUuidOrNull(createdBy),
-      note: note ?? null,
+      created_by: toUuidOrNull(params.createdBy),
+      note: params.note ?? null,
     });
-    if (insErr) {
-      this.logger.error({ insErr, flowId, versionNumber }, 'publishDraft: insert version failed');
-      throw new Error(`publishDraft insert version failed: ${insErr.message}`);
-    }
+    if (insErr) throw new Error(`legacyPublish insert version failed: ${insErr.message}`);
 
-    // 4. Activar este flow (desactiva hermanos del mismo channel) y limpiar draft.
     await this.setActiveFlow({
       flowId,
       tenantId,
       channel: (row.channel ?? 'whatsapp') as BotFlowChannel,
       flow,
-      clearDraft: true,
+      clearDraft: params.clearDraft,
     });
-
-    this.logger.info({ flowId, tenantId, versionNumber }, '[SupabaseBotFlowRepository] draft publicado');
     return { versionNumber };
   }
 
@@ -442,7 +504,6 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
   }): Promise<{ versionNumber: number }> {
     const { flowId, tenantId, versionNumber, createdBy } = params;
 
-    // 1. Leer el flow_json de la versión histórica objetivo.
     const { data: ver, error: verErr } = await this.supabase
       .from('bot_flow_versions')
       .select('flow_json')
@@ -458,53 +519,17 @@ export class SupabaseBotFlowRepository implements BotFlowRepository {
     if (!ver) {
       throw new Error(`Versión ${versionNumber} no existe para el flow "${flowId}"`);
     }
-    const flow = ver.flow_json as BotFlow;
 
-    // 2. channel del flow (para desactivar hermanos al activar).
-    const { data: row, error: rowErr } = await this.supabase
-      .from('bot_flows')
-      .select('channel')
-      .eq('id', flowId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-
-    if (rowErr) {
-      this.logger.error({ rowErr, flowId }, 'rollback: read flow failed');
-      throw new Error(`rollback read flow failed: ${rowErr.message}`);
-    }
-    if (!row) {
-      throw new Error(`Flow "${flowId}" no existe para el tenant "${tenantId}"`);
-    }
-
-    // 3. Append inmutable: nueva versión con el contenido viejo.
-    const newVersion = await this.nextVersionNumber(flowId);
-    const { error: insErr } = await this.supabase.from('bot_flow_versions').insert({
-      tenant_id: tenantId,
-      flow_id: flowId,
-      version_number: newVersion,
-      flow_json: flow,
-      created_by: toUuidOrNull(createdBy),
-      note: `rollback a v${versionNumber}`,
-    });
-    if (insErr) {
-      this.logger.error({ insErr, flowId, newVersion }, 'rollback: insert version failed');
-      throw new Error(`rollback insert version failed: ${insErr.message}`);
-    }
-
-    // 4. Activar el contenido restaurado.
-    await this.setActiveFlow({
+    // Append inmutable: versión nueva con el contenido viejo. El borrador en
+    // curso no se toca.
+    return this.publishVersion({
       flowId,
       tenantId,
-      channel: (row.channel ?? 'whatsapp') as BotFlowChannel,
-      flow,
+      flow: ver.flow_json as BotFlow,
+      createdBy,
+      note: `rollback a v${versionNumber}`,
       clearDraft: false,
     });
-
-    this.logger.info(
-      { flowId, tenantId, restoredFrom: versionNumber, newVersion },
-      '[SupabaseBotFlowRepository] rollback aplicado',
-    );
-    return { versionNumber: newVersion };
   }
 
   /**

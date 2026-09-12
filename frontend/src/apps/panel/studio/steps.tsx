@@ -580,6 +580,7 @@ export function StepPublicar({ spec, report, goTo, actions }: StepProps & { acti
       <Section title="Probar">
         <p className="text-xs text-muted-foreground">
           Usa el simulador de la derecha: corre el motor real con lo último guardado, sin mandar nada a WhatsApp. Debajo de cada respuesta está el porqué.
+          Las conversaciones que guardes como prueba se corren solas antes de publicar.
         </p>
       </Section>
       <Section title="Publicar">

@@ -67,7 +67,7 @@ function buildApp(repo: Partial<BotFlowRepository> = {}) {
   app.use(cookieParser());
   const router = express.Router();
   router.use(requireAdmin);
-  router.use(createStudioRouter({ botFlowRepository, simulateConversation: useCase, audit: audit as never, logger: silentLogger }));
+  router.use(createStudioRouter({ botFlowRepository, simulateConversation: useCase, testCases: { list: async () => [] } as never, audit: audit as never, logger: silentLogger }));
   app.use('/api/admin', router);
 
   const cookieFor = (role: 'super_admin' | 'admin_operator', tenantId: string | null) =>

@@ -10,6 +10,7 @@ import {
   previewWizard,
   saveWizard,
   type StudioMold,
+  type TestInput,
   type ValidationReport,
   type WhatsAppLimits,
   type WizardSpec,
@@ -40,6 +41,8 @@ import {
   StepReconocimiento,
   type StepProps,
 } from './steps';
+import { DiffPanel, ExplorerPanel, PublishErrorAlert, TestsPanel, VersionsPanel } from './StudioQuality';
+import { testFromConversation } from './testing-model';
 
 /**
  * Pantallas del Studio: el editor del asistente y sus puntos de partida
@@ -86,6 +89,7 @@ export function StudioEditor({
   const [specError, setSpecError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [pendingTest, setPendingTest] = useState<{ seq: number; draft: TestInput } | null>(null);
 
   const specDirty = spec !== null && JSON.stringify(spec) !== savedSpec;
   const patch = businessPatch(businessBase, business);
@@ -181,6 +185,9 @@ export function StudioEditor({
     </div>
   );
 
+  /** Antes de simular o correr pruebas se guarda lo pendiente: se prueba lo último editado. */
+  const beforeRun = dirty ? () => save() : undefined;
+
   const stepProps: StepProps = { spec, setSpec, business, setBusiness, limits, canEditStructure: isSuperAdmin, report, goTo: setStep };
 
   return (
@@ -221,11 +228,7 @@ export function StudioEditor({
           <AlertDescription>{saveError}</AlertDescription>
         </Alert>
       )}
-      {publish.error && (
-        <Alert variant="destructive">
-          <AlertDescription>No se pudo publicar: {publish.error.message}</AlertDescription>
-        </Alert>
-      )}
+      {publish.error && <PublishErrorAlert error={publish.error} />}
       {publish.isSuccess && !dirty && source === 'published' && (
         <Alert>
           <AlertDescription>✅ Publicado como versión {publish.data.versionNumber}. El bot ya contesta con esto.</AlertDescription>
@@ -268,7 +271,21 @@ export function StudioEditor({
           {step === 'no-entiende' && <StepNoEntiende {...stepProps} />}
           {step === 'humano' && <StepHumano {...stepProps} />}
           {step === 'despedida' && <StepDespedida {...stepProps} />}
-          {step === 'publicar' && <StepPublicar {...stepProps} actions={actions} />}
+          {step === 'publicar' && (
+            <>
+              <StepPublicar {...stepProps} actions={actions} />
+              <TestsPanel
+                tenantId={tenantId}
+                flowId={flowId}
+                pending={pendingTest}
+                onPendingDone={() => setPendingTest(null)}
+                beforeRun={beforeRun}
+              />
+              <ExplorerPanel tenantId={tenantId} flowId={flowId} beforeRun={beforeRun} />
+              <DiffPanel tenantId={tenantId} flowId={flowId} refreshKey={`${draftUpdatedAt ?? ''}|${source}|${publish.data?.versionNumber ?? ''}`} />
+              <VersionsPanel tenantId={tenantId} flowId={flowId} isSuperAdmin={isSuperAdmin} />
+            </>
+          )}
           <div className="flex justify-between">
             <Button size="sm" variant="ghost" disabled={stepIndex === 0} onClick={() => setStep(STEPS[stepIndex - 1].key)}>
               <ArrowLeft className="mr-1 h-3.5 w-3.5" /> Anterior
@@ -294,7 +311,11 @@ export function StudioEditor({
             flowId={flowId}
             source="draft"
             compact
-            onBeforeSend={dirty ? () => save() : undefined}
+            onBeforeSend={beforeRun}
+            onSaveAsTest={(conversation) => {
+              setPendingTest({ seq: Date.now(), draft: testFromConversation(conversation) });
+              setStep('publicar');
+            }}
           />
         </aside>
       </div>

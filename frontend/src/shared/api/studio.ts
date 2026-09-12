@@ -202,6 +202,120 @@ export function previewWizard(tenantId: string, spec: WizardSpec): Promise<{ rep
   return apiFetch<{ report: ValidationReport }>('POST', `/api/admin/tenants/${tenantId}/studio/wizard/preview`, { spec });
 }
 
+// ============================================================================
+// Pruebas, explorador y diff (Fase 4). Espejo a mano de
+// backend/src/domain/studio/{testCases,diff}.ts y StudioFlowExplorer.ts
+// ============================================================================
+
+export interface TestExpectation {
+  node?: string;
+  vars?: Record<string, string>;
+  contains?: string[];
+  notContains?: string[];
+  maxMessages?: number;
+}
+
+export interface TestOptions {
+  startAt?: string;
+  from?: string;
+}
+
+export interface FlowTestCase {
+  id: string;
+  flowId: string;
+  name: string;
+  events: SimEvent[];
+  expect: TestExpectation;
+  options: TestOptions;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TestInput {
+  name: string;
+  events: SimEvent[];
+  expect: TestExpectation;
+  options: TestOptions;
+}
+
+export interface TestRunReport {
+  total: number;
+  passed: number;
+  failed: number;
+  results: Array<{ id: string; name: string; passed: boolean; failures: string[] }>;
+}
+
+export interface ExplorationReport {
+  depth: number;
+  runs: number;
+  truncated: boolean;
+  coverage: { total: number; reached: string[]; unreached: string[]; percent: number };
+  deadEnds: Array<{ nodeId: string; path: string[] }>;
+  errors: Array<{ nodeId: string; reason: string; path: string[] }>;
+  maxMessagesPerTurn: { count: number; path: string[] };
+}
+
+export interface FlowDiff {
+  startChanged: { from: string; to: string } | null;
+  added: string[];
+  removed: string[];
+  changed: Array<{ nodeId: string; changes: string[] }>;
+  same: boolean;
+}
+
+const studioFlow = (tenantId: string, flowId: string) => `/api/admin/tenants/${tenantId}/studio/flows/${flowId}`;
+
+export async function listTests(tenantId: string, flowId: string): Promise<FlowTestCase[]> {
+  const res = await apiFetch<{ tests: FlowTestCase[] }>('GET', `${studioFlow(tenantId, flowId)}/tests`);
+  return res.tests;
+}
+
+export async function createTest(tenantId: string, flowId: string, input: TestInput): Promise<FlowTestCase> {
+  const res = await apiFetch<{ test: FlowTestCase }>('POST', `${studioFlow(tenantId, flowId)}/tests`, input);
+  return res.test;
+}
+
+export async function deleteTest(tenantId: string, flowId: string, testId: string): Promise<void> {
+  await apiFetch('DELETE', `${studioFlow(tenantId, flowId)}/tests/${testId}`);
+}
+
+export async function runTests(tenantId: string, flowId: string, source: SimulateSource): Promise<TestRunReport> {
+  const res = await apiFetch<{ report: TestRunReport }>('POST', `${studioFlow(tenantId, flowId)}/tests/run`, { source });
+  return res.report;
+}
+
+export async function exploreFlow(
+  tenantId: string,
+  flowId: string,
+  body: { source: SimulateSource; depth?: number },
+): Promise<ExplorationReport> {
+  const res = await apiFetch<{ report: ExplorationReport }>('POST', `${studioFlow(tenantId, flowId)}/explore`, body);
+  return res.report;
+}
+
+export interface DiffResult {
+  /** Versión contra la que se compara; null si nunca se publicó. */
+  against: number | null;
+  source: 'draft' | 'published' | null;
+  diff: FlowDiff;
+}
+
+export function getDiff(tenantId: string, flowId: string, against?: number): Promise<DiffResult> {
+  const qs = against !== undefined ? `?against=${against}` : '';
+  return apiFetch<DiffResult>('GET', `${studioFlow(tenantId, flowId)}/diff${qs}`);
+}
+
+/**
+ * Cuerpo del 400 de publicar (compuerta de la Fase 4): errores del validador
+ * o pruebas fallidas. `testReport` solo viene cuando fallaron pruebas.
+ */
+export interface PublishRejection {
+  error: string;
+  issues?: Array<{ path?: string; message: string }>;
+  report?: ValidationReport;
+  testReport?: TestRunReport;
+}
+
 export function saveWizard(
   tenantId: string,
   flowId: string,

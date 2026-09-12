@@ -1,4 +1,4 @@
-import type { MetaPayload, SimEvent, SimSession } from '@/shared/api/studio';
+import type { MetaPayload, SimEvent, SimSession, SimTurn } from '@/shared/api/studio';
 
 /**
  * Traducciones puras que usa el simulador para pintar la conversación.
@@ -197,6 +197,18 @@ export function formatMinutes(minutes: number): string {
   const days = Math.floor(hours / 24);
   const h = hours % 24;
   return `${days} ${days === 1 ? 'día' : 'días'}${h ? ` ${h} h` : ''}`;
+}
+
+/**
+ * Una conversación del simulador tal como se corrió: lo que hizo el cliente,
+ * lo que contestó el bot y el reloj y teléfono con que se corrió. Con esto se
+ * guarda como prueba y se vuelve a correr idéntica.
+ */
+export interface SimConversation {
+  events: SimEvent[];
+  turns: SimTurn[];
+  startAt: string;
+  from: string;
 }
 
 /** Variables capturadas, sin las que están vacías. */

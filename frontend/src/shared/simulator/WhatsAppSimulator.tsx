@@ -1,6 +1,6 @@
 import { Fragment, useRef, useState } from 'react';
 import {
-  Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile, Clock, HelpCircle, Phone,
+  Send, RotateCcw, Loader2, ExternalLink, MapPin, FileText, Smile, Clock, HelpCircle, Phone, FlaskConical,
 } from 'lucide-react';
 import {
   simulateConversation,
@@ -20,6 +20,7 @@ import {
   formatWhen,
   sessionVariables,
   startAtTodayAt,
+  type SimConversation,
 } from './studioView';
 
 /**
@@ -42,6 +43,8 @@ import {
  *   phoneNumber      — teléfono del cliente simulado.
  *   onBeforeSend     — se espera antes de cada turno (el Designer guarda ahí
  *                      los cambios del canvas, para simular lo último editado).
+ *   onSaveAsTest     — si viene, aparece "Guardar como prueba" y recibe la
+ *                      conversación tal como se corrió (Studio, Fase 4).
  */
 
 const DEFAULT_SIM_PHONE = '5210000000000';
@@ -70,6 +73,7 @@ export function WhatsAppSimulator({
   versionId,
   versionLabel,
   onBeforeSend,
+  onSaveAsTest,
 }: {
   tenantId: string;
   phoneNumber?: string;
@@ -81,6 +85,7 @@ export function WhatsAppSimulator({
   /** Etiqueta a mostrar en el chip cuando source='version', ej. "v3". */
   versionLabel?: string;
   onBeforeSend?: () => Promise<void> | void;
+  onSaveAsTest?: (conversation: SimConversation) => void;
 }) {
   const [events, setEvents] = useState<SimEvent[]>([]);
   const [turns, setTurns] = useState<SimTurn[]>([]);
@@ -331,11 +336,23 @@ export function WhatsAppSimulator({
         </div>
       )}
 
-      <div className="flex justify-center">
+      <div className="flex flex-wrap justify-center gap-2">
         <Button size="sm" variant="outline" onClick={reset} disabled={busy}>
           <RotateCcw className="mr-1 h-3.5 w-3.5" />
           Reiniciar conversación
         </Button>
+        {onSaveAsTest && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy || turns.length === 0}
+            title="Guarda esta conversación para correrla antes de cada publicación"
+            onClick={() => startAtRef.current && onSaveAsTest({ events, turns, startAt: startAtRef.current, from: phoneNumber })}
+          >
+            <FlaskConical className="mr-1 h-3.5 w-3.5" />
+            Guardar como prueba
+          </Button>
+        )}
       </div>
     </div>
   );
