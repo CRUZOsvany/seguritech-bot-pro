@@ -64,6 +64,8 @@ export type GateName =
 
 export interface TransitionCandidate {
   condition: TransitionCondition['type'];
+  /** El valor de la condición, cuando tiene uno: id del botón o de la fila, palabras clave. */
+  detail?: string;
   target: string;
   matched: boolean;
   /** Especificidad (FlowInterpreter.transitionSpecificity): mayor gana. */

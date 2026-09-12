@@ -92,8 +92,8 @@ describe('FlowInterpreter · traza', () => {
         kind: 'transitions',
         nodeId: 'pregunta',
         candidates: [
-          { condition: 'button', target: 'fin', matched: false, score: 100 },
-          { condition: 'button', target: 'fin', matched: false, score: 100 },
+          { condition: 'button', detail: 'si', target: 'fin', matched: false, score: 100 },
+          { condition: 'button', detail: 'no', target: 'fin', matched: false, score: 100 },
         ],
         winner: null,
       },

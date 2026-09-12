@@ -167,6 +167,31 @@ describe('POST .../studio/flows/:flowId/simulate', () => {
     );
   });
 
+  it("source 'version' simula una versión del historial", async () => {
+    const getVersionFlow = jest.fn().mockResolvedValue(loadMold('securitech'));
+    const { app, cookieFor } = buildApp({ getVersionFlow });
+
+    const res = await request(app)
+      .post(url())
+      .set('Cookie', cookieFor('super_admin', null))
+      .send({ source: 'version', versionId: 'ver-3', events: [{ type: 'text', text: 'hola' }] });
+
+    expect(res.status).toBe(200);
+    expect(getVersionFlow).toHaveBeenCalledWith('ver-3', HARNESS_TENANT_ID);
+    expect(res.body.turns[0].why[1]).toBe('Conversación nueva: empieza en «saludo».');
+  });
+
+  it("source 'version' sin versionId → 400; versión inexistente → 404", async () => {
+    const { app, cookieFor } = buildApp({ getVersionFlow: jest.fn().mockResolvedValue(null) });
+    const cookie = cookieFor('super_admin', null);
+    const events = [{ type: 'text', text: 'hola' }];
+
+    expect((await request(app).post(url()).set('Cookie', cookie).send({ source: 'version', events })).status).toBe(400);
+    expect(
+      (await request(app).post(url()).set('Cookie', cookie).send({ source: 'version', versionId: 'x', events })).status,
+    ).toBe(404);
+  });
+
   it('responde un turno por evento con el JSON exacto de la Cloud API, la traza y el estado', async () => {
     const { app, cookieFor } = buildApp();
 

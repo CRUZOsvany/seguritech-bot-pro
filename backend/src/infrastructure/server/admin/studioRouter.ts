@@ -19,7 +19,9 @@ const SimulateBodySchema = z.object({
    * si no hay borrador), igual que el Designer. 'active': lo que el bot real
    * contesta hoy — solo si este flow es el activo del tenant.
    */
-  source: z.enum(['draft', 'active']).default('draft'),
+  source: z.enum(['draft', 'active', 'version']).default('draft'),
+  /** Requerido con source 'version': una versión publicada del historial (id de bot_flow_versions). */
+  versionId: z.string().min(1).optional(),
   /** Hora de arranque del reloj simulado (ISO 8601 con zona). Default: ahora. */
   startAt: z.string().datetime({ offset: true }).optional(),
   /** Teléfono del cliente simulado. Si es el del dueño, aplican sus reglas. */
@@ -55,9 +57,19 @@ export function createStudioRouter(params: {
         return;
       }
       const body = parsed.data;
+      if (body.source === 'version' && !body.versionId) {
+        res.status(400).json({ error: "versionId: requerido con source 'version'" });
+        return;
+      }
 
       try {
-        const resolved = await resolveFlow(botFlowRepository, tenantId, flowId, body.source);
+        const resolved = await resolveFlow(
+          botFlowRepository,
+          tenantId,
+          flowId,
+          body.source,
+          body.versionId,
+        );
         if (!resolved.ok) {
           res.status(resolved.status).json(resolved.body);
           return;
@@ -100,8 +112,16 @@ async function resolveFlow(
   repo: BotFlowRepository,
   tenantId: string,
   flowId: string,
-  source: 'draft' | 'active',
+  source: 'draft' | 'active' | 'version',
+  versionId?: string,
 ): Promise<Resolved> {
+  if (source === 'version') {
+    // getVersionFlow filtra por tenant: una versión de otro tenant no existe aquí.
+    const flow = await repo.getVersionFlow(versionId!, tenantId);
+    if (!flow) return { ok: false, status: 404, body: { error: 'Versión no encontrada' } };
+    return { ok: true, flow };
+  }
+
   if (source === 'draft') {
     const editable = await repo.getEditableFlow(flowId, tenantId);
     if (!editable) return { ok: false, status: 404, body: { error: 'Flow no encontrado' } };

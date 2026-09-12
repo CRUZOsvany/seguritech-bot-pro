@@ -49,7 +49,7 @@ import { validateGraph } from '../designer/validation/graphValidator';
 import { ValidationPanel } from '../designer/validation/ValidationPanel';
 import { VersionsPanel } from '../designer/VersionsPanel';
 import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
-import type { SimulateSource } from '@/shared/api/tenants';
+import type { SimulateSource } from '@/shared/api/studio';
 import { useSession } from '@/shared/auth/useSession';
 
 /**
