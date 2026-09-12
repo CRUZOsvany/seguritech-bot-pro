@@ -67,7 +67,15 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
       break;
     }
     case 'transitions':
+      // Un empate sin ganador lo explica el paso 'ambiguous' que sigue.
+      if (step.winner === null && step.candidates.some((c) => c.matched && c.condition !== 'default')) break;
       lines.push(explainTransitions(step.nodeId, step.candidates, step.winner));
+      break;
+    case 'ambiguous':
+      lines.push(`Coinciden ${step.options.map((o) => `«${o.title}»`).join(' y ')} con la misma prioridad: en vez de adivinar, el bot pregunta cuál.`);
+      break;
+    case 'disambiguated':
+      lines.push(`El cliente eligió «${step.title}»: sigue a ${q(step.target)}.`);
       break;
     case 'no_match':
       lines.push(`Se vuelve a mostrar ${q(step.nodeId)}.`);

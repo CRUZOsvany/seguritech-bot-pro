@@ -54,6 +54,10 @@ export type DecisionStep =
     }
   /** Ninguna transición coincidió: el nodo se vuelve a mostrar. */
   | { kind: 'no_match'; nodeId: string }
+  /** B-02: coincidieron salidas del mismo nivel a lugares distintos; el bot pregunta cuál. */
+  | { kind: 'ambiguous'; nodeId: string; options: Array<{ title: string; target: string }> }
+  /** B-02: el cliente contestó la pregunta. */
+  | { kind: 'disambiguated'; nodeId: string; title: string; target: string }
   | { kind: 'context_update'; key: string; value: unknown }
   | { kind: 'node_entered'; nodeId: string; nodeType: FlowNode['type'] }
   /** Lista o carrusel que resolvió a cero opciones: el motor salta a su default. */

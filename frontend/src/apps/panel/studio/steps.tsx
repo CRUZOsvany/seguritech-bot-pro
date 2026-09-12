@@ -535,7 +535,7 @@ export function StepReconocimiento({ spec, setSpec, canEditStructure, report, es
       <StepIssues report={report} spec={spec} step="reconocimiento" />
       <EngineNote>
         El bot reconoce cada opción por su botón y por su texto exacto. Además, por estas palabras dentro de lo que escribe el cliente.
-        Si dos opciones comparten una palabra, gana la primera y aquí aparece un aviso.
+        Si un mensaje coincide con palabras de dos opciones, el bot pregunta cuál quiere («¿Te refieres a A o a B?») en vez de adivinar; si comparten la misma palabra, aquí aparece un aviso.
       </EngineNote>
       <Section title="Palabras que funcionan en cualquier paso">
         {escape ? (

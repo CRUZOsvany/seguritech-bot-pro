@@ -17,6 +17,14 @@ import { fuzzyIncludes } from '@/domain/services/textMatch';
 import type { DecisionStep } from '@/domain/conversation/trace';
 import { matchEscape, resolveEscape } from '@/domain/conversation/escapeWords';
 import { CAPTURE_ATTEMPTS_KEY, checkCapture, defaultCaptureError, validatorName } from '@/domain/conversation/captureValidation';
+import {
+  DISAMBIGUATION_KEY,
+  questionText,
+  resolvePending,
+  tiedOptions,
+  type DisambiguationOption,
+  type PendingDisambiguation,
+} from '@/domain/conversation/disambiguation';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -202,7 +210,9 @@ export class FlowInterpreter {
 
       if (!nodeHandlesItLocally && escape.category !== 'restart') {
         // Menú y persona: siguen desde su paso sin borrar lo capturado (la
-        // alerta al dueño puede usar lo que el cliente ya dijo).
+        // alerta al dueño puede usar lo que el cliente ya dijo). Una pregunta
+        // de desambiguación pendiente (B-02) ya no aplica.
+        if (user.context?.[DISAMBIGUATION_KEY]) contextUpdates[DISAMBIGUATION_KEY] = null;
         return this.advanceFrom({
           flow,
           startNodeId: target,
@@ -264,6 +274,28 @@ export class FlowInterpreter {
         trace,
         orderIdFactory,
       });
+    }
+
+    // B-02: el turno anterior preguntó "¿te refieres a A o a B?". Un botón o
+    // el título de una opción la resuelve; cualquier otra cosa descarta la
+    // pregunta y el paso se evalúa normal.
+    const pending = user.context?.[DISAMBIGUATION_KEY] as PendingDisambiguation | null | undefined;
+    if (pending) {
+      contextUpdates[DISAMBIGUATION_KEY] = null;
+      const chosen = resolvePending(pending, currentNode.id, message.content);
+      if (chosen) {
+        trace.push({ kind: 'disambiguated', nodeId: currentNode.id, title: chosen.title, target: chosen.target });
+        return this.advanceFrom({
+          flow,
+          startNodeId: chosen.target,
+          user: { ...user, context: { ...user.context, ...contextUpdates } },
+          message,
+          tenantConfig,
+          contextUpdates,
+          trace,
+          orderIdFactory,
+        });
+      }
     }
 
     // search_catalog: el match requiere una query real a pos_products (a
@@ -348,13 +380,30 @@ export class FlowInterpreter {
     }
 
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.
+    // B-02: si empatan palabras clave a destinos distintos, se pregunta. Una
+    // captura no pregunta: ahí el texto es la respuesta, no una elección.
+    const ambiguity: { options: DisambiguationOption[] | null } = { options: null };
     const transition = this.evaluateTransitions(
       currentNode,
       message,
       tenantConfig,
       { catalogMatch },
       trace,
+      currentNode.type === 'wait_input' ? undefined : ambiguity,
     );
+    if (ambiguity.options) {
+      const pendingNext: PendingDisambiguation = { node: currentNode.id, options: ambiguity.options };
+      contextUpdates[DISAMBIGUATION_KEY] = pendingNext;
+      trace.push({ kind: 'ambiguous', nodeId: currentNode.id, options: ambiguity.options.map(({ title, target }) => ({ title, target })) });
+      trace.push({ kind: 'wait', nodeId: currentNode.id });
+      return {
+        outputs: [{ kind: 'buttons', text: questionText(ambiguity.options), buttons: ambiguity.options.map(({ id, title }) => ({ id, title })) }],
+        nextNodeId: currentNode.id,
+        contextUpdates,
+        flowEnded: false,
+        trace,
+      };
+    }
 
     // save_to_context para wait_input
     if (currentNode.type === 'wait_input' && currentNode.content.save_to_context) {
@@ -623,7 +672,8 @@ export class FlowInterpreter {
    * notara). Ahora se evalúan TODAS las transiciones del nodo, se quedan las
    * que matchean, y gana la de mayor especificidad — el orden en el JSON ya
    * no importa salvo para desempatar entre dos transiciones del MISMO nivel
-   * (ahí sí gana la que viene primero, comportamiento idéntico al de antes
+   * (ahí gana la que viene primero, salvo palabras clave a destinos
+   * distintos, que preguntan por B-02; comportamiento idéntico al de antes
    * para ese caso). Con 0 o 1 match no hay nada que rankear — mismo
    * resultado que first-match-wins, sin costo extra.
    */
@@ -638,13 +688,20 @@ export class FlowInterpreter {
      * si el nodo sabría qué hacer, no se decide el turno.
      */
     trace?: DecisionStep[],
+    /**
+     * B-02: si viene, un empate de palabras clave a destinos distintos no se
+     * desempata por orden: deja aquí las opciones y no hay ganador.
+     */
+    ambiguity?: { options: DisambiguationOption[] | null },
   ): Transition | null {
     const transitions: Transition[] = node.transitions;
     const matches = transitions.map((t) =>
       this.matchesCondition(t.condition, node, message, tenantConfig, extra),
     );
     const matching = transitions.filter((_t, i) => matches[i]);
-    const winner = this.pickBySpecificity(node, message, matching);
+    const options = ambiguity ? this.ambiguousOptions(node, message, matching) : null;
+    if (ambiguity) ambiguity.options = options;
+    const winner = options ? null : this.pickBySpecificity(node, message, matching);
 
     if (trace) {
       trace.push({
@@ -661,6 +718,21 @@ export class FlowInterpreter {
       });
     }
     return winner;
+  }
+
+  /**
+   * B-02: las salidas empatadas en el puntaje más alto, si son todas palabras
+   * clave y llevan a más de un destino. Botones y filas no empatan (coinciden
+   * exacto), y un empate que incluye otra condición se sigue desempatando por
+   * especificidad.
+   */
+  private ambiguousOptions(node: FlowNode, message: Message, matching: Transition[]): DisambiguationOption[] | null {
+    const relevant = matching.filter((t) => t.condition.type !== 'default');
+    if (relevant.length < 2) return null;
+    const top = Math.max(...relevant.map((t) => this.transitionSpecificity(t.condition)));
+    const tied = relevant.filter((t) => this.transitionSpecificity(t.condition) === top);
+    if (tied.length < 2 || tied.some((t) => t.condition.type !== 'keyword')) return null;
+    return tiedOptions(node, tied, message.content);
   }
 
   private pickBySpecificity(

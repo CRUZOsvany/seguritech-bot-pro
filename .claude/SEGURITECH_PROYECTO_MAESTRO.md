@@ -143,7 +143,7 @@ Comparten backend, cookie de sesión y deploy. Cada una en su carpeta bajo `fron
 
 Dos propiedades del motor que conviene tener presentes al diseñar un flow:
 
-- **Las transiciones se resuelven por especificidad, no por orden** (ADR-016). El orden del array solo desempata entre transiciones del mismo nivel.
+- **Las transiciones se resuelven por especificidad, no por orden** (ADR-016). El orden del array solo desempata entre transiciones del mismo nivel; si empatan palabras clave a destinos distintos, el bot pregunta cuál (B-02, Fase 5 del Studio).
 - **El estado conversacional persiste en la base** (`bot_users.current_node_id` y `context`), no en memoria. Sobrevive a reinicios del proceso.
 
 ---
@@ -182,7 +182,7 @@ Decisiones que no se rediscuten cada sprint. Si alguien las cuestiona, primero l
 
 **ADR-015 · La IA queda pausada; primero se exprime el motor determinista.** El plan de "secretaria digital" (`SEGURITECH_AI_SECRETARIA_PLAN.md`) está aprobado y en pausa deliberada. La razón: el motor de flows está subutilizado y el cumplimiento de Meta no está cerrado. Cuando se retome, los guardrails del plan son obligatorios — la IA nunca escribe SQL ni inventa precios, toda mutación pasa por un caso de uso validado, timeout corto con fallback a flow o humano, y feature flag apagado por default.
 
-**ADR-016 · Las transiciones se resuelven por especificidad, no por orden de array.** `button` 100 · `list_item` 90 · `call_permission_*` 85 · `catalog_found` 80 · `service_directory_match` 70 · `list_item_any` 60 · `keyword` 50 · `catalog_not_found` 20 · `default` 0. El orden del array desempata solo dentro del mismo nivel. El ranking se derivó para preservar comportamiento ya testeado, no se inventó.
+**ADR-016 · Las transiciones se resuelven por especificidad, no por orden de array.** `button` 100 · `list_item` 90 · `call_permission_*` 85 · `catalog_found` 80 · `service_directory_match` 70 · `list_item_any` 60 · `keyword` 50 · `catalog_not_found` 20 · `default` 0. El orden del array desempata solo dentro del mismo nivel, excepto palabras clave a destinos distintos: desde B-02 (Fase 5 del Studio) el bot pregunta cuál. El ranking se derivó para preservar comportamiento ya testeado, no se inventó.
 
 **ADR-017 · El buscador de texto libre del bot lee `pos_products`, no `catalog_items`.** `pos_products` es el inventario real y completo. `catalog_items` se queda para las listas fijas cortas de `send_list`. No se migra ni se borra; simplemente `CatalogSearchService` no la usa como fuente.
 
