@@ -20,6 +20,14 @@ describe('Designer: configuración del flow fuera del grafo', () => {
     expect(useDesignerStore.getState().toBotFlow()).toEqual(flow({ escape }));
   });
 
+  it('conserva el horario y la inactividad (Fase 5) al guardar; antes el horario se perdía', () => {
+    const hours = { when_closed: 'continue' };
+    const inactivity = { reminder: { after_minutes: 15, text: '¿Sigues ahí?' }, close: { after_minutes: 60 } };
+    useDesignerStore.getState().loadFromBotFlow(flow({ hours, inactivity }), 'f1');
+
+    expect(useDesignerStore.getState().toBotFlow()).toEqual(flow({ hours, inactivity }));
+  });
+
   it('un flow sin palabras de escape sale sin ellas', () => {
     useDesignerStore.getState().loadFromBotFlow(flow({ escape: { opt_out: { words: ['baja'] } } }), 'f1');
     useDesignerStore.getState().loadFromBotFlow(flow(), 'f2');
