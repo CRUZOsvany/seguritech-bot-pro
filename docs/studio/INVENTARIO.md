@@ -1,6 +1,10 @@
 # Studio de Chatbots — Inventario de la Fase 0
 
-> **Fecha:** 2026-09-10 · **Base:** `main` en `ad2a663` · **Rama:** `chore/studio-fase-0`
+> **Fecha:** 2026-09-10 · **Base:** `main` en `ad2a663` · **Mergeado en** #84 (`092da4e`)
+>
+> **Actualización del 2026-09-10:** H-1 resuelto en #85 (`bcfecc7`). Las
+> referencias `archivo:línea` de `MetaWhatsAppAdapter.ts` y
+> `FlowInterpreter.ts` están recalculadas sobre ese commit.
 >
 > Contrasta la especificación del Studio (documento de OVY del 2026-09-10) con
 > el código real de `main`. Donde no coinciden, **manda el repo**: la sección 2
@@ -19,7 +23,7 @@
 3. **El panel no es Next.js ni NextAuth.** Es Vite + React 19 + TanStack, servido por el mismo Express, con auth propia por cookie JWT. No hay BFF: los endpoints del Studio van bajo `/api/admin/tenants/:id/…`.
 4. **El versionado ya existe**, con otra forma: borrador en `bot_flows.draft_json`, publicado en `bot_flows.json_definition` e historial inmutable en `bot_flow_versions`. La tabla `flow_versions` del documento sería una segunda fuente de verdad.
 5. **El simulador ya existe, pero es una copia paralela de `BotController`.** Comparten el intérprete, no los gates. La Fase 1 tiene que unificar la orquestación, no solo agregar traza.
-6. **Hay un bug en producción en el molde de papelería** [test]: al tocar un servicio de la lista, el bot contesta *"Perfecto, \*\*."* con el nombre vacío (§8, H-1).
+6. ~~**Hay un bug en producción en el molde de papelería**~~ **Resuelto en #85.** Al tocar un servicio de la lista, el bot contestaba *"Perfecto, \*\*."* con el nombre vacío (§8, H-1).
 7. **El cobro de mensajes de servicio desde octubre de 2026 no aparece en la doc oficial de precios.** Solo lo reportan proveedores. La página oficial dice hoy que los mensajes que no son plantilla son gratis (§6.3).
 8. **Meta exige mínimo 2 tarjetas en un carrusel y cuerpo de tarjeta ≤ 160.** El schema del repo acepta 1 tarjeta y 1024: hoy se puede publicar un carrusel que Meta rechaza (§8, H-5).
 
@@ -104,7 +108,7 @@ Fuente: `gh pr list --state all`. Qué hace el Designer que llegó con ellos: §
 | `call_permission_granted` / `_denied` | 85 | centinelas `__CALL_PERMISSION_*__` |
 | `catalog_found` | 80 | hubo match en `pos_products` (con la excepción de servicios, DEC-03) |
 | `service_directory_match` | 70 | match en el directorio de servicios |
-| `list_item_any` / `card_any` | 60 | cualquier fila / cualquier card |
+| `list_item_any` / `card_any` | 60 | una fila o card que el cliente vio, por id (o por título en filas). Texto libre ya no cuenta como fila (#85) |
 | `keyword` | 50 | `fuzzyIncludes` sobre la lista de palabras |
 | `catalog_not_found` | 20 | no hubo match |
 | `default` | 0 | siempre |
@@ -129,7 +133,7 @@ Fuente: `gh pr list --state all`. Qué hace el Designer que llegó con ellos: §
 |---|---|
 | Texto | el texto |
 | Botón de respuesta | el **título** (los ids son sintéticos `btn_0..2`); en carrusel, el id real |
-| Fila de lista | el **título**, nunca el id (H-1) |
+| Fila de lista | el **id** de la fila (`list_reply.id`); si viene vacío, el título. Hasta #85 era siempre el título (H-1) |
 | Permiso de llamada | `__CALL_PERMISSION_GRANTED__` / `_DENIED__` |
 | Respuesta de WhatsApp Flow | `__FLOW_RESPONSE__`; el payload se pierde en `ExpressServer.handleParsed` (H-4) |
 | Ubicación | `__LOCATION__`; lat/lng se pierden igual (H-4) |
@@ -137,8 +141,8 @@ Fuente: `gh pr list --state all`. Qué hace el Designer que llegó con ellos: §
 
 ### 3.5. Dependencias ocultas que estorban a la simulación
 
-- **Reloj:** `new Date()` / `Date.now()` en `BotController` (`:107`, `:167`, `:262`), `SimulateMessageUseCase`, `OwnerAlertFormatter.ts:21` y `FlowInterpreter.maybeGenerateOrderId` (`:1002`). `BusinessHoursService.isOpenNow` sí acepta `now` por parámetro.
-- **Aleatoriedad:** `order_id` usa `Math.random()` (`FlowInterpreter.ts:1003`) y `flow_token` también (`MetaWhatsAppAdapter.ts:888`). Sin inyectarlos, el test de paridad de la Fase 1 no puede comparar payloads byte a byte.
+- **Reloj:** `new Date()` / `Date.now()` en `BotController` (`:107`, `:167`, `:262`), `SimulateMessageUseCase`, `OwnerAlertFormatter.ts:21` y `FlowInterpreter.maybeGenerateOrderId` (`:1009`). `BusinessHoursService.isOpenNow` sí acepta `now` por parámetro.
+- **Aleatoriedad:** `order_id` usa `Math.random()` (`FlowInterpreter.ts:1010`) y `flow_token` también (`MetaWhatsAppAdapter.ts:895`). Sin inyectarlos, el test de paridad de la Fase 1 no puede comparar payloads byte a byte.
 - **Hexagonal:** `VariableResolver` (dominio) importa el tipo `SupabaseClient` y lo recibe en el constructor sin usarlo nunca **[código]**. Es la única importación de `@supabase` bajo `domain/`.
 
 ---
@@ -153,7 +157,7 @@ Contado sobre los JSON de `backend/scripts/`.
 | Tipos | `send_buttons` 6 · `send_list` 2 · `wait_input` 2 · `escape_to_human` 3 · `send_text` 1 · `end` 1 | `send_buttons` 7 · `wait_input` 3 · `escape_to_human` 6 · `send_list` 1 · `search_catalog` 1 · `send_text` 1 · `end` 1 | `send_text` 6 · `send_buttons` 2 · `wait_input` 4 · `escape_to_human` 5 · `end` 1 |
 | Condiciones | `button` 16 · `keyword` 16 · `default` 14 · `list_item_any` 2 | `button` 19 · `keyword` 14 · `default` 18 · `service_directory_match` 2 · `list_item_any` 1 · `catalog_found` 1 · `catalog_not_found` 1 | `default` 17 · `button` 6 |
 | Validación en `wait_input` | ninguna | `pedido_cantidad`: `numeric` | ninguna |
-| Listas dinámicas | no | `menu_servicios` desde `service_directory` (afectada por H-1) | no |
+| Listas dinámicas | no | `menu_servicios` desde `service_directory` (H-1, resuelto en #85) | no |
 | Variables | `welcome_message`, `menu_message`, `not_understood_message`, `nombre_negocio`, `phone`, `last_message`, `datos_emergencia`, `detalle_servicio`, `tipo_emergencia`, `servicio` | `welcome_message`, `menu_message`, `not_understood_message`, `nombre_negocio`, `phone`, `last_message`, `order_id`, `lista_escolar_detalle`, `detalle_servicio`, `cantidad_producto`, `matched_service_name`, `matched_service_response`, `selected_product_name`, `selected_product_price` | `phone`, `contacto_basico`, `contacto_estandar`, `contacto_premium`, `contacto_mantenimiento` |
 | Pasa `validateFlow` | sí **[test]** | sí **[test]** | sí **[test]** |
 
@@ -167,7 +171,7 @@ Entre los tres usan 7 de los 14 tipos. SegurITech enruta solo por botón y `defa
 |---|---|---|
 | **Designer** | `frontend/src/apps/panel/routes/tenants.$id.designer.tsx` (1561 líneas) + `apps/panel/designer/` (~2000) | Canvas React Flow con los 14 tipos, paleta, menú contextual, inspector por tipo, editor de transiciones, panel de versiones con "restaurar como borrador", validación en vivo (`graphValidator.ts`, capa L1), publicar, simulador embebido. Mapeo bidireccional `to-react-flow` / `to-bot-flow` |
 | **Guion** | `routes/tenants.$id.guion.tsx` (247 líneas) | Edita los textos `config_bound` (bienvenida, menú, no entendí) con concurrencia optimista |
-| **Simulador** | `shared/simulator/WhatsAppSimulator.tsx` | Burbujas por tipo de salida; al tocar botón o fila manda el **título**, igual que Meta. Toggle de fuera de horario y de sesión expirada |
+| **Simulador** | `shared/simulator/WhatsAppSimulator.tsx` | Burbujas por tipo de salida. Al tocar manda lo mismo que entregaría Meta: el título de un botón, el id de una fila o de una card (`replies.ts`, desde #85), con el título en la burbuja. Toggle de fuera de horario y de sesión expirada |
 | **Bloques** | `backend/src/domain/blocks/` + `POST .../blocks/expand` y `.../assemble` | Seis bloques (Entrada, Menú, Consulta de catálogo, Captura y escalado, Cotizador, Cierre) que se expanden a nodos y se ensamblan en un grafo que pasa L1 y L2. **Ninguna pantalla los usa todavía** |
 | **Espejo de tipos** | `designer/flow-types.ts` | Copia a mano de `flow.ts`; le faltan `service_directory_match`, `catalog_found`, `catalog_not_found` |
 
@@ -237,7 +241,7 @@ Regla 2 del documento: un campo solo aparece en la UI si el motor lo ejecuta. **
 |---|---|---|---|
 | Texto | `send_text` | Existe | Vista previa de enlace (`preview_url`) |
 | Botones de respuesta | `send_buttons` | Parcial | Encabezado y pie; conservar ids al enviar (H-3) |
-| Lista | `send_list` | Parcial | Encabezado y pie; ids de fila (H-1) |
+| Lista | `send_list` | Parcial | Encabezado y pie (los ids de fila ya viajan desde #85) |
 | Botón CTA URL | `send_cta_url` | Existe | — |
 | Carrusel | `send_media_carousel` | Parcial | Alinear límites con Meta (H-5) |
 | Solicitud de ubicación | `send_location_request` | Parcial | Capturar la ubicación que responde el cliente (H-4) |
@@ -281,14 +285,14 @@ Regla 2 del documento: un campo solo aparece en la UI si el motor lo ejecuta. **
 
 | # | Hallazgo | Evidencia | Severidad |
 |---|---|---|---|
-| **H-1** | **Las filas de listas dinámicas entran por título, no por id.** El parser usa `list_reply.title` (`MetaWhatsAppAdapter.ts:387`), `list_item_any` en una sección dinámica devuelve el texto crudo (`FlowInterpreter.ts:731`) y el `VariableResolver` busca por id. En `menu_servicios` de papelería el cliente toca "Engargolado" y recibe *"Perfecto, \*\*. Dinos cuántas hojas…"*; `matched_service_id` guarda `"Engargolado"` y la alerta al dueño sale sin servicio. El simulador del panel reproduce el mismo bug porque también manda el título | **[test]** con el parser real, el molde real y el `VariableResolver` real. Test desechable, borrado | Alta: afecta un molde sembrado. Hoy sin impacto real porque Meta aún no está conectado (A-01) |
+| **H-1** ✅ | **Resuelto en #85 (`bcfecc7`).** Las filas de listas dinámicas entraban por título, no por id: el parser usaba `list_reply.title` y `list_item_any` sobre una sección dinámica aceptaba cualquier texto y lo guardaba crudo, mientras el `VariableResolver` busca por id. En `menu_servicios` de papelería el cliente tocaba "Engargolado" y recibía *"Perfecto, \*\*. Dinos cuántas hojas…"*; el simulador del panel lo reproducía porque también mandaba el título. **Ahora:** el parser entrega el id (`MetaWhatsAppAdapter.ts:386`); `FlowInterpreter.resolveListItemId` (`:722`) resuelve la fila contra las filas hidratadas, por id o por título escrito; el simulador manda lo que entregaría Meta. **Cambio de comportamiento:** un texto que no es ninguna fila, o una palabra de escape, cae al `default` del nodo en vez de avanzar con un dato basura | Reproducido antes con un test desechable. Ahora cubierto por `FlowInterpreter.listReplyById.test.ts` (molde, parser y `VariableResolver` reales; sin el arreglo fallan 5 de 15), `MetaWhatsAppAdapter.buttonReplyId.test.ts` y `frontend/src/shared/simulator/replies.test.ts` | Era alta: afectaba un molde sembrado, sin impacto real porque Meta aún no está conectado (A-01) |
 | **H-2** | **El simulador duplica la orquestación de producción.** `SimulateMessageUseCase` copia a mano los gates de `BotController`. No simula el opt-out ni la pausa por handoff; el horario solo aplica con `simulateAt` y la sesión solo con `simulatedElapsedMinutes`; no produce payloads de Meta, solo `InterpreterOutput` | **[código]** `SimulateMessageUseCase.ts:88` contra `BotController.ts:69` | Alta para el Studio: rompe la garantía 1 del documento |
-| **H-3** | **`sendButtons` descarta los ids del nodo** y manda `btn_0..2` (`MetaWhatsAppAdapter.ts:496`). En producción los botones se reconocen solo por título. Un título con `{{variable}}` no matchearía nunca, porque `matchesCondition` compara contra el título sin resolver (`FlowInterpreter.ts:630`) | **[código]**. El caso del título con variable no se reprodujo | Media |
+| **H-3** | **`sendButtons` descarta los ids del nodo** y manda `btn_0..2` (`MetaWhatsAppAdapter.ts:503`). En producción los botones se reconocen solo por título. Un título con `{{variable}}` no matchearía nunca, porque `matchesCondition` compara contra el título sin resolver (`FlowInterpreter.ts:630`) | **[código]**. El caso del título con variable no se reprodujo | Media |
 | **H-4** | **La ubicación y la respuesta de un WhatsApp Flow se pierden.** El parser las extrae, pero `handleParsed` solo pasa `from`, `content` y `messageId` (`ExpressServer.ts:433`) | **[código]** | Media: `send_location_request` y `send_whatsapp_flow` no pueden capturar nada |
 | **H-5** | **Se pueden publicar carruseles que Meta rechaza:** 1 sola card, o cuerpo de card de más de 160 caracteres o más de 2 saltos de línea. Un carrusel dinámico con un solo producto con foto genera 1 card: el resolver solo desvía el caso de 0 (`CarouselCardResolver.ts:39`, `FlowInterpreter.ts:417`) | **[código]** + **[doc Meta]**. El 400 de Meta no se probó en vivo | Media |
 | **H-6** | **La alerta al dueño es un mensaje libre iniciado por el negocio** (`BotController.ts:405`). Si el dueño no le escribió al número del bot en las últimas 24 h, Meta la rechaza. El cliente sí recibe su respuesta (el envío es best-effort), pero el dueño no se entera del lead | **[código]** + **[doc Meta]**: *"Non-template messages can only be sent within an open customer service window"*. No probado en vivo | Alta para la decisión pendiente 4 |
 | **H-7** | **Publicar no es atómico** (§2) | **[código]** | Media |
-| **H-8** | **Audio, imagen, sticker, video, documento, contacto y reacción entrantes se ignoran en silencio.** El cliente no recibe nada | **[código]** `MetaWhatsAppAdapter.ts:422` | Media: es V-EST-09 del documento, y hoy no hay motor para cumplirla |
+| **H-8** | **Audio, imagen, sticker, video, documento, contacto y reacción entrantes se ignoran en silencio.** El cliente no recibe nada | **[código]** `MetaWhatsAppAdapter.ts:429` | Media: es V-EST-09 del documento, y hoy no hay motor para cumplirla |
 | **H-9** | **La comparación de teléfonos no normaliza el prefijo MX** (521 contra 52) | **[código]** `BotController.ts:498` | Baja hoy; importa para identificar contactos |
 
 ---
@@ -309,7 +313,7 @@ Nuevas, salidas de este inventario:
 
 | # | Pregunta | Recomendación |
 |---|---|---|
-| D-1 | ¿Arreglo H-1 (listas por id) ahora, en un PR `fix/` aparte, antes de la Fase 1? | Sí: son dos cambios chicos (parser + simulador) con su test, y afecta un molde sembrado |
+| D-1 ✅ | ¿Arreglo H-1 (listas por id) ahora, en un PR `fix/` aparte, antes de la Fase 1? | **Decidida: sí.** Hecho en #85 |
 | D-2 | ¿Versionado sobre las tablas existentes o tabla `flow_versions` nueva como dice el documento? | Existentes. Dos fuentes de verdad es justo lo que el proyecto ya pagó caro |
 | D-3 | ¿Prefijo de los endpoints: `/api/admin/tenants/:id/studio/...`? | Sí: hereda `requireTenantScope` y el audit log sin código nuevo |
 | D-4 | El carrusel dinámico lee `catalog_items` (legacy) porque `pos_products` no tiene imagen. ¿Agregamos `imagen_url` a `pos_products` o el Studio no ofrece carrusel dinámico por ahora? | Columna en `pos_products`, en su propia migración, antes de la Fase 6 |
