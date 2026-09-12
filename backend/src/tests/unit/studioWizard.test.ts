@@ -158,6 +158,25 @@ describe('compileWizard', () => {
     });
   });
 
+  it('horario (Fase 5): el flow sigue atendiendo cerrado y el paso de persona trae su texto de fuera de horario', () => {
+    const spec = minimal({ hours: { whenClosed: 'continue' } });
+    const option = spec.options[0] as Extract<WizardSpec['options'][number], { kind: 'capture' }>;
+    option.handoff = { ...option.handoff, userResponseClosed: 'Mañana te marcamos.' };
+    const flow = compileWizard(spec);
+
+    expect(flow.hours).toEqual({ when_closed: 'continue' });
+    expect(flow.nodes.find((n) => n.id === 'pedido__persona')?.content).toEqual({
+      user_response: 'Te atendemos en breve.',
+      user_response_closed: 'Mañana te marcamos.',
+      owner_alert_template: 'Pedido: {{detalle}} de {{phone}}',
+    });
+    expect(readWizardSpec(JSON.parse(JSON.stringify(flow)))).toEqual({ ok: true, spec });
+
+    const edited = compileWizard(spec);
+    edited.hours = { when_closed: 'block' };
+    expect(readWizardSpec(edited)).toEqual({ ok: false, reason: 'edited_elsewhere' });
+  });
+
   it('sin palabras de escape en la especificación, el flow tampoco las trae (el motor usa las de siempre)', () => {
     const flow = compileWizard(minimal());
 

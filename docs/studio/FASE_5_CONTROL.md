@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, y B-02 (`feat/studio-fase-5-desambiguacion`) sobre C-04.
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, y horario (`feat/studio-fase-5-horario`) sobre B-02.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -9,8 +9,8 @@
 |---|---|
 | C-08 · Palabras de escape por tenant | Hecha: #92 |
 | C-04 · Validación de capturas | Hecha: #93 |
-| B-02 · Desambiguación | Hecha: PR apilado sobre el de C-04 |
-| Horario en el saludo y en el paso a humano | Pendiente |
+| B-02 · Desambiguación | Hecha: #94 |
+| Horario en el saludo y en el paso a humano | Hecha: PR apilado sobre el de B-02 (sin zona horaria por tenant, D-5.3) |
 | Inactividad con ventana | Pendiente |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
 | Fusión de mensajes | Pendiente |
@@ -184,3 +184,47 @@ Ninguna conversación grabada de los moldes cambió: ninguna tenía un empate as
 | «Si dos reglas empatan» | Solo empates de palabras clave | Botones y filas coinciden exacto; los demás tipos (catálogo, directorio) tienen prioridades distintas y no empatan entre sí |
 | El validador marca los empates detectables | V-EST-07 marca la misma palabra en dos salidas | Dos palabras distintas que aparecen en el mismo mensaje («precio de la cita») no se pueden prever en diseño |
 | Texto de la pregunta | Fijo en el motor | Igual que la confirmación de baja. Si hace falta por negocio, es un campo más del flow |
+
+---
+
+## 4. Horario
+
+> §6: *Condición "dentro/fuera de horario" en el saludo y en el paso a humano, con la zona horaria del tenant.*
+
+### Qué hace
+
+Antes, fuera de horario el motor solo mandaba el mensaje de "cerrado" y no corría el flow, para todos. Ahora cada flow elige con `hours.when_closed`:
+
+| Modo | Fuera de horario |
+|---|---|
+| `block` (o sin `hours`) | Como siempre: solo el mensaje de "cerrado"; la conversación se queda donde iba |
+| `continue` | El flow atiende. Una conversación **nueva** empieza con el mensaje de "cerrado" y sigue normal. Cada paso a persona usa su `user_response_closed` (si no lo trae, el de siempre); el aviso al dueño se manda igual |
+
+El dueño prueba su bot a cualquier hora, sin aviso.
+
+| Pieza | Dónde |
+|---|---|
+| Contrato | `BotFlow.hours`, `EscapeToHumanNode.content.user_response_closed`, `FlowSchema` |
+| Motor | `ConversationEngine`: el gate de horario según el modo, y el texto del paso a persona |
+| "Por qué" | Gates nuevos `out_of_hours_notice` y `out_of_hours_handoff` |
+| Validador | **V-CUMP-05** (aviso): en `continue`, un paso a persona sin texto de fuera de horario |
+| Asistente | `hours.whenClosed` y `userResponseClosed` en cada paso a persona |
+| Panel | Paso 1: «Fuera de horario el bot sigue atendiendo». Paso 6: «Lo que ve el cliente fuera de horario» |
+
+### Hallazgo: el molde de cerrajería prometía algo que no hacía
+
+El mensaje de "cerrado" sugerido del molde de cerrajería dice *«Si es una emergencia, escríbenos "emergencia" y te atendemos»*, pero el gate de horario no dejaba correr el flow: escribir "emergencia" de noche devolvía otra vez el mensaje de "cerrado". Ahora el molde (el del asistente y el JSON) está en `continue`, con texto de fuera de horario en cada paso a persona. Las emergencias usan el mismo texto a cualquier hora, a propósito. Lo fija `businessHoursFlow.test.ts`.
+
+Por lo mismo, la conversación grabada de cerrajería ahora pasa por `out_of_hours_notice` en vez de `out_of_hours`. El gate de siempre sigue probado con un flow en `block` en el mismo archivo.
+
+### Desvíos
+
+| Especificación | Qué se hizo | Por qué |
+|---|---|---|
+| Condición en el saludo | Aviso al empezar una conversación nueva, no un paso de condición | Una condición de horario como paso implica que el motor evalúe salidas en pasos que no esperan al cliente. El aviso cubre el caso real (avisar que está cerrado y seguir) sin tocar cómo avanza el motor |
+| Zona horaria del tenant | Sigue `America/Mexico_City` para todos | Ver D-5.3 |
+| Simulador viejo (`/simulator/<uuid>`) | Conserva el gate de siempre | Usa su propia copia de la orquestación (H-2) y está por retirarse |
+
+### Decisiones para OVY
+
+- **D-5.3 · Zona horaria por tenant.** `bot_configurations` es una tabla con columnas, así que necesita la migración 024 (`zona_horaria`) y el campo en el PATCH y en el panel. Leerla es seguro aunque la migración no esté (el servicio lee con `select('*')`); escribirla no. Hoy todos los tenants están en Chilpancingo. Para el horario, la zona del contenedor no importa: `BusinessHoursService` le pasa la zona a `Intl` explícitamente. ¿La agrego ahora o cuando haya un tenant en otra zona? Recomiendo esperar, porque ya hay dos migraciones sin aplicar (021 y 023).

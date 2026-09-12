@@ -116,6 +116,8 @@ export function getLimits(): Promise<WhatsAppLimits> {
 export interface WizardHandoff {
   userResponse: string;
   ownerAlert: string;
+  /** Lo que ve el cliente con el negocio cerrado, si el bot sigue atendiendo fuera de horario. */
+  userResponseClosed?: string;
 }
 
 interface WizardOptionBase {
@@ -200,6 +202,8 @@ export interface WizardSpec {
   farewell: { text: string; keywords: string[] };
   /** Sin ella el bot usa las palabras de siempre y no tiene palabra para pedir una persona. */
   escape?: WizardEscape;
+  /** Fuera de horario: `block` solo avisa que está cerrado; `continue` atiende igual. Sin él, `block`. */
+  hours?: { whenClosed: 'block' | 'continue' };
 }
 
 export interface StudioMold {

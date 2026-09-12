@@ -181,7 +181,7 @@ describe.each(MOLDS)('paridad simulador ↔ producción · %s', (mold) => {
 describe('las conversaciones grabadas recorren lo que dicen recorrer', () => {
   // Una paridad perfecta sobre una conversación que no toca nada no probaría
   // nada: estos checks fijan que cada guion pasa por los caminos difíciles.
-  it('cerrajería: pausa por humano, reinicio, escape, sesión expirada, fuera de horario y baja', async () => {
+  it('cerrajería: pausa por humano, reinicio, escape, sesión expirada, fuera de horario (atiende igual) y baja', async () => {
     const { turns } = await runSimulation('cerrajeria');
     const kinds = turns.flatMap((t) => t.trace.map((s) => (s.kind === 'gate' ? `gate:${s.gate}` : s.kind)));
 
@@ -190,7 +190,8 @@ describe('las conversaciones grabadas recorren lo que dicen recorrer', () => {
       'gate:human_paused',
       'escape_word',
       'gate:session_expired',
-      'gate:out_of_hours',
+      // Cerrajería atiende fuera de horario (Fase 5): aviso y el flow sigue.
+      'gate:out_of_hours_notice',
       'gate:opt_out',
       'gate:opt_in_implicit',
     ]));

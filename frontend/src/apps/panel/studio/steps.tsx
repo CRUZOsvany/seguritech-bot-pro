@@ -11,6 +11,7 @@ import type {
   WhatsAppLimits,
   WizardCaptureOption,
   WizardEscape,
+  WizardHandoff,
   WizardOption,
   WizardSpec,
 } from '@/shared/api/studio';
@@ -85,7 +86,8 @@ export function IssueList({ issues, onGo, spec }: { issues: ValidationIssue[]; o
 // 1. Negocio
 // ---------------------------------------------------------------------------
 
-export function StepNegocio({ business, setBusiness, limits }: StepProps) {
+export function StepNegocio({ spec, setSpec, business, setBusiness, limits, canEditStructure }: StepProps) {
+  const continuesClosed = spec.hours?.whenClosed === 'continue';
   const hoursHint = (v: string) =>
     isValidHours(v) ? 'Formato HH:MM-HH:MM, por ejemplo 09:00-19:00. Vacío = sin horario (el bot atiende siempre).' : (
       <span className="text-red-600">Usa el formato HH:MM-HH:MM, por ejemplo 09:00-19:00.</span>
@@ -112,7 +114,21 @@ export function StepNegocio({ business, setBusiness, limits }: StepProps) {
           multiline
           rows={2}
         />
-        <EngineNote>Fuera de horario el bot solo manda este mensaje y deja la conversación donde iba; al abrir, sigue desde ahí. El dueño puede probar su bot a cualquier hora.</EngineNote>
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={continuesClosed}
+            disabled={!canEditStructure}
+            onChange={(e) => setSpec((s) => ({ ...s, hours: { whenClosed: e.target.checked ? 'continue' : 'block' } }))}
+          />
+          Fuera de horario el bot sigue atendiendo (por ejemplo, emergencias 24/7)
+        </label>
+        <EngineNote>
+          {continuesClosed
+            ? 'Fuera de horario, una conversación nueva empieza con este mensaje y luego sigue normal. En «Paso a humano» pon qué ve el cliente cuando está cerrado.'
+            : 'Fuera de horario el bot solo manda este mensaje y deja la conversación donde iba; al abrir, sigue desde ahí.'}{' '}
+          El dueño puede probar su bot a cualquier hora.
+        </EngineNote>
       </Section>
       <Section title="Quién atiende cuando el bot pasa a una persona">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -641,12 +657,24 @@ export function StepHumano({ spec, setSpec, business, limits, canEditStructure, 
   const vars = availableVariables(spec);
   const handoffFields = (
     title: string,
-    value: { userResponse: string; ownerAlert: string },
-    onChange: (v: { userResponse: string; ownerAlert: string }) => void,
+    value: WizardHandoff,
+    onChange: (v: WizardHandoff) => void,
     extraVars: string[] = [],
   ) => (
     <Section key={title} title={title}>
       <TextField label="Lo que ve el cliente" value={value.userResponse} max={limits.text.bodyMax} multiline rows={2} disabled={disabled} onChange={(v) => onChange({ ...value, userResponse: v })} />
+      {spec.hours?.whenClosed === 'continue' && (
+        <TextField
+          label="Lo que ve el cliente fuera de horario"
+          value={value.userResponseClosed ?? ''}
+          max={limits.text.bodyMax}
+          multiline
+          rows={2}
+          disabled={disabled}
+          onChange={(v) => onChange({ ...value, userResponseClosed: v || undefined })}
+          hint="Vacío: el mismo texto de siempre (el validador lo avisa)."
+        />
+      )}
       <TextField label="La alerta que recibe el dueño" value={value.ownerAlert} max={limits.text.bodyMax} multiline rows={3} disabled={disabled} onChange={(v) => onChange({ ...value, ownerAlert: v })} />
       <VariableChips vars={[...vars, ...extraVars]} />
     </Section>

@@ -26,7 +26,7 @@ const ESCAPE_LABEL: Record<EscapeCategory, string> = {
  * hace lo que revisan: V-EST-09 (respuesta por tipo de entrada: el motor
  * ignora audio, imagen y demás, hallazgo H-8), V-META-03 (el modelo de nodos
  * no tiene encabezados donde Meta los prohíbe), V-META-06 (no hay nodo de
- * address message), V-CUMP-03/04/05/08 (el motor no programa envíos,
+ * address message), V-CUMP-03/04/08 (el motor no programa envíos,
  * recordatorios ni plantillas). Detalle: docs/studio/FASE_2_VALIDADOR.md.
  */
 
@@ -121,6 +121,7 @@ function runRules(flow: BotFlow): ValidationIssue[] {
     ...ruleMedia(ctx),
     ...ruleHumanPath(ctx),
     ...ruleOptOut(ctx),
+    ...ruleClosedHandoff(ctx),
     ...ruleSensitiveData(ctx),
     ...ruleBursts(ctx),
     ...ruleMergeable(ctx),
@@ -689,6 +690,21 @@ function catchesWord(c: TransitionCondition, n: FlowNode, word: string): boolean
   default:
     return false;
   }
+}
+
+/**
+ * V-CUMP-05: con el flow atendiendo fuera de horario, un paso a persona sin
+ * texto para cuando está cerrado: el cliente leería "te marcamos en unos
+ * minutos" a medianoche. En modo `block` el flow no corre cerrado.
+ */
+function ruleClosedHandoff(ctx: GraphContext): ValidationIssue[] {
+  if (ctx.flow.hours?.when_closed !== 'continue') return [];
+  return ctx
+    .reachableNodes()
+    .filter((n) => n.type === 'escape_to_human' && !n.content.user_response_closed?.trim())
+    .map((n) =>
+      issue('V-CUMP-05', 'warning', `${q(n.id)} pasa a una persona, pero fuera de horario el cliente leería el mismo texto de siempre. Agrega qué pasa cuando está cerrado.`, n.id),
+    );
 }
 
 /** V-CUMP-02: la baja es obligatoria en todo flujo. */

@@ -41,6 +41,8 @@ const HandoffSchema = z.object({
   userResponse: textSchema,
   /** La alerta que recibe el dueño por WhatsApp. */
   ownerAlert: textSchema,
+  /** Lo que ve el cliente con el negocio cerrado, si el bot sigue atendiendo fuera de horario. */
+  userResponseClosed: z.string().trim().optional(),
 });
 
 const OptionBase = {
@@ -155,6 +157,8 @@ export const WizardSpecSchema = z
       keywords: keywordsSchema,
     }),
     escape: EscapeSpecSchema.optional(),
+    /** Fuera de horario: `block` solo avisa que está cerrado; `continue` atiende igual. Sin él, `block`. */
+    hours: z.object({ whenClosed: z.enum(['block', 'continue']) }).optional(),
   })
   .superRefine((spec, ctx) => {
     const ids = new Set<string>();
@@ -263,10 +267,14 @@ export function compileWizard(spec: WizardSpec): BotFlow {
 
   nodes.push(menuNode(START, '{{welcome_message}}\n\n{{menu_message}}', firstRetry, ['welcome_message', 'menu_message']));
 
-  const handoffNode = (id: string, h: { userResponse: string; ownerAlert: string }): FlowNode => ({
+  const handoffNode = (id: string, h: { userResponse: string; ownerAlert: string; userResponseClosed?: string }): FlowNode => ({
     id,
     type: 'escape_to_human',
-    content: { user_response: h.userResponse, owner_alert_template: h.ownerAlert },
+    content: {
+      user_response: h.userResponse,
+      ...(h.userResponseClosed ? { user_response_closed: h.userResponseClosed } : {}),
+      owner_alert_template: h.ownerAlert,
+    },
     transitions: [byDefault(END)],
   });
 
@@ -375,6 +383,7 @@ export function compileWizard(spec: WizardSpec): BotFlow {
     start_node_id: START,
     nodes,
     ...(spec.escape ? { escape: compileEscape(spec.escape) } : {}),
+    ...(spec.hours ? { hours: { when_closed: spec.hours.whenClosed } } : {}),
     studio: { wizard: spec },
   };
 }
@@ -412,11 +421,12 @@ export function readWizardSpec(flow: unknown): WizardReadResult {
   if (!parsed.success) return { ok: false, reason: 'invalid_spec' };
 
   const expected = compileWizard(parsed.data);
-  const actual = flow as { start_node_id?: unknown; nodes?: unknown; escape?: unknown };
+  const actual = flow as { start_node_id?: unknown; nodes?: unknown; escape?: unknown; hours?: unknown };
   const same =
     actual.start_node_id === expected.start_node_id &&
     deepEqual(actual.nodes, expected.nodes) &&
-    deepEqual(actual.escape, expected.escape);
+    deepEqual(actual.escape, expected.escape) &&
+    deepEqual(actual.hours, expected.hours);
   return same ? { ok: true, spec: parsed.data } : { ok: false, reason: 'edited_elsewhere' };
 }
 

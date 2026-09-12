@@ -105,8 +105,9 @@ describe('explainTrace', () => {
 
   it('reloj adelantado, fuera de horario y baja', async () => {
     const config = makeTenantConfig({ horarioSemana: '09:00-19:00', horarioSabado: null });
+    // Papelería no atiende cerrado (sin `hours`); cerrajería sí, ver businessHoursFlow.test.
     const turns = await why(
-      'cerrajeria',
+      'papeleria',
       [say('hola'), { kind: 'advance_time', minutes: 600 }, say('¿siguen?'), say('baja')],
       config,
     );
