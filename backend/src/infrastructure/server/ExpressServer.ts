@@ -226,6 +226,8 @@ export class ExpressServer {
           if (await this.rejectIfTenantInactive(tenantId, res)) return;
 
           if (this.metaAdapter) {
+            // Estados de lo que mandó el bot: ordenan los envíos siguientes (§7.7).
+            this.metaAdapter.handleStatuses(req.body);
             const parsed = this.metaAdapter.parseIncomingMessage(req.body);
             if (!parsed) {
               res.json({ success: true });
@@ -269,6 +271,8 @@ export class ExpressServer {
             }
           }
 
+          // Estados de lo que mandó el bot: ordenan los envíos siguientes (§7.7).
+          this.metaAdapter.handleStatuses(req.body);
           const parsed = this.metaAdapter.parseIncomingMessage(req.body);
           if (!parsed) {
             res.json({ success: true });
