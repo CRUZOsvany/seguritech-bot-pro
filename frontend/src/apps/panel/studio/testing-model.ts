@@ -1,5 +1,5 @@
 import { ApiError } from '@/shared/api/client';
-import type { PublishRejection, TestExpectation, TestInput } from '@/shared/api/studio';
+import type { PublishRejection, TestExpectation, TestInput, TurnMessages } from '@/shared/api/studio';
 import { eventLabel, type SimConversation } from '@/shared/simulator/studioView';
 
 /**
@@ -83,6 +83,11 @@ export function publishFailure(error: unknown): PublishFailure {
     };
   }
   return { message, issues: body?.issues ?? [], tests: [] };
+}
+
+/** Los turnos que mandan más de un mensaje, del más cargado al menos (Fase 5: cada mensaje cuenta). */
+export function busyTurns(turns: TurnMessages[] | undefined): TurnMessages[] {
+  return (turns ?? []).filter((t) => t.messages > 1).sort((a, b) => b.messages - a.messages);
 }
 
 /** "hola → 🚨 Emergencia": el camino del explorador, legible. */

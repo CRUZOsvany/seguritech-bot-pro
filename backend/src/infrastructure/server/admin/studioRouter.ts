@@ -12,6 +12,7 @@ import type { AuditLogService } from '@/infrastructure/services/AuditLogService'
 import { requireRole } from '@/infrastructure/auth/AuthMiddleware';
 import { WizardSpecSchema, compileWizard, readWizardSpec } from '@/domain/studio/wizard';
 import { STUDIO_MOLDS, defaultWizardEscape } from '@/domain/studio/molds';
+import { planMerge } from '@/domain/validation/mergeMessages';
 import { TestExpectationSchema, TestOptionsSchema } from '@/domain/studio/testCases';
 import { diffFlows } from '@/domain/studio/diff';
 import { TestCasesUnavailableError, type FlowTestCaseRepository } from '@/domain/ports/FlowTestCaseRepository';
@@ -165,6 +166,41 @@ export function createStudioRouter(params: {
   // ==========================================================================
   // Asistente (Fase 3)
   // ==========================================================================
+
+  // POST /tenants/:id/studio/validate — valida un flow que manda el panel
+  // (el lienzo del Designer, sin guardar). No toca nada.
+  router.post('/tenants/:id/studio/validate', requireTenantScope, (req: Request, res: Response) => {
+    const flow = (req.body ?? {}).flow;
+    if (flow === undefined) {
+      res.status(400).json({ error: 'Falta el flow' });
+      return;
+    }
+    res.json({ report: validateFlowDesign(flow) });
+  });
+
+  // POST /tenants/:id/studio/merge — fusiona un texto suelto con el mensaje
+  // que le sigue (V-COSTO-01) y devuelve el flow resultante SIN guardarlo:
+  // el Designer lo carga al lienzo y el operador guarda como siempre.
+  router.post('/tenants/:id/studio/merge', requireTenantScope, (req: Request, res: Response) => {
+    const parsed = z
+      .object({ flow: z.object({ nodes: z.array(z.object({ id: z.string() }).passthrough()) }).passthrough(), nodeId: z.string().min(1) })
+      .safeParse(req.body ?? {});
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Faltan el flow o el paso a fusionar' });
+      return;
+    }
+    try {
+      const plan = planMerge(parsed.data.flow as unknown as BotFlow, parsed.data.nodeId);
+      if (!plan.ok) {
+        res.status(400).json({ error: `No se puede fusionar: ${plan.reason}.` });
+        return;
+      }
+      res.json({ flow: plan.flow, removed: plan.removed, report: validateFlowDesign(plan.flow) });
+    } catch (err) {
+      logger.warn({ err: errMsg(err) }, 'POST studio merge: flow mal formado');
+      res.status(400).json({ error: 'El flow no tiene la forma esperada' });
+    }
+  });
 
   // GET /studio/molds — moldes del asistente (especificación + textos
   // sugeridos) y las palabras de escape que propone el Studio (C-08).

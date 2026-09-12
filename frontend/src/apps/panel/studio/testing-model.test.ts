@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '@/shared/api/client';
 import type { SimTurn } from '@/shared/api/studio';
 import type { SimConversation } from '@/shared/simulator/studioView';
-import { buildExpectation, describeExpectation, linesOf, publishFailure, suggestTestName, testFromConversation } from './testing-model';
+import { buildExpectation, busyTurns, describeExpectation, linesOf, publishFailure, suggestTestName, testFromConversation } from './testing-model';
 
 function turn(node: string | null, customerMessages = 1): SimTurn {
   return {
@@ -75,6 +75,19 @@ describe('expectativas', () => {
     expect(buildExpectation({ node: ' ', contains: '\n', notContains: '' })).toBeNull();
     expect(buildExpectation({ node: 'fin', contains: 'a\n\n b ', notContains: '' })).toEqual({ node: 'fin', contains: ['a', 'b'] });
     expect(linesOf(' uno \n\ndos')).toEqual(['uno', 'dos']);
+  });
+});
+
+describe('busyTurns', () => {
+  it('solo los turnos con más de un mensaje, del más cargado al menos', () => {
+    expect(
+      busyTurns([
+        { entry: 'a', messages: 1, path: ['a'] },
+        { entry: 'b', messages: 2, path: ['b', 'c'] },
+        { entry: 'd', messages: 4, path: ['d', 'e', 'f', 'g'] },
+      ]).map((t) => t.entry),
+    ).toEqual(['d', 'b']);
+    expect(busyTurns(undefined)).toEqual([]);
   });
 });
 

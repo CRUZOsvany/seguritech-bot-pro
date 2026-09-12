@@ -47,6 +47,7 @@ import { TransitionsEditor } from '../designer/TransitionsEditor';
 import { NodeContextMenu, type ContextMenuState } from '../designer/NodeContextMenu';
 import { validateGraph } from '../designer/validation/graphValidator';
 import { ValidationPanel } from '../designer/validation/ValidationPanel';
+import { StudioReview } from '../designer/validation/StudioReview';
 import { VersionsPanel } from '../designer/VersionsPanel';
 import { WhatsAppSimulator } from '@/shared/simulator/WhatsAppSimulator';
 import type { SimulateSource } from '@/shared/api/studio';
@@ -540,7 +541,9 @@ function DesignerCanvas({
                     : undefined
                 }
                 publishing={publish.isPending}
-              />
+              >
+                <StudioReview tenantId={tenantId} flowId={flowId} />
+              </ValidationPanel>
             ) : showVersions ? (
               <VersionsPanel
                 versions={versionsQ.data ?? []}

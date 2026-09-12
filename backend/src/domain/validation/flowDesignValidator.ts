@@ -3,6 +3,7 @@ import { WHATSAPP_LIMITS as L } from '@/domain/whatsapp/limits';
 import { FlowSchema } from '@/domain/validators/flowSchema';
 import { resolveEscape, wordsOf, type EscapeCategory, type ResolvedEscape } from '@/domain/conversation/escapeWords';
 import { fuzzyIncludes, normalizePhrase } from '@/domain/services/textMatch';
+import { planMerge } from './mergeMessages';
 
 const ESCAPE_CATEGORIES: EscapeCategory[] = ['opt_out', 'human', 'restart', 'menu'];
 const ESCAPE_LABEL: Record<EscapeCategory, string> = {
@@ -37,6 +38,8 @@ export interface ValidationIssue {
   level: IssueLevel;
   message: string;
   nodeId?: string;
+  /** Arreglo que el Studio sabe hacer solo (Fase 5: fusionar un texto con el mensaje que le sigue). */
+  fix?: { kind: 'merge_next'; nodeId: string };
 }
 
 export interface ValidationReport {
@@ -46,19 +49,31 @@ export interface ValidationReport {
   issues: ValidationIssue[];
   /** Lo que decide hoy la publicación (FlowSchema, capa L2). */
   schema: { ok: boolean; issues: Array<{ path: string; message: string }> };
+  /** Cuántos mensajes manda el bot en cada turno, desde donde empieza hasta esperar al cliente. */
+  turns: Array<{ entry: string; messages: number; path: string[] }>;
 }
 
 export function validateFlowDesign(input: unknown): ValidationReport {
   const schema = runSchema(input);
   const shape = checkShape(input);
-  const issues: ValidationIssue[] = shape.ok ? runRules(shape.flow) : [shape.issue];
+  const ctx = shape.ok ? new GraphContext(shape.flow) : null;
+  const issues: ValidationIssue[] = shape.ok ? runRules(ctx!) : [shape.issue];
   const errors = issues.filter((i) => i.level === 'error').length;
   return {
     ok: errors === 0,
     summary: { errors, warnings: issues.length - errors },
     issues,
     schema,
+    turns: ctx ? turnsOf(ctx) : [],
   };
+}
+
+/** Mensajes del bot por turno: desde cada inicio de turno hasta que espera o termina. */
+function turnsOf(ctx: GraphContext): ValidationReport['turns'] {
+  return ctx.turnEntries().map((entry) => {
+    const chain = ctx.autoChain(entry);
+    return { entry, messages: chain.nodes.reduce((acc, n) => acc + messagesSent(n), 0), path: chain.nodes.map((n) => n.id) };
+  });
 }
 
 // ============================================================================
@@ -104,8 +119,7 @@ function checkShape(
 // Reglas
 // ============================================================================
 
-function runRules(flow: BotFlow): ValidationIssue[] {
-  const ctx = new GraphContext(flow);
+function runRules(ctx: GraphContext): ValidationIssue[] {
   return [
     ...ruleStart(ctx),
     ...ruleDestinations(ctx),
@@ -764,7 +778,12 @@ function ruleMergeable(ctx: GraphContext): ValidationIssue[] {
     if (!next) continue;
     if (next.type === 'send_text' || next.type === 'send_buttons' || next.type === 'send_list') {
       const into = next.type === 'send_text' ? 'en un solo texto' : 'poniendo el texto en el cuerpo del menú';
-      out.push(issue('V-COSTO-01', 'warning', `${q(n.id)} y ${q(next.id)} salen juntos: se pueden fusionar ${into} y mandar un mensaje menos.`, n.id));
+      const plan = planMerge(ctx.flow, n.id);
+      const why = plan.ok ? '' : ` No se puede hacer solo: ${plan.reason}.`;
+      out.push({
+        ...issue('V-COSTO-01', 'warning', `${q(n.id)} y ${q(next.id)} salen juntos: se pueden fusionar ${into} y mandar un mensaje menos.${why}`, n.id),
+        ...(plan.ok ? { fix: { kind: 'merge_next' as const, nodeId: n.id } } : {}),
+      });
     }
   }
   return out;

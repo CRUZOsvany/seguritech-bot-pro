@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { AlertCircle, AlertTriangle, CheckCircle2, X } from 'lucide-react';
 import type { ValidationResult, ValidationIssue } from './graphValidator';
 import { Button } from '@/shared/ui/button';
@@ -16,11 +17,14 @@ export function ValidationPanel({
   onClose,
   onPublishAnyway,
   publishing,
+  children,
 }: {
   result: ValidationResult;
   onClose: () => void;
   onPublishAnyway?: () => void;
   publishing?: boolean;
+  /** Secciones extra debajo de la validación del grafo (la revisión del Studio). */
+  children?: ReactNode;
 }) {
   const { issues, errorCount, warningCount } = result;
   const onlyWarnings = errorCount === 0 && warningCount > 0;
@@ -80,6 +84,8 @@ export function ValidationPanel({
           ))}
         </ul>
       )}
+
+      {children}
 
       {/* Acción para warnings */}
       {onlyWarnings && onPublishAnyway && (
