@@ -278,6 +278,9 @@ export interface ServiceDirectoryRepository {
   delete(tenantId: string, id: string): Promise<void>;
 }
 
+/** Reloj e ids del motor de conversación (Fase 1 del Studio). */
+export type { ClockPort, IdGenerator } from './ClockPort';
+
 /**
  * Puerto para carga y persistencia de flujos conversacionales por tenant.
  * Re-exportado desde BotFlowRepository.ts para mantener un solo punto de entrada.

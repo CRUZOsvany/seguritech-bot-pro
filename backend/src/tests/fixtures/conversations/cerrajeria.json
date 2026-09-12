@@ -1,0 +1,26 @@
+{
+  "mold": "cerrajeria",
+  "description": "Emergencia completa hasta el paso a humano, silencio durante la pausa, reinicio, palabra de escape, sesión expirada fuera de horario y baja.",
+  "startAt": "2026-09-10T10:00:00-06:00",
+  "tenant": {
+    "horarioSemana": "09:00-19:00",
+    "horarioSabado": "10:00-14:00",
+    "abreDomingo": false
+  },
+  "events": [
+    { "type": "text", "text": "hola" },
+    { "type": "button_reply", "id": "btn_0", "title": "🚨 Emergencia" },
+    { "type": "list_reply", "id": "Apertura de puerta", "title": "Apertura de puerta" },
+    { "type": "text", "text": "Calle Morelos 12, centro. Se me cerró la puerta con las llaves adentro" },
+    { "type": "button_reply", "id": "btn_0", "title": "✅ Sí, correcto" },
+    { "type": "text", "text": "¿ya vienen?" },
+    { "type": "advance_time", "minutes": 2900 },
+    { "type": "text", "text": "hola de nuevo" },
+    { "type": "text", "text": "menu" },
+    { "type": "text", "text": "quiero info" },
+    { "type": "advance_time", "minutes": 600 },
+    { "type": "text", "text": "sigo aquí" },
+    { "type": "text", "text": "baja" },
+    { "type": "text", "text": "hola" }
+  ]
+}

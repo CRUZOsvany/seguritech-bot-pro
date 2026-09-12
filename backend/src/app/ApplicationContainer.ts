@@ -20,6 +20,8 @@ import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
+import { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
+import { config } from '@/config/env';
 import { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 
 /**
@@ -34,6 +36,7 @@ export class ApplicationContainer {
   private readonly assignMoldeUseCase: AssignMoldeUseCase;
   private readonly setTenantStatusUseCase: SetTenantStatusUseCase;
   private readonly simulateMessageUseCase: SimulateMessageUseCase;
+  private readonly simulateConversationUseCase: SimulateConversationUseCase;
   private readonly createTenantUseCase: CreateTenantUseCase;
 
   constructor(
@@ -93,6 +96,16 @@ export class ApplicationContainer {
       logger,
     );
 
+    // Simulador del Studio: el MISMO FlowInterpreter que atiende a los
+    // clientes, con sesiones, reloj y envío falsos.
+    this.simulateConversationUseCase = new SimulateConversationUseCase(
+      tenantConfigPort,
+      flowInterpreter,
+      businessHoursService,
+      config.bot.handoffPauseMinutes * 60 * 1000,
+      logger,
+    );
+
     this.createTenantUseCase = new CreateTenantUseCase(tenantRepository, logger);
   }
 
@@ -110,6 +123,10 @@ export class ApplicationContainer {
 
   getSimulateMessageUseCase(): SimulateMessageUseCase {
     return this.simulateMessageUseCase;
+  }
+
+  getSimulateConversationUseCase(): SimulateConversationUseCase {
+    return this.simulateConversationUseCase;
   }
 
   getCreateTenantUseCase(): CreateTenantUseCase {

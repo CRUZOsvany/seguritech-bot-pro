@@ -56,6 +56,7 @@ function buildApp(deps: {
     assignMoldeUseCase: noop,
     setTenantStatusUseCase: noop,
     simulateMessageUseCase: noop,
+    simulateConversationUseCase: noop,
     createTenantUseCase: noop,
     tenantRepository: (deps.tenantRepository ?? {}) as TenantRepository,
     tenantServiceRepository: noop,

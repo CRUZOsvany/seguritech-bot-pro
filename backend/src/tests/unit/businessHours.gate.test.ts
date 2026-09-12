@@ -158,11 +158,16 @@ describe('BotController — gate de horario de atención (§2.2)', () => {
 
     await controller.processMessage(TENANT_ID, USER_PHONE, 'hola');
 
-    expect(businessHours.isOpenNow).toHaveBeenCalledWith({
-      horarioSemana: '09:00-19:00',
-      horarioSabado: '10:00-14:00',
-      abreDomingo: true,
-    });
+    // Desde la Fase 1 del Studio la hora viene del reloj del motor (ClockPort)
+    // en vez de que isOpenNow la lea sola: por eso el segundo argumento.
+    expect(businessHours.isOpenNow).toHaveBeenCalledWith(
+      {
+        horarioSemana: '09:00-19:00',
+        horarioSabado: '10:00-14:00',
+        abreDomingo: true,
+      },
+      expect.any(Date),
+    );
   });
 
   it('fuera de horario pero el mensaje viene del dueño: el gate NO aplica, el flow sigue normal', async () => {

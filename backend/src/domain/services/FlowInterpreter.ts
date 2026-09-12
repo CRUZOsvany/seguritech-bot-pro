@@ -14,6 +14,7 @@ import { CarouselCardResolver } from '@/domain/services/CarouselCardResolver';
 import { ServiceDirectoryMatcher } from '@/domain/services/ServiceDirectoryMatcher';
 import { CatalogSearchService } from '@/domain/services/CatalogSearchService';
 import { fuzzyIncludes } from '@/domain/services/textMatch';
+import type { DecisionStep } from '@/domain/conversation/trace';
 
 // ============================================================================
 // TIPOS DE OUTPUT (lo que el interpreter le devuelve al BotController)
@@ -83,6 +84,12 @@ export interface InterpreterResult {
   nextNodeId: string;
   contextUpdates: Record<string, unknown>;
   flowEnded: boolean;
+  /**
+   * Por qué el intérprete hizo lo que hizo, en orden. Solo lectura: no altera
+   * ninguna decisión. execute() siempre la llena; es opcional en el tipo para
+   * que los dobles de prueba anteriores a la Fase 1 sigan compilando.
+   */
+  trace?: DecisionStep[];
 }
 
 // ============================================================================
@@ -125,9 +132,17 @@ export class FlowInterpreter {
     user: User;
     message: Message;
     tenantConfig: TenantConfig;
+    /**
+     * Genera el folio de {{order_id}}. ConversationEngine siempre lo pasa
+     * (IdGenerator); los llamadores viejos que no lo pasan conservan el
+     * generador de siempre, basado en la hora y Math.random.
+     */
+    orderIdFactory?: () => string;
   }): Promise<InterpreterResult> {
     const { flow, user, message, tenantConfig } = params;
+    const orderIdFactory = params.orderIdFactory ?? legacyOrderId;
     const contextUpdates: Record<string, unknown> = {};
+    const trace: DecisionStep[] = [];
 
     // Nodo actual, resuelto una sola vez (antes se recalculaba en Caso 2;
     // ahora también lo necesita Caso 1 para el fix de precedencia de abajo).
@@ -165,6 +180,12 @@ export class FlowInterpreter {
         localTransition.condition.type !== 'default' &&
         localTransition.condition.type !== 'catalog_not_found';
 
+      trace.push({
+        kind: 'escape_word',
+        word: message.content.trim().toLowerCase(),
+        handledLocally: nodeHandlesItLocally,
+      });
+
       if (!nodeHandlesItLocally) {
         this.logger.debug(
           { tenantId: user.tenantId, content: message.content },
@@ -174,6 +195,7 @@ export class FlowInterpreter {
         for (const k of Object.keys(user.context ?? {})) cleared[k] = null;
         Object.assign(contextUpdates, cleared);
 
+        trace.push({ kind: 'session_start', startNodeId: flow.start_node_id, reason: 'escape_word' });
         return this.advanceFrom({
           flow,
           startNodeId: flow.start_node_id,
@@ -181,6 +203,8 @@ export class FlowInterpreter {
           message,
           tenantConfig,
           contextUpdates,
+          trace,
+          orderIdFactory,
         });
       }
       this.logger.debug(
@@ -192,6 +216,15 @@ export class FlowInterpreter {
 
     // Caso 2: usuario nuevo, sin currentNodeId, o nodo desconocido → start
     if (!user.currentNodeId || !currentNode || user.currentNodeId === 'end') {
+      trace.push({
+        kind: 'session_start',
+        startNodeId: flow.start_node_id,
+        reason: !user.currentNodeId
+          ? 'new'
+          : user.currentNodeId === 'end'
+            ? 'ended'
+            : 'unknown_node',
+      });
       return this.advanceFrom({
         flow,
         startNodeId: flow.start_node_id,
@@ -199,6 +232,8 @@ export class FlowInterpreter {
         message,
         tenantConfig,
         contextUpdates,
+        trace,
+        orderIdFactory,
       });
     }
 
@@ -213,6 +248,12 @@ export class FlowInterpreter {
         message.content.trim(),
         tenantConfig.catalogSynonyms,
       );
+      trace.push({
+        kind: 'catalog_search',
+        nodeId: currentNode.id,
+        query: message.content.trim(),
+        productId: catalogMatch?.id ?? null,
+      });
     }
 
     // Validación de wait_input (depuración motor+simulador, Fase 4 — cierra
@@ -223,6 +264,12 @@ export class FlowInterpreter {
     // nada en el contexto — el intento inválido se descarta por completo.
     if (currentNode.type === 'wait_input' && currentNode.content.validation === 'numeric') {
       const isValidNumber = /^\d+([.,]\d+)?$/.test(message.content.trim());
+      trace.push({
+        kind: 'validation',
+        nodeId: currentNode.id,
+        validator: 'numeric',
+        valid: isValidNumber,
+      });
       if (!isValidNumber) {
         const errorNode: FlowNode = {
           ...currentNode,
@@ -234,17 +281,25 @@ export class FlowInterpreter {
           },
         };
         const outputs = await this.renderNode(errorNode, { flow, user, message, tenantConfig });
+        trace.push({ kind: 'wait', nodeId: currentNode.id });
         return {
           outputs,
           nextNodeId: currentNode.id,
           contextUpdates,
           flowEnded: false,
+          trace,
         };
       }
     }
 
     // Caso 3: estamos en un nodo que estaba esperando input. Evaluar transición.
-    const transition = this.evaluateTransitions(currentNode, message, tenantConfig, { catalogMatch });
+    const transition = this.evaluateTransitions(
+      currentNode,
+      message,
+      tenantConfig,
+      { catalogMatch },
+      trace,
+    );
 
     // save_to_context para wait_input
     if (currentNode.type === 'wait_input' && currentNode.content.save_to_context) {
@@ -309,11 +364,14 @@ export class FlowInterpreter {
         message,
         tenantConfig,
       });
+      trace.push({ kind: 'no_match', nodeId: currentNode.id });
+      trace.push({ kind: 'wait', nodeId: currentNode.id });
       return {
         outputs,
         nextNodeId: currentNode.id,
         contextUpdates,
         flowEnded: false,
+        trace,
       };
     }
 
@@ -324,6 +382,8 @@ export class FlowInterpreter {
       message,
       tenantConfig,
       contextUpdates,
+      trace,
+      orderIdFactory,
     });
   }
 
@@ -338,8 +398,10 @@ export class FlowInterpreter {
     message: Message;
     tenantConfig: TenantConfig;
     contextUpdates: Record<string, unknown>;
+    trace: DecisionStep[];
+    orderIdFactory: () => string;
   }): Promise<InterpreterResult> {
-    const { flow, message, tenantConfig } = params;
+    const { flow, message, tenantConfig, trace } = params;
     let user = params.user;
     const contextUpdates = params.contextUpdates;
     let currentId = params.startNodeId;
@@ -352,11 +414,13 @@ export class FlowInterpreter {
           { tenantId: user.tenantId, currentId },
           'Ciclo detectado sin nodo de espera, abortando',
         );
+        trace.push({ kind: 'engine_error', reason: 'cycle', nodeId: currentId });
         return {
           outputs,
           nextNodeId: currentId,
           contextUpdates,
           flowEnded: false,
+          trace,
         };
       }
       visited.add(currentId);
@@ -364,16 +428,19 @@ export class FlowInterpreter {
       const node = flow.nodes.find((n) => n.id === currentId);
       if (!node) {
         this.logger.error({ tenantId: user.tenantId, currentId }, 'Nodo no encontrado');
+        trace.push({ kind: 'engine_error', reason: 'node_not_found', nodeId: currentId });
         return {
           outputs,
           nextNodeId: flow.start_node_id,
           contextUpdates,
           flowEnded: false,
+          trace,
         };
       }
+      trace.push({ kind: 'node_entered', nodeId: node.id, nodeType: node.type });
 
       // Generar order_id si el nodo lo necesita (lazy)
-      const generatedOrderId = this.maybeGenerateOrderId(node);
+      const generatedOrderId = this.maybeGenerateOrderId(node, params.orderIdFactory);
       if (generatedOrderId && !contextUpdates['order_id']) {
         contextUpdates['order_id'] = generatedOrderId;
         user = { ...user, context: { ...user.context, order_id: generatedOrderId } };
@@ -403,8 +470,16 @@ export class FlowInterpreter {
               { tenantId: user.tenantId, nodeId: node.id },
               'send_list vacío sin transición default — abortando',
             );
-            return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: false };
+            trace.push({ kind: 'auto_skip', nodeId: node.id, reason: 'empty_list', target: null });
+            trace.push({ kind: 'engine_error', reason: 'empty_without_default', nodeId: node.id });
+            return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: false, trace };
           }
+          trace.push({
+            kind: 'auto_skip',
+            nodeId: node.id,
+            reason: 'empty_list',
+            target: def.next_node_id,
+          });
           currentId = def.next_node_id;
           continue;
         }
@@ -426,12 +501,20 @@ export class FlowInterpreter {
             { tenantId: user.tenantId, nodeId: node.id },
             'Carrusel vacío sin transición default — abortando',
           );
-          return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: false };
+          trace.push({ kind: 'auto_skip', nodeId: node.id, reason: 'empty_carousel', target: null });
+          trace.push({ kind: 'engine_error', reason: 'empty_without_default', nodeId: node.id });
+          return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: false, trace };
         }
         this.logger.warn(
           { tenantId: user.tenantId, nodeId: node.id },
           'Carrusel resolvió a 0 cards, transicionando al default',
         );
+        trace.push({
+          kind: 'auto_skip',
+          nodeId: node.id,
+          reason: 'empty_carousel',
+          target: def.next_node_id,
+        });
         currentId = def.next_node_id;
         continue;
       }
@@ -439,20 +522,24 @@ export class FlowInterpreter {
       outputs.push(...rendered);
 
       if (this.isWaitNode(node)) {
+        trace.push({ kind: 'wait', nodeId: node.id });
         return {
           outputs,
           nextNodeId: node.id,
           contextUpdates,
           flowEnded: false,
+          trace,
         };
       }
 
       if (node.type === 'end') {
+        trace.push({ kind: 'flow_ended', nodeId: node.id });
         return {
           outputs,
           nextNodeId: 'end',
           contextUpdates,
           flowEnded: true,
+          trace,
         };
       }
 
@@ -462,7 +549,8 @@ export class FlowInterpreter {
           { tenantId: user.tenantId, nodeId: node.id },
           'Nodo sin transiciones, terminando flow',
         );
-        return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: true };
+        trace.push({ kind: 'dead_end', nodeId: node.id });
+        return { outputs, nextNodeId: node.id, contextUpdates, flowEnded: true, trace };
       }
       currentId = next.next_node_id;
     }
@@ -489,10 +577,41 @@ export class FlowInterpreter {
     message: Message,
     tenantConfig: TenantConfig,
     extra?: { catalogMatch?: PosProduct | null },
+    /**
+     * Si viene, se registra cada transición con si coincidió y su puntaje.
+     * El pre-chequeo de la palabra de escape no la pasa: ahí solo se pregunta
+     * si el nodo sabría qué hacer, no se decide el turno.
+     */
+    trace?: DecisionStep[],
   ): Transition | null {
-    const matching = node.transitions.filter((t) =>
+    const transitions: Transition[] = node.transitions;
+    const matches = transitions.map((t) =>
       this.matchesCondition(t.condition, node, message, tenantConfig, extra),
     );
+    const matching = transitions.filter((_t, i) => matches[i]);
+    const winner = this.pickBySpecificity(node, message, matching);
+
+    if (trace) {
+      trace.push({
+        kind: 'transitions',
+        nodeId: node.id,
+        candidates: transitions.map((t, i) => ({
+          condition: t.condition.type,
+          target: t.next_node_id,
+          matched: matches[i],
+          score: this.transitionSpecificity(t.condition),
+        })),
+        winner: winner ? transitions.indexOf(winner) : null,
+      });
+    }
+    return winner;
+  }
+
+  private pickBySpecificity(
+    node: FlowNode,
+    message: Message,
+    matching: Transition[],
+  ): Transition | null {
     if (matching.length === 0) return null;
     if (matching.length === 1) return matching[0];
 
@@ -1003,11 +1122,20 @@ export class FlowInterpreter {
     return (ESCAPE_WORDS as readonly string[]).includes(trimmed);
   }
 
-  private maybeGenerateOrderId(node: FlowNode): string | null {
+  private maybeGenerateOrderId(node: FlowNode, orderIdFactory: () => string): string | null {
     const contentJson = JSON.stringify(node.content ?? {});
     if (!contentJson.includes('{{order_id}}')) return null;
-    const ts = Date.now().toString(36).toUpperCase();
-    const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
-    return `${ts}-${rnd}`;
+    return orderIdFactory();
   }
+}
+
+/**
+ * Folio de siempre, para quien llama a execute() sin orderIdFactory
+ * (SimulateMessageUseCase y tests anteriores a la Fase 1). El motor nuevo
+ * usa IdGenerator.orderId(), que genera el mismo formato.
+ */
+function legacyOrderId(): string {
+  const ts = Date.now().toString(36).toUpperCase();
+  const rnd = Math.random().toString(36).slice(2, 6).toUpperCase();
+  return `${ts}-${rnd}`;
 }

@@ -15,10 +15,14 @@ function normalizeDigits(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
-export function enrichOwnerAlert(alert: string, clientPhone: string): string {
+/**
+ * `now` viene del reloj del motor (ClockPort). La hora se formatea con la
+ * zona del proceso, igual que siempre: en un contenedor en UTC el dueño ve la
+ * hora UTC. No se corrige aquí porque cambiaría lo que recibe hoy.
+ */
+export function enrichOwnerAlert(alert: string, clientPhone: string, now: Date = new Date()): string {
   const digits = normalizeDigits(clientPhone);
   const code = clientPhone.slice(-4);
-  const now = new Date();
   const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   return (
     `${alert}\n\n` +
