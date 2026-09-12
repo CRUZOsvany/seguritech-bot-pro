@@ -6,6 +6,7 @@ import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusU
 import type { SimulateMessageUseCase } from '@/domain/use-cases/SimulateMessageUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
+import { OwnerDataIncompleteError } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import type { MessagesRepository, UserRepository } from '@/domain/ports';
@@ -169,6 +170,19 @@ export function createTenantsRouter(params: {
         mensaje_confirmacion_pedido: z.string().max(1024).optional(),
       })
       .optional(),
+    // Dueño del negocio: destino de las alertas de paso a humano (Studio,
+    // paso 1). El WhatsApp se guarda solo con dígitos, que es como lo compara
+    // el motor.
+    owner: z
+      .object({
+        nombre_dueno: z.string().trim().min(1).max(120).optional(),
+        whatsapp_dueno: z
+          .string()
+          .transform((s) => s.replace(/\D/g, ''))
+          .pipe(z.string().min(10, 'El WhatsApp del dueño necesita al menos 10 dígitos').max(15))
+          .optional(),
+      })
+      .optional(),
   });
 
   router.patch('/tenants/:id', requireTenantScope, async (req: Request, res: Response) => {
@@ -201,6 +215,10 @@ export function createTenantsRouter(params: {
       });
       res.json({ ok: true });
     } catch (err: unknown) {
+      if (err instanceof OwnerDataIncompleteError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
       logger.error({ err, id }, 'PATCH /api/admin/tenants/:id failed');
       res.status(500).json({ error: 'Error interno actualizando tenant' });
     }

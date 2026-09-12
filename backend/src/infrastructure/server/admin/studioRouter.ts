@@ -7,7 +7,11 @@ import type { SimulateConversationUseCase } from '@/domain/use-cases/SimulateCon
 import { validateFlow, FlowValidationError } from '@/domain/validators/flowSchema';
 import { requireTenantScope } from '@/infrastructure/auth/AuthMiddleware';
 import { SimEventSchema, eventToStep, toApiTurn } from './studioSimulation';
-import { errMsg } from './helpers';
+import { ctx, errMsg } from './helpers';
+import type { AuditLogService } from '@/infrastructure/services/AuditLogService';
+import { requireRole } from '@/infrastructure/auth/AuthMiddleware';
+import { WizardSpecSchema, compileWizard, readWizardSpec } from '@/domain/studio/wizard';
+import { STUDIO_MOLDS } from '@/domain/studio/molds';
 import { validateFlowDesign } from '@/domain/validation/flowDesignValidator';
 import { WHATSAPP_LIMITS, WHATSAPP_LIMITS_VERIFIED_AT } from '@/domain/whatsapp/limits';
 
@@ -36,7 +40,8 @@ const SimulateBodySchema = z.object({
 });
 
 /**
- * Endpoints del Studio: simulación (Fase 1), validación y límites (Fase 2). Rutas bajo
+ * Endpoints del Studio: simulación (Fase 1), validación y límites (Fase 2),
+ * asistente (Fase 3). Rutas bajo
  * /api/admin/tenants/:id/studio/... (decisión D-3): heredan requireTenantScope,
  * así que un admin_operator solo simula flows de su propio tenant.
  *
@@ -46,9 +51,10 @@ const SimulateBodySchema = z.object({
 export function createStudioRouter(params: {
   botFlowRepository: BotFlowRepository;
   simulateConversation: SimulateConversationUseCase;
+  audit: AuditLogService;
   logger: pino.Logger;
 }): Router {
-  const { botFlowRepository, simulateConversation, logger } = params;
+  const { botFlowRepository, simulateConversation, audit, logger } = params;
   const router = Router();
 
   router.post(
@@ -149,7 +155,105 @@ export function createStudioRouter(params: {
     res.json({ verifiedAt: WHATSAPP_LIMITS_VERIFIED_AT, limits: WHATSAPP_LIMITS });
   });
 
+  // ==========================================================================
+  // Asistente (Fase 3)
+  // ==========================================================================
+
+  // GET /studio/molds — moldes del asistente: especificación + textos sugeridos.
+  router.get('/studio/molds', (_req: Request, res: Response) => {
+    res.json({ molds: STUDIO_MOLDS });
+  });
+
+  // POST /tenants/:id/studio/wizard/preview — compila y valida sin guardar.
+  // Es la validación en vivo del asistente.
+  router.post('/tenants/:id/studio/wizard/preview', requireTenantScope, (req: Request, res: Response) => {
+    const parsed = WizardSpecSchema.safeParse(req.body?.spec);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'La especificación no es válida', issues: specIssues(parsed.error.issues) });
+      return;
+    }
+    const flow = compileWizard(parsed.data);
+    res.json({ flow, report: validateFlowDesign(flow) });
+  });
+
+  // GET /tenants/:id/studio/flows/:flowId/wizard — la especificación del
+  // asistente guardada en el flow editable, o por qué no se puede abrir.
+  router.get(
+    '/tenants/:id/studio/flows/:flowId/wizard',
+    requireTenantScope,
+    async (req: Request, res: Response) => {
+      const tenantId = String(req.params.id);
+      const flowId = String(req.params.flowId);
+      try {
+        const [editable, meta] = await Promise.all([
+          botFlowRepository.getEditableFlow(flowId, tenantId),
+          botFlowRepository.getDraftMeta(flowId, tenantId),
+        ]);
+        if (!editable) {
+          res.status(404).json({ error: 'Flow no encontrado' });
+          return;
+        }
+        const read = readWizardSpec(editable.flow);
+        res.json({
+          spec: read.ok ? read.spec : null,
+          ...(read.ok ? {} : { reason: read.reason }),
+          source: editable.source,
+          draftUpdatedAt: meta?.draftUpdatedAt ?? null,
+        });
+      } catch (err) {
+        logger.error({ err: errMsg(err), tenantId, flowId }, 'GET studio wizard failed');
+        res.status(500).json({ error: 'Error leyendo el asistente' });
+      }
+    },
+  );
+
+  // PUT /tenants/:id/studio/flows/:flowId/wizard — compila y guarda como
+  // borrador. Cambiar la estructura del bot es de super_admin (§13 de la
+  // especificación); publicar sigue siendo POST .../publish.
+  router.put(
+    '/tenants/:id/studio/flows/:flowId/wizard',
+    requireRole('super_admin'),
+    async (req: Request, res: Response) => {
+      const c = ctx(req);
+      const tenantId = String(req.params.id);
+      const flowId = String(req.params.flowId);
+      const parsed = WizardSpecSchema.safeParse(req.body?.spec);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'La especificación no es válida', issues: specIssues(parsed.error.issues) });
+        return;
+      }
+      const expectedDraftUpdatedAt =
+        req.body && 'expectedDraftUpdatedAt' in req.body
+          ? (req.body.expectedDraftUpdatedAt as string | null)
+          : undefined;
+      try {
+        const flow = compileWizard(parsed.data);
+        const result = await botFlowRepository.saveDraft({ flowId, tenantId, flow, expectedDraftUpdatedAt });
+        if (result.conflict) {
+          res.status(409).json({ error: 'Este flujo cambió desde que lo cargaste. Recarga antes de guardar.' });
+          return;
+        }
+        audit.log({
+          ...c,
+          action: 'flow.draft.save',
+          targetType: 'bot_flow',
+          targetId: flowId,
+          metadata: { tenantId, via: 'studio_wizard', options: parsed.data.options.length },
+        });
+        res.json({ draftUpdatedAt: result.draftUpdatedAt, report: validateFlowDesign(flow) });
+      } catch (err) {
+        logger.error({ err: errMsg(err), tenantId, flowId }, 'PUT studio wizard failed');
+        res.status(500).json({ error: 'Error guardando el asistente' });
+      }
+    },
+  );
+
   return router;
+}
+
+/** Issues de Zod en la forma que muestra el panel: ruta legible + mensaje. */
+function specIssues(issues: z.ZodIssue[]): Array<{ path: string; message: string }> {
+  return issues.map((i) => ({ path: i.path.join('.'), message: i.message }));
 }
 
 type Loaded =

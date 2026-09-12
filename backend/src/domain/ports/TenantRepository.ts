@@ -61,6 +61,14 @@ export interface TenantDetail extends TenantSummary {
     source_template_id: string | null;
     updated_at: string;
   } | null;
+  /**
+   * Dueño del negocio (owner_data). Su WhatsApp es el destino de las alertas
+   * de paso a humano y el único número que puede mandar #listo.
+   */
+  owner: {
+    nombre_dueno: string;
+    whatsapp_dueno: string;
+  } | null;
   created_at: string;
   updated_at: string;
 }
@@ -114,6 +122,23 @@ export interface UpdateTenantInput {
   horario_sabado?: string | null;
   abre_domingo?: boolean;
   bot_configuration?: Partial<CreateTenantInput['bot_configuration']>;
+  /**
+   * Datos del dueño (owner_data). Si el tenant todavía no tiene fila, hacen
+   * falta los dos campos para crearla (la tabla los exige): si falta alguno,
+   * update() lanza OwnerDataIncompleteError.
+   */
+  owner?: {
+    nombre_dueno?: string;
+    whatsapp_dueno?: string;
+  };
+}
+
+/** Crear owner_data exige nombre y WhatsApp del dueño; llegó solo uno. */
+export class OwnerDataIncompleteError extends Error {
+  constructor() {
+    super('Para registrar al dueño hacen falta su nombre y su WhatsApp.');
+    this.name = 'OwnerDataIncompleteError';
+  }
 }
 
 /**

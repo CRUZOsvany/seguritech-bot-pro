@@ -116,11 +116,12 @@ export function createAdminRouter(params: {
   router.use(
     createBlocksRouter({ logger }),
   );
-  // Studio (Fase 1): simulación con el motor real. No persiste nada.
+  // Studio: simulación con el motor real, validación, límites y asistente.
   router.use(
     createStudioRouter({
       botFlowRepository,
       simulateConversation: simulateConversationUseCase,
+      audit,
       logger,
     }),
   );

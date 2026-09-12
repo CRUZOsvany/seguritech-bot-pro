@@ -13,6 +13,8 @@ import type { AdminSessionsRepository } from '@/domain/ports/AdminSessionsReposi
 import type { BotFlowRepository } from '@/domain/ports/BotFlowRepository';
 import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
+import { compileWizard } from '@/domain/studio/wizard';
+import { STUDIO_MOLDS } from '@/domain/studio/molds';
 import {
   HARNESS_OWNER_PHONE,
   HARNESS_TENANT_ID,
@@ -47,8 +49,11 @@ function buildApp(repo: Partial<BotFlowRepository> = {}) {
     getEditableFlow: jest.fn().mockResolvedValue({ flow: loadMold('cerrajeria'), source: 'draft' }),
     listFlowsByTenant: jest.fn().mockResolvedValue([]),
     findActiveByTenant: jest.fn().mockResolvedValue(null),
+    getDraftMeta: jest.fn().mockResolvedValue({ draftUpdatedAt: '2026-09-11T10:00:00.000Z' }),
+    saveDraft: jest.fn().mockResolvedValue({ conflict: false, draftUpdatedAt: '2026-09-11T10:05:00.000Z' }),
     ...repo,
   } as unknown as BotFlowRepository;
+  const audit = { log: jest.fn() };
   const useCase = new SimulateConversationUseCase(
     makeTenantConfigPort(makeTenantConfig()),
     makeInterpreter(),
@@ -62,13 +67,121 @@ function buildApp(repo: Partial<BotFlowRepository> = {}) {
   app.use(cookieParser());
   const router = express.Router();
   router.use(requireAdmin);
-  router.use(createStudioRouter({ botFlowRepository, simulateConversation: useCase, logger: silentLogger }));
+  router.use(createStudioRouter({ botFlowRepository, simulateConversation: useCase, audit: audit as never, logger: silentLogger }));
   app.use('/api/admin', router);
 
   const cookieFor = (role: 'super_admin' | 'admin_operator', tenantId: string | null) =>
     `${COOKIE}=${jwt.sign({ sub: 'admin-1', email: 'a@x.test', role, tenantId }).token}`;
-  return { app, botFlowRepository, cookieFor };
+  return { app, botFlowRepository, audit, cookieFor };
 }
+
+describe('asistente del Studio', () => {
+  const wizardUrl = (tenant = HARNESS_TENANT_ID) => `/api/admin/tenants/${tenant}/studio/flows/${FLOW_ID}/wizard`;
+  const spec = () => structuredClone(STUDIO_MOLDS[0].spec);
+
+  it('GET /studio/molds trae el molde de cerrajería con su especificación y textos sugeridos', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app).get('/api/admin/studio/molds').set('Cookie', cookieFor('admin_operator', HARNESS_TENANT_ID));
+
+    expect(res.status).toBe(200);
+    expect(res.body.molds[0]).toMatchObject({
+      id: 'cerrajeria',
+      spec: { version: 1 },
+      textosSugeridos: { mensaje_bienvenida: expect.any(String) },
+    });
+  });
+
+  it('preview compila y valida sin guardar nada', async () => {
+    const { app, botFlowRepository, cookieFor } = buildApp();
+
+    const res = await request(app)
+      .post(`/api/admin/tenants/${HARNESS_TENANT_ID}/studio/wizard/preview`)
+      .set('Cookie', cookieFor('admin_operator', HARNESS_TENANT_ID))
+      .send({ spec: spec() });
+
+    expect(res.status).toBe(200);
+    expect(res.body.flow.start_node_id).toBe('bienvenida');
+    expect(res.body.report).toMatchObject({ ok: true, schema: { ok: true } });
+    expect(botFlowRepository.saveDraft).not.toHaveBeenCalled();
+  });
+
+  it('preview con una especificación inválida: 400 con lo que está mal', async () => {
+    const { app, cookieFor } = buildApp();
+    const bad = spec();
+    bad.options[0].id = 'Con Mayúsculas';
+
+    const res = await request(app)
+      .post(`/api/admin/tenants/${HARNESS_TENANT_ID}/studio/wizard/preview`)
+      .set('Cookie', cookieFor('super_admin', null))
+      .send({ spec: bad });
+
+    expect(res.status).toBe(400);
+    expect(res.body.issues[0]).toMatchObject({ path: 'options.0.id' });
+  });
+
+  it('GET wizard: un molde JSON no trae especificación y lo dice', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app).get(wizardUrl()).set('Cookie', cookieFor('super_admin', null));
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ spec: null, reason: 'no_spec', source: 'draft', draftUpdatedAt: '2026-09-11T10:00:00.000Z' });
+  });
+
+  it('GET wizard: un flow generado por el asistente devuelve su especificación', async () => {
+    const { app, cookieFor } = buildApp({
+      getEditableFlow: jest.fn().mockResolvedValue({ flow: compileWizard(spec()), source: 'published' }),
+    });
+
+    const res = await request(app).get(wizardUrl()).set('Cookie', cookieFor('super_admin', null));
+
+    expect(res.body.spec).toEqual(spec());
+    expect(res.body.source).toBe('published');
+  });
+
+  it('PUT wizard guarda el flow compilado como borrador, con auditoría', async () => {
+    const { app, botFlowRepository, audit, cookieFor } = buildApp();
+
+    const res = await request(app)
+      .put(wizardUrl())
+      .set('Cookie', cookieFor('super_admin', null))
+      .send({ spec: spec(), expectedDraftUpdatedAt: '2026-09-11T10:00:00.000Z' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ draftUpdatedAt: '2026-09-11T10:05:00.000Z', report: { ok: true } });
+    expect(botFlowRepository.saveDraft).toHaveBeenCalledWith({
+      flowId: FLOW_ID,
+      tenantId: HARNESS_TENANT_ID,
+      flow: compileWizard(spec()),
+      expectedDraftUpdatedAt: '2026-09-11T10:00:00.000Z',
+    });
+    expect(audit.log).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'flow.draft.save',
+      targetId: FLOW_ID,
+      metadata: expect.objectContaining({ via: 'studio_wizard' }),
+    }));
+  });
+
+  it('PUT wizard: cambiar la estructura es de super_admin', async () => {
+    const { app, cookieFor } = buildApp();
+
+    const res = await request(app)
+      .put(wizardUrl())
+      .set('Cookie', cookieFor('admin_operator', HARNESS_TENANT_ID))
+      .send({ spec: spec() });
+
+    expect(res.status).toBe(403);
+  });
+
+  it('PUT wizard: si el borrador cambió desde que se cargó, 409', async () => {
+    const { app, cookieFor } = buildApp({ saveDraft: jest.fn().mockResolvedValue({ conflict: true }) });
+
+    const res = await request(app).put(wizardUrl()).set('Cookie', cookieFor('super_admin', null)).send({ spec: spec() });
+
+    expect(res.status).toBe(409);
+  });
+});
 
 describe('POST .../studio/flows/:flowId/validate', () => {
   const validateUrl = (tenant = HARNESS_TENANT_ID) => `/api/admin/tenants/${tenant}/studio/flows/${FLOW_ID}/validate`;
