@@ -27,9 +27,9 @@ export function ArchiveTenantDialog({ tenant, open, onOpenChange }: Props) {
         <AlertDialogHeader>
           <AlertDialogTitle>Archivar {tenant.nombre_negocio}</AlertDialogTitle>
           <AlertDialogDescription>
-            Deja de aparecer en la lista de clientes, pero no se pierde ningún
-            dato: sus mensajes, flows y configuración se quedan en la base. Es
-            reversible.
+            Se oculta de la lista de clientes y conserva todo su historial. Hoy
+            no hay una pantalla para reactivarlo desde el panel — si necesitas
+            reactivar un cliente archivado, avísame directamente.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
