@@ -159,7 +159,7 @@ El flow más maduro usa 6 de los 14 tipos de nodo. Esto es ganancia disponible s
 ### Panel y catálogo
 
 - [ ] CRUD de catálogo producto a producto (E-03). Hoy solo hay import CSV, y eso obliga a que un desarrollador intervenga en cada ajuste
-- [ ] Tests del frontend (E-01, alcance DEC-11): ValidationPanel, serialización, hooks de TanStack Query. Hoy no hay ni runner instalado
+- [~] Tests del frontend (E-01, alcance DEC-11): ValidationPanel, serialización, hooks de TanStack Query. Ya hay runner (vitest, 113 tests al 2026-09-13); falta Testing Library para probar componentes y hooks
 - [ ] Completar el espejo de tipos en `designer/flow-types.ts` — le faltan `TransitionCondition` de `service_directory_match`, `catalog_found` y `catalog_not_found`
 - [x] ~~Audit log en `/simulate` con `persist:true` (D-03)~~ Ya no aplica: el endpoint se borró el 2026-09-11
 
@@ -245,6 +245,29 @@ Armar y probar bots sin tocar JSON, sobre el motor de producción. La especifica
   - con la ventana cerrada no lo intenta: queda en el log y en el "Por qué", y la conversación queda en la bandeja `/escalaciones`.
 
   Sin plantilla utility. [no verificado] contra un número real (1A).
+
+---
+
+## CUARTO DE CONTROL — plan de mejora del panel (2026-09-13)
+
+Salió de una auditoría manual del panel hecha sobre el código. La especificación vive en el prompt de la sesión, no en el repo.
+
+- [x] **Fase 1 — Funcionalidad y feedback** (#106):
+  - archivar desde la tabla de clientes;
+  - eliminar para siempre, con tres guardas: nombre, status y operador asignado;
+  - toasts en las mutaciones y buscador de clientes.
+
+  Contrato en `CONTRATOS_API_ADMIN.md` §5.
+- [x] **Fase 1 §1.5 — Identidad de marca** (#107): navy `#14263D`, dorado `#B9A67C` y crema `#F5F4EF`, más `--primary-text` `#7A6644` para el dorado como texto.
+- [x] **Fase 2 — Navegación de la ficha** (#108): un solo botón de Studio y una barra de cinco secciones. El Designer queda solo como modo avanzado del Studio.
+- [~] **Pendiente de verificar en vivo:** la guarda del `admin_operator` contra Cloud. Crear un operador desechable exige SQL directo.
+- [ ] **Fase 3 del plan** (sin fecha):
+  - paginación y filtrado server-side de Clientes;
+  - partir `tenants.$id.designer.tsx`;
+  - los bugs de `AUDITORIA_DUPLICACION_PANEL.md`;
+  - una vista de clientes archivados y un camino para reactivarlos.
+
+Los hallazgos sueltos de esta ronda están en `ESTADO` §8, "Panel".
 
 ---
 
