@@ -239,11 +239,12 @@ Armar y probar bots sin tocar JSON, sobre el motor de producción. La especifica
 | 4 | ¿Dónde llegan los avisos de paso a humano? | Siempre en el panel; por WhatsApp al dueño como intento adicional, solo con su ventana de 24 h abierta (2026-09-12) | Sin plantilla utility por ahora |
 | 5 | ¿Cuánto se conservan los `conversation_events`? | Sin fecha de borrado por ahora (2026-09-12) | La tabla llega con la Fase 8 |
 
-- [ ] **Llevar la decisión 4 al código.** Hoy el motor manda el aviso al dueño por WhatsApp siempre (`ConversationEngine.ts:360`), sin revisar su ventana, y fuera de ella Meta lo rechaza (H-6). Falta:
-  - mandarlo solo con la ventana abierta, usando el `last_inbound_at` del dueño, que se registra cuando le escribe al bot algo que no es un comando;
-  - dejar constancia cuando no se manda.
+- [x] **Llevar la decisión 4 al código** (#105). El motor manda el aviso al dueño por WhatsApp solo con su ventana de 24 h abierta, según el `last_inbound_at` del dueño:
+  - su ventana la abre cualquier mensaje suyo al bot, incluido un `#listo`;
+  - la búsqueda prueba `52…` y `521…` (H-9);
+  - con la ventana cerrada no lo intenta: queda en el log y en el "Por qué", y la conversación queda en la bandeja `/escalaciones`.
 
-  La bandeja `/escalaciones` del panel ya lista las conversaciones en pausa por paso a humano.
+  Sin plantilla utility. [no verificado] contra un número real (1A).
 
 ---
 
