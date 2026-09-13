@@ -15,14 +15,21 @@ describe('canHardDelete', () => {
 });
 
 describe('confirmNameMatches', () => {
-  it('solo con el nombre idéntico', () => {
+  it('con el nombre del negocio', () => {
     expect(confirmNameMatches('Papelería DEMO', 'Papelería DEMO')).toBe(true);
   });
 
-  it('no perdona mayúsculas, acentos, espacios ni el campo vacío', () => {
+  it('los espacios de las orillas no cuentan, en ninguno de los dos lados', () => {
+    expect(confirmNameMatches('Cerrajeria Tony', 'Cerrajeria Tony ')).toBe(true);
+    expect(confirmNameMatches('  Papelería DEMO ', 'Papelería DEMO')).toBe(true);
+  });
+
+  it('no perdona mayúsculas, acentos, ñ, espacios de en medio ni el campo vacío', () => {
     expect(confirmNameMatches('papelería demo', 'Papelería DEMO')).toBe(false);
     expect(confirmNameMatches('Papeleria DEMO', 'Papelería DEMO')).toBe(false);
-    expect(confirmNameMatches('Papelería DEMO ', 'Papelería DEMO')).toBe(false);
+    expect(confirmNameMatches('Nandú', 'Ñandú')).toBe(false);
+    expect(confirmNameMatches('Papelería  DEMO', 'Papelería DEMO')).toBe(false);
     expect(confirmNameMatches('', 'Papelería DEMO')).toBe(false);
+    expect(confirmNameMatches('   ', 'Papelería DEMO')).toBe(false);
   });
 });

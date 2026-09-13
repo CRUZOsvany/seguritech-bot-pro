@@ -94,12 +94,17 @@ sesiones, reloj y envío falsos, así que no escribe en la base.
   credenciales Meta, servicios, POS y directorio. `admin_users.tenant_id`
   queda en `null` (el operador no se borra).
 - Solo `super_admin`. Body: `{"confirmNombreNegocio": string}` — tiene que ser
-  **idéntico** a `nombre_negocio` (mayúsculas y acentos incluidos).
+  igual a `nombre_negocio` **sin contar espacios al inicio o al final** (se
+  comparan los dos con `trim()`); mayúsculas, acentos y ñ sí cuentan.
 - Solo con status `draft`, `sandbox` o `archived`; `live`/`paused` → 400.
+- Solo si ningún `admin_operator` tiene asignado el tenant
+  (`admin_users.tenant_id`); si lo tiene → 400. Borrarlo dejaría a ese
+  usuario sin tenant.
   **Sí encuentra tenants ya archivados con soft-delete**: es la única vía para
   purgarlos (lee con `findIncludingDeleted`, sin filtro de `deleted_at`).
 - Respuestas: `200 {ok:true}` · `400 {error:'El nombre no coincide'}` ·
   `400 {error:'Solo se pueden eliminar clientes en draft, sandbox o archivados. …'}` ·
+  `400 {error:'Este cliente tiene un usuario operador del panel (admin_operator) asignado. …'}` ·
   `400` sin `confirmNombreNegocio` · `404` si no existe · `403` para `admin_operator`.
 - Audita `tenant.delete.permanent` (distinta de `tenant.delete`) con
   `metadata: {nombre_negocio, status}` — la fila del tenant ya no existe, el

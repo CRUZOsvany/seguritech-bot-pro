@@ -373,6 +373,7 @@ export class PerformanceSecurityTest {
       findById: async () => null,
       findFullDetail: async () => null,
       findIncludingDeleted: async () => null,
+      countAdminOperators: async () => 0,
       setStatus: async () => { /* noop */ },
       findStatusById: async () => null,
       createAtomic: async () => { throw new Error('not implemented in perf test'); },

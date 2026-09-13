@@ -49,7 +49,7 @@ export function HardDeleteTenantDialog({ tenant, open, onOpenChange }: Props) {
 
         <div className="grid gap-2">
           <Label htmlFor={inputId} className="font-normal">
-            Escribe «{tenant.nombre_negocio}» para confirmar
+            Escribe «{tenant.nombre_negocio.trim()}» para confirmar
           </Label>
           <Input
             id={inputId}

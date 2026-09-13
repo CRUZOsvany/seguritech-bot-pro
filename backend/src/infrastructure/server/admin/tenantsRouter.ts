@@ -253,9 +253,10 @@ export function createTenantsRouter(params: {
 
   // ============================================================
   // DELETE /api/admin/tenants/:id/permanent  (hard-delete — super_admin only)
-  // IRREVERSIBLE: DELETE + cascade de todo lo que cuelga del tenant. Las dos
-  // guardas (nombre exacto, status draft/sandbox/archived) viven en
-  // HardDeleteTenantUseCase; encuentra también lo ya archivado (soft-deleted).
+  // IRREVERSIBLE: DELETE + cascade de todo lo que cuelga del tenant. Las tres
+  // guardas (nombre, status draft/sandbox/archived, sin admin_operator
+  // asignado) viven en HardDeleteTenantUseCase; encuentra también lo ya
+  // archivado (soft-deleted).
   // ============================================================
   const HardDeleteTenantSchema = z.object({
     confirmNombreNegocio: z.string().min(1),

@@ -112,7 +112,7 @@ export function createAdminRouter(params: {
     new StudioFlowTestRunner(simulateConversationUseCase, logger),
     logger,
   );
-  // Borrado permanente: las dos guardas (nombre exacto, status) viven aquí.
+  // Borrado permanente: las guardas (nombre, status, operadores) viven aquí.
   const hardDeleteTenantUseCase = new HardDeleteTenantUseCase(tenantRepository, logger);
 
   const router = Router();

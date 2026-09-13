@@ -1,8 +1,9 @@
 /**
  * DELETE /api/admin/tenants/:id/permanent — borrado permanente desde el panel.
- * Irreversible: solo super_admin, nombre exacto, status draft/sandbox/archived,
- * y una fila `tenant.delete.permanent` en el audit log, distinta del
- * `tenant.delete` del soft-delete.
+ * Irreversible: solo super_admin, nombre (sin contar espacios de las orillas),
+ * status draft/sandbox/archived, sin admin_operator asignado, y una fila
+ * `tenant.delete.permanent` en el audit log, distinta del `tenant.delete` del
+ * soft-delete.
  */
 import express from 'express';
 import cookieParser from 'cookie-parser';
@@ -20,7 +21,7 @@ const TENANT = '00000000-0000-0000-0000-0000000000aa';
 const NOMBRE = 'Papelería DEMO';
 const logger = pino({ level: 'silent' });
 
-function buildApp(found: { status: TenantStatus } | null) {
+function buildApp(found: { status: TenantStatus; nombre?: string } | null, operators = 0) {
   const jwt = new JwtService(SECRET, 3600);
   const requireAdmin = createAuthMiddleware({
     jwt,
@@ -30,9 +31,10 @@ function buildApp(found: { status: TenantStatus } | null) {
     cloudflareAllowedDomain: '',
     logger,
   });
-  const findIncludingDeleted = jest
-    .fn()
-    .mockResolvedValue(found ? { id: TENANT, nombre_negocio: NOMBRE, status: found.status } : null);
+  const findIncludingDeleted = jest.fn().mockResolvedValue(
+    found ? { id: TENANT, nombre_negocio: found.nombre ?? NOMBRE, status: found.status } : null,
+  );
+  const countAdminOperators = jest.fn().mockResolvedValue(operators);
   const hardDelete = jest.fn().mockResolvedValue(undefined);
   const invalidate = jest.fn();
   const noop = {} as never;
@@ -46,7 +48,7 @@ function buildApp(found: { status: TenantStatus } | null) {
     setTenantStatusUseCase: noop,
     simulateConversationUseCase: noop,
     createTenantUseCase: noop,
-    tenantRepository: { findIncludingDeleted, hardDelete } as unknown as TenantRepository,
+    tenantRepository: { findIncludingDeleted, countAdminOperators, hardDelete } as unknown as TenantRepository,
     tenantServiceRepository: noop,
     botFlowRepository: noop,
     messagesRepository: noop,
@@ -107,7 +109,16 @@ describe('DELETE /tenants/:id/permanent', () => {
     expect(hardDelete).toHaveBeenCalledWith(TENANT);
   });
 
-  it('400 si el nombre no coincide exacto, sin borrar ni auditar', async () => {
+  it('un nombre guardado con espacio al final se confirma escribiéndolo sin él', async () => {
+    const { app, hardDelete, cookie } = buildApp({ status: 'draft', nombre: 'Cerrajeria Tony ' });
+
+    const res = await request(app).delete(url).set('Cookie', cookie).send({ confirmNombreNegocio: 'Cerrajeria Tony' });
+
+    expect(res.status).toBe(200);
+    expect(hardDelete).toHaveBeenCalledWith(TENANT);
+  });
+
+  it('400 si el nombre no coincide (mayúsculas), sin borrar ni auditar', async () => {
     const { app, audit, hardDelete, cookie } = buildApp({ status: 'draft' });
 
     const res = await request(app).delete(url).set('Cookie', cookie).send({ confirmNombreNegocio: 'papelería demo' });
@@ -127,6 +138,17 @@ describe('DELETE /tenants/:id/permanent', () => {
     expect(res.body).toEqual({
       error: 'Solo se pueden eliminar clientes en draft, sandbox o archivados. Archiva este cliente primero.',
     });
+    expect(hardDelete).not.toHaveBeenCalled();
+    expect(audit.log).not.toHaveBeenCalled();
+  });
+
+  it('400 si un admin_operator tiene asignado el tenant, con el motivo y sin borrar', async () => {
+    const { app, audit, hardDelete, cookie } = buildApp({ status: 'draft' }, 1);
+
+    const res = await request(app).delete(url).set('Cookie', cookie).send({ confirmNombreNegocio: NOMBRE });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/operador del panel \(admin_operator\)/);
     expect(hardDelete).not.toHaveBeenCalled();
     expect(audit.log).not.toHaveBeenCalled();
   });

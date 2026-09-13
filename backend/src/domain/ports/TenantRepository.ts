@@ -162,6 +162,15 @@ export interface TenantRepository {
   findIncludingDeleted(
     id: string,
   ): Promise<{ id: string; nombre_negocio: string; status: TenantStatus } | null>;
+
+  /**
+   * Cuántos usuarios `admin_operator` del panel tienen asignado este tenant
+   * (admin_users.tenant_id). Guarda del borrado permanente: esa FK es
+   * `on delete set null`, así que borrar el tenant dejaría a esos operadores
+   * sin tenant. Lanza si la lectura falla — una guarda que no pudo leer no
+   * debe dejar pasar el borrado.
+   */
+  countAdminOperators(tenantId: string): Promise<number>;
   /**
    * Actualiza el estado FSM del tenant.
    * Transiciones válidas: draft→sandbox→live⇄paused→archived.
@@ -204,8 +213,8 @@ export interface TenantRepository {
    * `on delete set null` — el operador del tenant queda sin tenant, no se borra.
    * El audit log no tiene FK y conserva el rastro.
    *
-   * No valida nada: las guardas (nombre exacto, status permitido) viven en
-   * HardDeleteTenantUseCase.
+   * No valida nada: las guardas (nombre, status permitido, sin operadores
+   * asignados) viven en HardDeleteTenantUseCase.
    */
   hardDelete(id: string): Promise<void>;
 

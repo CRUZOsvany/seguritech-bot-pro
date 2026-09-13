@@ -254,6 +254,21 @@ export class SupabaseTenantRepository implements TenantRepository {
     return { id: t.id, nombre_negocio: t.nombre_negocio, status: t.status as TenantStatus };
   }
 
+  async countAdminOperators(tenantId: string): Promise<number> {
+    const { count, error } = await this.supabase
+      .from('admin_users')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('role', 'admin_operator');
+
+    if (error) {
+      // Lanza, no devuelve 0: es una guarda del borrado permanente.
+      this.logger.error({ error, tenantId }, 'countAdminOperators failed');
+      throw new Error(`countAdminOperators failed: ${error.message}`);
+    }
+    return count ?? 0;
+  }
+
   async setStatus(id: string, status: TenantStatus): Promise<void> {
     const { error } = await this.supabase
       .from('tenants')
