@@ -1,4 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
+import { apiErrorMessage } from '@/shared/api/client';
 import {
   enableService,
   type ServiceType,
@@ -18,6 +20,8 @@ export function useEnableService() {
       enableService(tenantId, serviceType),
     onSuccess: (_data, { tenantId }) => {
       queryClient.invalidateQueries({ queryKey: ['tenant-services', tenantId] });
+      toast.success('Servicio habilitado');
     },
+    onError: (err) => toast.error(apiErrorMessage(err)),
   });
 }

@@ -372,11 +372,14 @@ export class PerformanceSecurityTest {
       findAll: async () => [],
       findById: async () => null,
       findFullDetail: async () => null,
+      findIncludingDeleted: async () => null,
+      countAdminOperators: async () => 0,
       setStatus: async () => { /* noop */ },
       findStatusById: async () => null,
       createAtomic: async () => { throw new Error('not implemented in perf test'); },
       update: async () => { throw new Error('not implemented in perf test'); },
       softDelete: async () => { throw new Error('not implemented in perf test'); },
+      hardDelete: async () => { throw new Error('not implemented in perf test'); },
       isModuleEnabled: async () => false,
     };
     const supabaseStub = {} as SupabaseClient;

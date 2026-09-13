@@ -1,8 +1,10 @@
+import { useMemo, useState } from 'react';
 import { createRoute, Link } from '@tanstack/react-router';
 import { AlertCircle, Loader2 } from 'lucide-react';
 import { authedLayoutRoute } from './_authed';
 import { useTenants } from '../hooks/use-tenants';
 import { TenantsTable } from '../components/tenants-table';
+import { filterTenants } from '../components/tenant-search';
 import {
   Card,
   CardContent,
@@ -12,9 +14,12 @@ import {
 } from '@/shared/ui/card';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Button } from '@/shared/ui/button';
+import { Input } from '@/shared/ui/input';
 
 function DashboardPage() {
   const { data: tenants, isLoading, error } = useTenants();
+  const [query, setQuery] = useState('');
+  const visible = useMemo(() => filterTenants(tenants ?? [], query), [tenants, query]);
 
   return (
     <Card className="shadow-card">
@@ -65,7 +70,24 @@ function DashboardPage() {
         )}
 
         {!isLoading && !error && tenants && tenants.length > 0 && (
-          <TenantsTable tenants={tenants} />
+          <div className="flex flex-col gap-4">
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nombre, giro o status…"
+              aria-label="Buscar clientes"
+              className="max-w-sm"
+            />
+            {visible.length > 0 ? (
+              <TenantsTable tenants={visible} />
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="mb-3 text-sm text-muted-foreground">
+                  Sin resultados para «{query.trim()}».
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </CardContent>
     </Card>

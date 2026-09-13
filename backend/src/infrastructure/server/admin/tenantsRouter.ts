@@ -4,6 +4,11 @@ import { z } from 'zod';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
+import {
+  HardDeleteRejectedError,
+  TenantNotFoundError,
+  type HardDeleteTenantUseCase,
+} from '@/domain/use-cases/HardDeleteTenantUseCase';
 import type { TenantRepository, TenantStatus } from '@/domain/ports/TenantRepository';
 import { OwnerDataIncompleteError } from '@/domain/ports/TenantRepository';
 import type { TenantServiceRepository } from '@/domain/ports/TenantServiceRepository';
@@ -27,6 +32,7 @@ export function createTenantsRouter(params: {
   assignMoldeUseCase: AssignMoldeUseCase;
   setTenantStatusUseCase: SetTenantStatusUseCase;
   createTenantUseCase: CreateTenantUseCase;
+  hardDeleteTenantUseCase: HardDeleteTenantUseCase;
   tenantRepository: TenantRepository;
   tenantServiceRepository: TenantServiceRepository;
   botFlowRepository: BotFlowRepository;
@@ -42,6 +48,7 @@ export function createTenantsRouter(params: {
     assignMoldeUseCase,
     setTenantStatusUseCase,
     createTenantUseCase,
+    hardDeleteTenantUseCase,
     tenantRepository,
     tenantServiceRepository,
     botFlowRepository,
@@ -243,6 +250,59 @@ export function createTenantsRouter(params: {
       res.status(500).json({ error: 'Error interno eliminando tenant' });
     }
   });
+
+  // ============================================================
+  // DELETE /api/admin/tenants/:id/permanent  (hard-delete — super_admin only)
+  // IRREVERSIBLE: DELETE + cascade de todo lo que cuelga del tenant. Las tres
+  // guardas (nombre, status draft/sandbox/archived, sin admin_operator
+  // asignado) viven en HardDeleteTenantUseCase; encuentra también lo ya
+  // archivado (soft-deleted).
+  // ============================================================
+  const HardDeleteTenantSchema = z.object({
+    confirmNombreNegocio: z.string().min(1),
+  });
+
+  router.delete(
+    '/tenants/:id/permanent',
+    requireRole('super_admin'),
+    async (req: Request, res: Response) => {
+      const id = String(req.params.id);
+      const c = ctx(req);
+      const parsed = HardDeleteTenantSchema.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).json({ error: 'confirmNombreNegocio requerido (string)' });
+        return;
+      }
+      try {
+        const deleted = await hardDeleteTenantUseCase.execute({
+          tenantId: id,
+          confirmNombreNegocio: parsed.data.confirmNombreNegocio,
+        });
+        // El TenantConfig cacheado (5 min) apuntaría a un tenant que ya no existe.
+        tenantConfigPort?.invalidate(id);
+        audit.log({
+          ...c,
+          action: 'tenant.delete.permanent',
+          targetType: 'tenant',
+          targetId: id,
+          // La fila del tenant ya no existe: el nombre solo queda aquí.
+          metadata: { nombre_negocio: deleted.nombre_negocio, status: deleted.status },
+        });
+        res.json({ ok: true });
+      } catch (err: unknown) {
+        if (err instanceof TenantNotFoundError) {
+          res.status(404).json({ error: 'Tenant no encontrado' });
+          return;
+        }
+        if (err instanceof HardDeleteRejectedError) {
+          res.status(400).json({ error: err.message });
+          return;
+        }
+        logger.error({ err, id }, 'DELETE /api/admin/tenants/:id/permanent failed');
+        res.status(500).json({ error: 'Error interno eliminando tenant' });
+      }
+    },
+  );
 
   // ============================================================
   // GET /api/admin/templates

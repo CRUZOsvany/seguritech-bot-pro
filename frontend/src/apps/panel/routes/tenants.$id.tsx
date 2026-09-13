@@ -263,7 +263,6 @@ function BusinessDataCard({
               {update.isPending && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
               Guardar datos
             </Button>
-            {update.isSuccess && <span className="text-xs text-emerald-600">Guardado ✓</span>}
           </div>
         </form>
       </CardContent>
