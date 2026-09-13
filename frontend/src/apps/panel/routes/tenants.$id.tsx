@@ -1,14 +1,17 @@
+import { useState } from 'react';
 import { createLazyRoute, Link } from '@tanstack/react-router';
-import {
-  AlertCircle, Loader2, Workflow, ScrollText, ListTree,
-  MessageCircle, MessageSquare, ShoppingCart, Wand2,
-} from 'lucide-react';
+import { AlertCircle, Loader2, Wand2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useTenant } from '../hooks/use-tenant';
 import { useTenantServices } from '../hooks/use-tenant-services';
 import { useUpdateTenant } from '../hooks/use-update-tenant';
 import { ServiceCards } from '../components/service-cards';
+import {
+  DEFAULT_SECTION,
+  TENANT_SECTIONS,
+  type InlineSection,
+} from '../components/tenant-sections';
 import {
   CreateTenantSchema,
   type CreateTenantInput,
@@ -21,12 +24,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/shared/ui/card';
-import {
-  Tabs,
-  TabsContent,
-  TabsList,
-  TabsTrigger,
-} from '@/shared/ui/tabs';
+import { tabsListVariants, tabsTriggerClassName } from '@/shared/ui/tabs';
 import { Badge } from '@/shared/ui/badge';
 import { Alert, AlertDescription } from '@/shared/ui/alert';
 import { Input } from '@/shared/ui/input';
@@ -57,6 +55,7 @@ function TenantDetailPage() {
   const { id } = Route.useParams();
   const tenantQuery = useTenant(id);
   const servicesQuery = useTenantServices(id);
+  const [section, setSection] = useState<InlineSection>(DEFAULT_SECTION);
 
   if (tenantQuery.isLoading) {
     return (
@@ -84,11 +83,19 @@ function TenantDetailPage() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-xl font-medium">{tenant.nombre_negocio}</h1>
           <Badge variant={`fsm-${tenant.status}` as const}>
             {tenant.status}
           </Badge>
+          {/* La acción más frecuente sobre un cliente: va junto a su nombre,
+              no dentro de la barra de secciones. El Designer ya no tiene
+              botón aquí; se entra desde el Studio ("Modo avanzado"). */}
+          <Button asChild size="sm" className="ml-auto">
+            <Link to="/tenants/$id/studio" params={{ id: tenant.id }}>
+              <Wand2 className="mr-1 h-3 w-3" /> Studio del bot
+            </Link>
+          </Button>
         </div>
         <p className="text-xs text-muted-foreground">
           {GIRO_LABELS[tenant.giro] ?? tenant.giro} ·{' '}
@@ -96,79 +103,69 @@ function TenantDetailPage() {
         </p>
       </div>
 
-      {/* Accesos directos — el Designer/simulador, el guion, el directorio de
-          servicios, etc. ya existen y están registrados en router.tsx; antes
-          solo se llegaba a través de Servicios → Configurar → sub-tabs. No
-          reemplaza esos tabs, solo evita el rodeo. */}
-      <div className="flex flex-wrap gap-2">
-        <Button asChild size="sm">
-          <Link to="/tenants/$id/studio" params={{ id: tenant.id }}>
-            <Wand2 className="mr-1 h-3 w-3" /> Studio del bot
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/designer" params={{ id: tenant.id }}>
-            <Workflow className="mr-1 h-3 w-3" /> Diseñador y simulador
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/guion" params={{ id: tenant.id }}>
-            <ScrollText className="mr-1 h-3 w-3" /> Guion
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/service-directory" params={{ id: tenant.id }}>
-            <ListTree className="mr-1 h-3 w-3" /> Directorio de servicios
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/whatsapp" params={{ id: tenant.id }}>
-            <MessageCircle className="mr-1 h-3 w-3" /> WhatsApp
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/pos" params={{ id: tenant.id }}>
-            <ShoppingCart className="mr-1 h-3 w-3" /> POS
-          </Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/tenants/$id/messages" params={{ id: tenant.id }}>
-            <MessageSquare className="mr-1 h-3 w-3" /> Mensajes
-          </Link>
-        </Button>
-      </div>
-
-      <Tabs defaultValue="services" className="w-full">
-        <TabsList>
-          <TabsTrigger value="services">Servicios</TabsTrigger>
-          <TabsTrigger value="business">Datos del negocio</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="services" className="mt-6">
-          {servicesQuery.isLoading ? (
-            <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Cargando servicios…
-            </div>
-          ) : servicesQuery.error ? (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {servicesQuery.error.message ?? 'Error cargando servicios'}
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <ServiceCards
-              tenantId={tenant.id}
-              services={servicesQuery.data ?? []}
-            />
+      {/* Una sola barra con aspecto de tabs (mismas clases y data-* que
+          shadcn/Radix), pero no es un Radix Tabs: Guion, Directorio y
+          Mensajes son rutas completas y un <Link> dentro de TabsList rompe
+          su estado y su roving tabindex. Servicios y Datos del negocio se
+          pintan aquí con estado local. Ver tenant-sections.ts. */}
+      <div data-orientation="horizontal" className="group/tabs flex w-full flex-col gap-2">
+        <nav
+          aria-label="Secciones del cliente"
+          data-variant="default"
+          className={tabsListVariants()}
+        >
+          {TENANT_SECTIONS.map((s) =>
+            s.kind === 'inline' ? (
+              <button
+                key={s.key}
+                type="button"
+                data-state={section === s.key ? 'active' : 'inactive'}
+                aria-current={section === s.key ? 'true' : undefined}
+                onClick={() => setSection(s.key)}
+                className={tabsTriggerClassName}
+              >
+                {s.label}
+              </button>
+            ) : (
+              // Nunca está activa en esta página: navegar la saca de la ficha.
+              <Link
+                key={s.key}
+                to={s.to}
+                params={{ id: tenant.id }}
+                data-state="inactive"
+                className={tabsTriggerClassName}
+              >
+                {s.label}
+              </Link>
+            ),
           )}
-        </TabsContent>
+        </nav>
 
-        <TabsContent value="business" className="mt-6">
-          <BusinessDataCard tenant={tenant} />
-        </TabsContent>
-      </Tabs>
+        <div className="mt-6 flex-1 text-sm">
+          {section === 'services' ? (
+            servicesQuery.isLoading ? (
+              <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Cargando servicios…
+              </div>
+            ) : servicesQuery.error ? (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  {servicesQuery.error.message ?? 'Error cargando servicios'}
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <ServiceCards
+                tenantId={tenant.id}
+                services={servicesQuery.data ?? []}
+              />
+            )
+          ) : (
+            <BusinessDataCard tenant={tenant} />
+          )}
+        </div>
+      </div>
     </div>
   );
 }

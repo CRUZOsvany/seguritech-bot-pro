@@ -107,7 +107,7 @@ export function TenantsTable({ tenants }: Props) {
                   </Link>
                 </Button>
                 <Button asChild variant="ghost" size="sm">
-                  <Link to="/tenants/$id/designer" params={{ id: t.id }}>
+                  <Link to="/tenants/$id/studio" params={{ id: t.id }}>
                     Simular
                   </Link>
                 </Button>
