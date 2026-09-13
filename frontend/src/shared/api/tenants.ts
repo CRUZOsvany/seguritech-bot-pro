@@ -100,6 +100,29 @@ export async function createTenant(
 }
 
 // ============================================================
+// Archivar (soft-delete) y eliminar para siempre (hard-delete)
+// ============================================================
+
+/**
+ * DELETE /api/admin/tenants/:id — soft-delete. El tenant sale de la lista pero
+ * no se pierde nada (mensajes, flows, configuración siguen en la base).
+ */
+export async function archiveTenant(id: string): Promise<void> {
+  await apiFetch('DELETE', `/api/admin/tenants/${id}`);
+}
+
+/**
+ * DELETE /api/admin/tenants/:id/permanent — IRREVERSIBLE (DELETE + cascade).
+ * El backend exige el nombre exacto y status draft/sandbox/archived.
+ */
+export async function hardDeleteTenant(
+  id: string,
+  confirmNombreNegocio: string,
+): Promise<void> {
+  await apiFetch('DELETE', `/api/admin/tenants/${id}/permanent`, { confirmNombreNegocio });
+}
+
+// ============================================================
 // Detalle de un tenant (GET /api/admin/tenants/:id/detail)
 //
 // El backend ya tenía `/tenants/:id/detail` que devuelve la forma completa via

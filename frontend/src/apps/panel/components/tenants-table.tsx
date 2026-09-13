@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react';
+import {
+  CheckCircle2, Clock, AlertTriangle, MoreVertical, Archive, Trash2,
+} from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -10,7 +13,17 @@ import {
 } from '@/shared/ui/table';
 import { Badge } from '@/shared/ui/badge';
 import { Button } from '@/shared/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/shared/ui/dropdown-menu';
 import type { TenantSummary, TenantStatus } from '@/shared/api/tenants';
+import { ArchiveTenantDialog } from './archive-tenant-dialog';
+import { HardDeleteTenantDialog } from './hard-delete-tenant-dialog';
+import { canHardDelete } from './tenants-model';
 
 interface Props {
   tenants: TenantSummary[];
@@ -98,11 +111,75 @@ export function TenantsTable({ tenants }: Props) {
                     Simular
                   </Link>
                 </Button>
+                <TenantRowActions tenant={t} />
               </div>
             </TableCell>
           </TableRow>
         ))}
       </TableBody>
     </Table>
+  );
+}
+
+/**
+ * Menú ⋮ de la fila: archivar y eliminar para siempre. Los diálogos viven
+ * fuera del menú y se abren por estado — un diálogo montado dentro de un
+ * DropdownMenuItem se desmonta junto con el menú al seleccionar.
+ */
+function TenantRowActions({ tenant }: { tenant: TenantSummary }) {
+  const [dialog, setDialog] = useState<'archive' | 'hard-delete' | null>(null);
+  const deletable = canHardDelete(tenant.status);
+
+  return (
+    <>
+      {/* modal={false}: con el menú modal, Radix deja pointer-events:none en
+          el body al pasar el foco al AlertDialog y la página queda muerta. */}
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={`Más acciones para ${tenant.nombre_negocio}`}
+          >
+            <MoreVertical />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-60">
+          <DropdownMenuItem onSelect={() => setDialog('archive')}>
+            <Archive />
+            Archivar
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={!deletable}
+            onSelect={() => setDialog('hard-delete')}
+            className="items-start"
+          >
+            <Trash2 className="mt-0.5" />
+            <span className="flex flex-col">
+              <span>Eliminar para siempre</span>
+              {!deletable && (
+                <span className="text-xs text-muted-foreground">
+                  No disponible en {STATUS_LABELS[tenant.status]}: solo en
+                  draft, sandbox o archivado
+                </span>
+              )}
+            </span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <ArchiveTenantDialog
+        tenant={tenant}
+        open={dialog === 'archive'}
+        onOpenChange={(open) => setDialog(open ? 'archive' : null)}
+      />
+      <HardDeleteTenantDialog
+        tenant={tenant}
+        open={dialog === 'hard-delete'}
+        onOpenChange={(open) => setDialog(open ? 'hard-delete' : null)}
+      />
+    </>
   );
 }
