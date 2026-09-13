@@ -30,6 +30,15 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Mensaje presentable de un error de mutación (toasts): el `{ error }` que
+ * devolvió el backend si es un ApiError; cualquier otra cosa es un bug nuestro
+ * y no se le enseña al operador tal cual.
+ */
+export function apiErrorMessage(err: unknown): string {
+  return err instanceof ApiError ? err.message : 'Error inesperado';
+}
+
 export async function apiFetch<T = unknown>(
   method: Method,
   url: string,
