@@ -1,6 +1,6 @@
 # Studio — Fase 5: control de respuestas
 
-> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, fusión (`feat/studio-fase-5-fusion`, #96) sobre horario, "escribiendo" (`feat/studio-fase-5-escribiendo`, #97) sobre fusión, y orden de entrega (`feat/studio-fase-5-orden-entrega`) sobre "escribiendo".
+> Una rama por funcionalidad, apiladas: C-08 (`feat/studio-fase-5-escape`, #92) sobre la Fase 4 (#91), C-04 (`feat/studio-fase-5-capturas`, #93) sobre C-08, B-02 (`feat/studio-fase-5-desambiguacion`, #94) sobre C-04, horario (`feat/studio-fase-5-horario`, #95) sobre B-02, fusión (`feat/studio-fase-5-fusion`, #96) sobre horario, "escribiendo" (`feat/studio-fase-5-escribiendo`, #97) sobre fusión, y orden de entrega (`feat/studio-fase-5-orden-entrega`) sobre "escribiendo". La inactividad (`feat/studio-fase-5-inactividad`) va contra `main`, sin apilar.
 >
 > La especificación pide un PR por funcionalidad, con motor, validador y
 > panel juntos (paridad de tres vías). Este documento crece con cada una.
@@ -11,7 +11,7 @@
 | C-04 · Validación de capturas | Hecha: #93 |
 | B-02 · Desambiguación | Hecha: #94 |
 | Horario en el saludo y en el paso a humano | Hecha: #95 (sin zona horaria por tenant, D-5.3) |
-| Inactividad con ventana | Pendiente |
+| Inactividad con ventana | Hecha: `feat/studio-fase-5-inactividad`, con la migración 024 (§8) |
 | Opt-out | Cubierto por C-08 (la baja ahora es del flow) |
 | Fusión de mensajes | Hecha: #96 |
 | Indicador de "escribiendo" | Hecha: #97 (sin probar contra un número real, A-01) |
@@ -319,3 +319,111 @@ El motor no cambia. El simulador y la paridad arman el adaptador sin marcapasos,
 - **Valores fijos en el código** (2 s, 600–1200 ms, 15 s), no variables de entorno. Si hace falta ajustarlos en producción, son opciones del constructor.
 
 **[no verificado]:** no se probó contra un número real (A-01). Lo que sí está probado, con relojes y HTTP falsos: que el segundo mensaje no sale antes del "entregado" del primero, que sale al cumplirse el tope, y la pausa.
+
+---
+
+## 8. Inactividad con ventana
+
+> §6: *Minutos hasta un recordatorio y minutos hasta el cierre; nunca más de un recordatorio. Nada programado puede dispararse con la ventana de 24 h cerrada sin plantilla aprobada.*
+
+### Antes de mergear: migración 024
+
+`backend/supabase/migrations/024_bot_users_inactivity.sql`. Se pega entera en el SQL Editor; es idempotente. Agrega `bot_users.inactivity_reminded_at` (cuándo salió el recordatorio) y el índice parcial `idx_bot_users_awaiting_reply` para el barrido. `bot_users` ya tiene `tenant_id` y RLS.
+
+Verificación (regla 8: el mismo día):
+
+```sql
+select column_name, data_type from information_schema.columns
+ where table_schema = 'public' and table_name = 'bot_users' and column_name = 'inactivity_reminded_at';
+-- esperado: 1 fila, timestamp with time zone
+
+select indexname from pg_indexes
+ where schemaname = 'public' and indexname = 'idx_bot_users_awaiting_reply';
+-- esperado: 1 fila
+```
+
+**Si todavía no se aplica,** el cierre funciona pero el recordatorio no sale: el reclamo falla, el log dice «migración 024» y no se manda nada, para no repetirlo cada minuto.
+
+### Qué hace
+
+Cada flow puede traer `inactivity`, en minutos desde el último mensaje del cliente:
+
+| Campo | Qué pasa |
+|---|---|
+| `reminder: { after_minutes, text }` | Opcional. Un solo recordatorio por silencio del cliente |
+| `close: { after_minutes, text? }` | Se cierra la conversación: se borran el paso y lo capturado, y el próximo mensaje empieza de nuevo sin el aviso de sesión vencida. Si trae texto, se manda al cerrar |
+
+Sin `inactivity`, el bot espera sin escribir, como siempre.
+
+**Cuándo actúa** (`domain/conversation/inactivity.ts`, puro):
+
+- Solo a media conversación: con paso guardado que no sea el final.
+- Nunca con la baja activa ni con una persona atendiendo.
+- Nunca con la ventana de 24 h cerrada. Es la guarda de V-CUMP-03 en el motor, aunque el contrato ya no lo permita.
+- Nunca si la sesión ya venció, por las 2 h o porque el negocio cerró en medio: la respuesta del cliente empezaría de nuevo de todos modos.
+- Un recordatorio por silencio: cuenta si se mandó después del último mensaje del cliente. Si el cliente contesta, empieza otro silencio y puede haber otro recordatorio. Nunca salen dos seguidos.
+- Si ya tocaba cerrar (por ejemplo, el barrido no corrió a tiempo), cierra sin recordar antes.
+
+**Por qué 1 a 120 minutos.** A las 2 h la sesión vence sola (`SessionTtlPolicy`). Un recordatorio después de eso sería inútil: la respuesta del cliente reiniciaría con «empezamos de nuevo». Con ese tope, además, la ventana de 24 h siempre sigue abierta.
+
+**Textos tal cual.** El recordatorio y el cierre salen sin pasar por un paso, así que no resuelven `{{variables}}`. El validador lo marca.
+
+### Cómo corre
+
+| Pieza | Dónde |
+|---|---|
+| Reglas | `domain/conversation/inactivity.ts` |
+| Barrido de un tenant | `domain/conversation/InactivitySweeper.ts`: el mismo código en producción y en el simulador |
+| Cada minuto | `infrastructure/scheduling/InactivityScheduler.ts`, arrancado en `Bootstrap` |
+| Sesiones | `UserRepository.listAwaitingReply`, `markInactivityReminder` (024) y `closeInactiveSession` |
+| Tenants | `TenantServiceRepository.listTenantIdsByStatus('whatsapp_bot', 'active')`, los mismos que atiende el webhook |
+| Contrato | `BotFlow.inactivity` en `flow.ts` y `FlowSchema` |
+| "Por qué" | Paso `inactivity` de la traza |
+
+- **Primero se reclama, después se manda.** El recordatorio se marca con un UPDATE condicionado a que `last_inbound_at` siga igual y a que no se haya recordado ya en ese silencio. El cierre lleva la misma condición. Si el cliente escribe justo en ese momento, o si otra instancia ya lo hizo, no sale nada. Si el envío falla después de reclamar, ese recordatorio se pierde, pero nunca sale dos veces.
+- **Una pasada a la vez.** Si una tarda más de un minuto, la siguiente se salta. Un tenant que falla no frena a los demás.
+- **Queda en «Mensajes».** Lo que manda el barrido se registra en `messages`, como las respuestas del webhook.
+- **`INACTIVITY_SWEEP=on|off`.** Sin valor, prendido solo en producción. Una laptop de desarrollo apunta a la misma Supabase: con el barrido prendido reclamaría recordatorios que solo «saldrían» a la consola, y el cliente real no los recibiría.
+
+### Simulador
+
+Adelantar el reloj (`advance_time`, el botón «+30 min») corre el mismo barrido en cada momento del intervalo en que a la conversación le toca algo. Si el reloj salta 90 minutos, salen el recordatorio y el cierre, en orden y a su hora. El "Por qué" dice cuánto llevaba el cliente sin contestar y qué hizo el bot.
+
+### Validador y schema
+
+| Dónde | Qué revisa |
+|---|---|
+| Schema (no publica) | Tiempos enteros de 1 a 120; el recordatorio antes del cierre; textos no vacíos y dentro del límite de un texto de WhatsApp |
+| V-CUMP-03 (error) | Un recordatorio o cierre que saldría con la ventana de 24 h cerrada |
+| V-CUMP-04 (error) | Más de un recordatorio (el contrato solo admite uno; atrapa un arreglo) |
+| V-EST-05 (error) | `{{variables}}` en los textos de inactividad |
+
+### Asistente y panel
+
+- Paso 7, *Despedida*: sección «Si el cliente deja de contestar». Propone un recordatorio a los 15 minutos y el cierre a la hora; los dos se pueden quitar o cambiar.
+- Los hallazgos V-CUMP-03 y V-CUMP-04 llevan a ese paso.
+- `WizardSpec.inactivity` se compila a `flow.inactivity` y se lee de vuelta. Si alguien la cambia fuera del asistente, el asistente no la pisa (`edited_elsewhere`).
+
+### Hallazgo de paso: el Designer borraba el horario
+
+El Designer conservaba al guardar solo las palabras de escape. `hours` (#95) se perdía: un flow en `continue` volvía en silencio a `block` si alguien lo guardaba desde el Designer. Con `inactivity` habría pasado lo mismo. Ahora el Designer conserva las tres claves (`FlowExtras` en `to-bot-flow.ts`), y `designer-store.test.ts` lo fija.
+
+### Desvíos
+
+| Especificación | Qué se hizo | Por qué |
+|---|---|---|
+| Minutos configurables | De 1 a 120 | El TTL de sesión de 2 h (arriba) |
+| «Sin plantilla aprobada» | Nunca sale nada fuera de la ventana | El motor todavía no manda plantillas (Fase 7) |
+| — | Con el negocio cerrado en medio no se recuerda ni se cierra | La sesión ya venció: la respuesta del cliente empieza de nuevo con el aviso de siempre. Por lo mismo, en `continue` de noche no hay recordatorios |
+| — | Un solo proceso barre cada minuto | Como el marcapasos de entrega. Con varias instancias, el reclamo en `bot_users` evita el doble envío |
+
+### Tests
+
+- `inactivity.test.ts`: la decisión pura (a qué hora, un recordatorio por silencio, cada excepción).
+- `inactivitySweeper.test.ts`: el barrido con adaptadores en memoria. Recordatorio una vez, cierre con y sin texto, el cliente escribe entre la lectura y el reclamo, baja, persona, negocio cerrado, reclamo que falla (sin la 024) y envío que falla, sin frenar a los demás.
+- `inactivityFlow.test.ts`: de punta a punta en el simulador, validador y asistente.
+- `SupabaseInactivityQueries.test.ts`: los filtros exactos del reclamo y del cierre.
+- `InactivityScheduler.test.ts`: una pasada por minuto, una a la vez, un tenant que falla no frena a los demás.
+- Panel: `inactivity-model.test.ts` y `designer-store.test.ts`.
+
+**[no verificado]:** no se probó contra un número real (A-01), ni contra Supabase con la 024 aplicada. Lo que sí está probado: las consultas exactas con un cliente de Supabase falso y el barrido con el motor real.

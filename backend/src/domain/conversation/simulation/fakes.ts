@@ -25,6 +25,11 @@ export class FakeClock implements ClockPort {
   advanceMinutes(minutes: number): void {
     this.current = new Date(this.current.getTime() + minutes * 60_000);
   }
+
+  /** Adelanta hasta `at`. Nunca atrasa. */
+  advanceTo(at: Date): void {
+    if (at.getTime() > this.current.getTime()) this.current = new Date(at.getTime());
+  }
 }
 
 /** Ids predecibles: `sim-0001`, `sim-0002`… y folios `SIM-0001`… */
@@ -65,6 +70,7 @@ export class InMemorySessionRepository implements UserRepository {
       humanPausedUntil: null,
       lastInboundAt: null,
       optedOutAt: null,
+      inactivityRemindedAt: null,
     });
   }
 
@@ -113,6 +119,38 @@ export class InMemorySessionRepository implements UserRepository {
 
   async setOptOut(tenantId: string, phoneNumber: string, optedOutAt: Date | null): Promise<void> {
     this.patch(tenantId, phoneNumber, { optedOutAt });
+  }
+
+  async listAwaitingReply(tenantId: string, lastInboundFrom: Date, lastInboundTo: Date): Promise<User[]> {
+    return [...this.users.values()]
+      .filter(
+        (u) =>
+          u.tenantId === tenantId &&
+          !!u.currentNodeId &&
+          u.currentNodeId !== 'end' &&
+          !u.optedOutAt &&
+          !!u.lastInboundAt &&
+          u.lastInboundAt >= lastInboundFrom &&
+          u.lastInboundAt <= lastInboundTo,
+      )
+      .sort((a, b) => a.lastInboundAt!.getTime() - b.lastInboundAt!.getTime())
+      .map(copy);
+  }
+
+  /** Mismas condiciones que el UPDATE condicionado de SupabaseUserRepository. */
+  async markInactivityReminder(tenantId: string, phoneNumber: string, lastInboundAt: Date, at: Date): Promise<boolean> {
+    const user = this.find(tenantId, phoneNumber);
+    if (!user || user.lastInboundAt?.getTime() !== lastInboundAt.getTime()) return false;
+    if (user.inactivityRemindedAt && user.inactivityRemindedAt >= lastInboundAt) return false;
+    this.patch(tenantId, phoneNumber, { inactivityRemindedAt: at });
+    return true;
+  }
+
+  async closeInactiveSession(tenantId: string, phoneNumber: string, lastInboundAt: Date): Promise<boolean> {
+    const user = this.find(tenantId, phoneNumber);
+    if (!user || !user.currentNodeId || user.lastInboundAt?.getTime() !== lastInboundAt.getTime()) return false;
+    this.patch(tenantId, phoneNumber, { currentNodeId: undefined, context: {} });
+    return true;
   }
 
   /** Estado actual de un contacto, para el panel de estado del simulador. */

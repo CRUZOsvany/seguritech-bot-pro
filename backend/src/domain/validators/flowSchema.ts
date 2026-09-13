@@ -15,6 +15,8 @@
 import { z } from 'zod';
 import type { BotFlow } from '@/domain/entities/flow';
 import { CONFIG_BOUND_VALUES } from '@/domain/entities/flow';
+import { WHATSAPP_LIMITS } from '@/domain/whatsapp/limits';
+import { INACTIVITY_MAX_MINUTES } from '@/domain/conversation/inactivity';
 
 // ============================================================================
 // SCHEMAS BASE
@@ -492,6 +494,33 @@ export const FlowNodeSchema = z
 
 const EscapeWordsSchema = z.array(z.string().trim().min(1).max(40)).max(20);
 
+// Inactividad (Fase 5). Los dos tiempos hasta 120 min: a las 2 h la sesión
+// vence sola y la respuesta del cliente empezaría de nuevo.
+const InactivityMinutesSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(
+    INACTIVITY_MAX_MINUTES,
+    `hasta ${INACTIVITY_MAX_MINUTES} min: a esa hora la sesión vence sola y la respuesta del cliente empezaría de nuevo`,
+  );
+const InactivityTextSchema = z.string().trim().min(1).max(WHATSAPP_LIMITS.text.bodyMax);
+const InactivitySchema = z
+  .object({
+    reminder: z.object({ after_minutes: InactivityMinutesSchema, text: InactivityTextSchema }).strict().optional(),
+    close: z.object({ after_minutes: InactivityMinutesSchema, text: InactivityTextSchema.optional() }).strict(),
+  })
+  .strict()
+  .superRefine((inactivity, ctx) => {
+    if (inactivity.reminder && inactivity.reminder.after_minutes >= inactivity.close.after_minutes) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['reminder', 'after_minutes'],
+        message: 'El recordatorio tiene que salir antes del cierre',
+      });
+    }
+  });
+
 export const FlowSchema = z
   .object({
     version: z.literal('1.0'),
@@ -505,6 +534,7 @@ export const FlowSchema = z
     // Palabras de escape (C-08). El validador de diseño revisa además que
     // haya baja y que la de persona lleve a una persona.
     hours: z.object({ when_closed: z.enum(['block', 'continue']) }).optional(),
+    inactivity: InactivitySchema.optional(),
     escape: z
       .object({
         menu: z.object({ words: EscapeWordsSchema, node_id: z.string().min(1).optional() }).optional(),

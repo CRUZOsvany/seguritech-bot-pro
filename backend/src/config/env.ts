@@ -70,6 +70,12 @@ const envSchema = z.object({
   // P4), el TTL deja de ser el mecanismo primario y pasa a ser red de
   // seguridad para conversaciones abandonadas.
   HANDOFF_PAUSE_MINUTES: z.coerce.number().int().positive().default(2880),
+  // Barrido de inactividad (Studio, Fase 5): recordatorio y cierre de
+  // conversaciones que se quedaron a medias. Sin valor: prendido solo en
+  // producción. Una laptop de desarrollo apunta a la misma Supabase; con el
+  // barrido prendido reclamaría recordatorios que solo "saldrían" a la
+  // consola y el cliente real no recibiría.
+  INACTIVITY_SWEEP: z.enum(['on', 'off']).optional(),
 
   // IA — Secretaria Digital (plan .claude/SEGURITECH_AI_SECRETARIA_PLAN.md).
   // Usada por IntentRouterPort (Fase 1.2) y, más adelante, el AgentOrchestrator.
@@ -140,6 +146,10 @@ export const config = {
     // TTL de la pausa tras escape_to_human. Default GLOBAL del deploy (48h, D3).
     // Override POR TENANT es follow-up (candidato: columna en urgent_service_config).
     handoffPauseMinutes: envVars.HANDOFF_PAUSE_MINUTES,
+    // Barrido de inactividad (Fase 5). INACTIVITY_SWEEP=on|off; sin valor, solo en producción.
+    inactivitySweep: envVars.INACTIVITY_SWEEP
+      ? envVars.INACTIVITY_SWEEP === 'on'
+      : envVars.NODE_ENV === 'production',
   },
 
   ai: {

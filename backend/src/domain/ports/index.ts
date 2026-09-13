@@ -31,6 +31,23 @@ export interface UserRepository {
    * reactiva al usuario (opt-in implícito al volver a escribir).
    */
   setOptOut(tenantId: string, phoneNumber: string, optedOutAt: Date | null): Promise<void>;
+  /**
+   * Inactividad (Fase 5): contactos a media conversación (paso guardado que
+   * no es 'end'), sin baja, cuyo último mensaje cae entre `lastInboundFrom` y
+   * `lastInboundTo`, del más viejo al más nuevo.
+   */
+  listAwaitingReply(tenantId: string, lastInboundFrom: Date, lastInboundTo: Date): Promise<User[]>;
+  /**
+   * Reclama el recordatorio de inactividad: lo marca en `at` solo si el
+   * cliente no escribió desde `lastInboundAt` y no se le recordó ya desde
+   * entonces. true = reclamado, ya se puede mandar. Usa la migración 024.
+   */
+  markInactivityReminder(tenantId: string, phoneNumber: string, lastInboundAt: Date, at: Date): Promise<boolean>;
+  /**
+   * Cierra la conversación por inactividad (borra el paso y lo capturado),
+   * solo si el cliente no escribió desde `lastInboundAt`. true = se cerró.
+   */
+  closeInactiveSession(tenantId: string, phoneNumber: string, lastInboundAt: Date): Promise<boolean>;
 }
 
 /**

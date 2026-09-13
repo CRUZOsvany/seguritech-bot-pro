@@ -19,10 +19,10 @@ export function StudioReview({ tenantId, flowId }: { tenantId: string; flowId: s
   const nodes = useDesignerStore((s) => s.nodes);
   const edges = useDesignerStore((s) => s.edges);
   const startNodeId = useDesignerStore((s) => s.startNodeId);
-  const escape = useDesignerStore((s) => s.escape);
+  const extras = useDesignerStore((s) => s.extras);
   const loadFromBotFlow = useDesignerStore((s) => s.loadFromBotFlow);
   // Lo mismo que toBotFlow(), pero con dependencias que React puede ver.
-  const flowJson = useMemo(() => JSON.stringify(graphToBotFlow(nodes, edges, startNodeId, escape)), [nodes, edges, startNodeId, escape]);
+  const flowJson = useMemo(() => JSON.stringify(graphToBotFlow(nodes, edges, startNodeId, extras)), [nodes, edges, startNodeId, extras]);
 
   const reviewQ = useQuery({
     queryKey: ['studio-review', tenantId, flowJson],

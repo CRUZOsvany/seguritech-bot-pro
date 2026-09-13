@@ -20,6 +20,9 @@ import { BusinessHoursService } from '@/domain/services/BusinessHoursService';
 import { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
 import { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
+import { InactivitySweeper } from '@/domain/conversation/InactivitySweeper';
+import { NotificationPortMessenger } from '@/domain/conversation/NotificationPortMessenger';
+import { systemClock } from '@/app/systemRuntime';
 import { config } from '@/config/env';
 import { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 
@@ -36,6 +39,7 @@ export class ApplicationContainer {
   private readonly setTenantStatusUseCase: SetTenantStatusUseCase;
   private readonly simulateConversationUseCase: SimulateConversationUseCase;
   private readonly createTenantUseCase: CreateTenantUseCase;
+  private readonly inactivitySweeper: InactivitySweeper;
 
   constructor(
     userRepository: UserRepository,
@@ -96,6 +100,18 @@ export class ApplicationContainer {
     );
 
     this.createTenantUseCase = new CreateTenantUseCase(tenantRepository, logger);
+
+    // Inactividad (Fase 5): el mismo barrido que corre el simulador, con los
+    // adaptadores de producción. Lo dispara InactivityScheduler cada minuto.
+    this.inactivitySweeper = new InactivitySweeper({
+      sessions: userRepository,
+      messenger: new NotificationPortMessenger(notificationPort),
+      tenantConfig: tenantConfigPort,
+      flows: { findActive: (tenantId) => botFlowRepository.findActiveByTenant(tenantId) },
+      businessHours: businessHoursService,
+      clock: systemClock,
+      logger,
+    });
   }
 
   getBotController(): BotController {
@@ -116,5 +132,9 @@ export class ApplicationContainer {
 
   getCreateTenantUseCase(): CreateTenantUseCase {
     return this.createTenantUseCase;
+  }
+
+  getInactivitySweeper(): InactivitySweeper {
+    return this.inactivitySweeper;
   }
 }

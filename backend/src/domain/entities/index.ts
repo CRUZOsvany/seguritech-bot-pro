@@ -39,6 +39,11 @@ export interface User {
   lastInboundAt?: Date | null;
   /** NULL/undefined = puede recibir mensajes. Timestamp = opt-out activo (Bloque 2.2). */
   optedOutAt?: Date | null;
+  /**
+   * Cuándo se mandó el recordatorio de inactividad (Fase 5, migración 024).
+   * Cuenta solo si es posterior a lastInboundAt.
+   */
+  inactivityRemindedAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

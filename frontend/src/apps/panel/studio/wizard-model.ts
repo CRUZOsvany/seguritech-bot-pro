@@ -2,6 +2,7 @@ import type {
   CaptureCheck,
   CaptureRule,
   ValidationIssue,
+  WizardInactivity,
   WizardOption,
   WizardSpec,
 } from '@/shared/api/studio';
@@ -196,6 +197,7 @@ export function optionOfNode(nodeId: string | undefined, spec: WizardSpec): stri
 /** En qué paso del asistente se arregla un hallazgo del validador. */
 export function stepForIssue(issue: ValidationIssue, spec: WizardSpec): StepKey {
   if (issue.code === 'V-EST-07' || issue.code === 'V-CUMP-02') return 'reconocimiento';
+  if (issue.code === 'V-CUMP-03' || issue.code === 'V-CUMP-04') return 'despedida';
   const node = issue.nodeId ?? '';
   if (node === 'hablar_persona') return 'humano';
   if (node === 'bienvenida') return 'primer-mensaje';
@@ -205,6 +207,15 @@ export function stepForIssue(issue: ValidationIssue, spec: WizardSpec): StepKey 
   if (issue.code === 'V-CUMP-01') return 'humano';
   return 'publicar';
 }
+
+/**
+ * Lo que propone el asistente al activar la inactividad (Fase 5): un
+ * recordatorio a los 15 minutos y el cierre a la hora.
+ */
+export const DEFAULT_INACTIVITY: WizardInactivity = {
+  reminder: { afterMinutes: 15, text: '¿Sigues ahí? Si quieres continuar, contesta este mensaje.' },
+  close: { afterMinutes: 60, text: 'Cerramos la conversación por ahora. Escríbenos cuando quieras y empezamos de nuevo.' },
+};
 
 /** Tipos de respuesta que el asistente ofrece para una captura (C-04). */
 export const CAPTURE_TYPES = [

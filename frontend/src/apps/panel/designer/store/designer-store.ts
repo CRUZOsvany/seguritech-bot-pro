@@ -7,7 +7,7 @@ import {
 } from '@xyflow/react';
 import type { BotFlow, FlowNode, FlowNodeType, TransitionCondition } from '../flow-types';
 import { botFlowToGraph } from '../mapping/to-react-flow';
-import { graphToBotFlow } from '../mapping/to-bot-flow';
+import { extrasOf, graphToBotFlow, type FlowExtras } from '../mapping/to-bot-flow';
 import { conditionLabel } from '../mapping/rf-types';
 import type { DesignerRFNode, DesignerRFEdge } from '../mapping/rf-types';
 
@@ -75,8 +75,11 @@ interface DesignerState {
   flowId: string | null;
   selectedId: string | null;
   dirty: boolean;
-  /** `escape` del flow cargado (C-08): no se edita aquí, se conserva al guardar. */
-  escape: unknown;
+  /**
+   * Configuración del flow cargado que no vive en el grafo (palabras de
+   * escape, horario, inactividad): no se edita aquí, se conserva al guardar.
+   */
+  extras: FlowExtras;
 
   /**
    * `markDirty` (P6): por default false — cargar el draft persistido al abrir
@@ -132,8 +135,8 @@ interface DesignerState {
   moveTransition: (nodeId: string, fromIdx: number, toIdx: number) => void;
 }
 
-const EMPTY: Pick<DesignerState, 'nodes' | 'edges' | 'startNodeId' | 'flowId' | 'selectedId' | 'dirty' | 'escape'> = {
-  escape: undefined,
+const EMPTY: Pick<DesignerState, 'nodes' | 'edges' | 'startNodeId' | 'flowId' | 'selectedId' | 'dirty' | 'extras'> = {
+  extras: {},
   nodes: [],
   edges: [],
   startNodeId: '',
@@ -151,7 +154,7 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
       nodes,
       edges,
       startNodeId: flow.start_node_id,
-      escape: flow.escape,
+      extras: extrasOf(flow),
       flowId,
       selectedId: null,
       dirty: markDirty,
@@ -159,8 +162,8 @@ export const useDesignerStore = create<DesignerState>((set, get) => ({
   },
 
   toBotFlow: () => {
-    const { nodes, edges, startNodeId, escape } = get();
-    return graphToBotFlow(nodes, edges, startNodeId, escape);
+    const { nodes, edges, startNodeId, extras } = get();
+    return graphToBotFlow(nodes, edges, startNodeId, extras);
   },
 
   onNodesChange: (changes) => {

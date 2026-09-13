@@ -11,12 +11,25 @@ import type { DesignerRFNode, DesignerRFEdge } from './rf-types';
  * `t<idx>`). Esto hace el round-trip exacto y respeta DEC-2/DEC-9: no se
  * inyectan posiciones ni campos fuera del contrato.
  */
+/**
+ * Configuración del flow que no vive en el grafo: palabras de escape (C-08),
+ * horario e inactividad (Fase 5). Se editan en el Studio; el Designer las
+ * devuelve tal cual. Sin esto, guardar en el Designer las borraba en
+ * silencio y el bot volvía a lo de siempre.
+ */
+export type FlowExtras = Pick<BotFlow, 'escape' | 'hours' | 'inactivity'>;
+
+export const extrasOf = (flow: BotFlow): FlowExtras => ({
+  escape: flow.escape,
+  hours: flow.hours,
+  inactivity: flow.inactivity,
+});
+
 export function graphToBotFlow(
   nodes: DesignerRFNode[],
   edges: DesignerRFEdge[],
   startNodeId: string,
-  /** Configuración del flow que no vive en el grafo (C-08). Se devuelve tal cual. */
-  escape?: unknown,
+  extras: FlowExtras = {},
 ): BotFlow {
   // Índice: source -> sourceHandle -> next_node_id (último edge gana).
   const wiring = new Map<string, Map<string, string>>();
@@ -51,6 +64,6 @@ export function graphToBotFlow(
     version: '1.0',
     start_node_id: startNodeId,
     nodes: rebuilt,
-    ...(escape !== undefined ? { escape } : {}),
+    ...(Object.fromEntries(Object.entries(extras).filter(([, value]) => value !== undefined)) as FlowExtras),
   };
 }

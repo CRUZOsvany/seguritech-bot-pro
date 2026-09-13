@@ -321,4 +321,4 @@ Nuevas, salidas de este inventario:
 | D-6 | El cobro de octubre no está en la doc oficial. ¿V-COSTO-01/02 igual como avisos? | Sí, como avisos: fusionar mensajes es buena práctica cobren o no. La métrica contra la cuota, hasta que Meta lo publique |
 | D-7 | "Botón de llamada" del documento (CTA de voz) contra `request_call_permission` (pedir permiso para llamar). ¿Cuál quieres? | Aclarar antes de la Fase 6 |
 
-Siguen abiertas las cinco del documento (§16). Una observación sobre la 4: por H-6, avisar al dueño solo por WhatsApp libre falla en cuanto el dueño pasa 24 h sin escribirle al bot. Hace falta el panel, una plantilla utility aprobada o las dos cosas.
+Las cinco del documento (§16) quedaron decididas el 2026-09-11 y el 2026-09-12; la tabla está en el ROADMAP, sección «Studio de chatbots». Sobre la 4 (por H-6, el WhatsApp libre al dueño falla en cuanto pasa 24 h sin escribirle al bot): siempre en el panel, y por WhatsApp solo con su ventana abierta; sin plantilla utility por ahora.

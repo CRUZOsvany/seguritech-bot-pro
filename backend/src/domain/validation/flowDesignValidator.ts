@@ -3,6 +3,7 @@ import { WHATSAPP_LIMITS as L } from '@/domain/whatsapp/limits';
 import { FlowSchema } from '@/domain/validators/flowSchema';
 import { resolveEscape, wordsOf, type EscapeCategory, type ResolvedEscape } from '@/domain/conversation/escapeWords';
 import { fuzzyIncludes, normalizePhrase } from '@/domain/services/textMatch';
+import { SERVICE_WINDOW_MS } from '@/domain/conversation/inactivity';
 import { planMerge } from './mergeMessages';
 
 const ESCAPE_CATEGORIES: EscapeCategory[] = ['opt_out', 'human', 'restart', 'menu'];
@@ -27,8 +28,8 @@ const ESCAPE_LABEL: Record<EscapeCategory, string> = {
  * hace lo que revisan: V-EST-09 (respuesta por tipo de entrada: el motor
  * ignora audio, imagen y demás, hallazgo H-8), V-META-03 (el modelo de nodos
  * no tiene encabezados donde Meta los prohíbe), V-META-06 (no hay nodo de
- * address message), V-CUMP-03/04/08 (el motor no programa envíos,
- * recordatorios ni plantillas). Detalle: docs/studio/FASE_2_VALIDADOR.md.
+ * address message), V-CUMP-08 (el motor no manda plantillas). Detalle:
+ * docs/studio/FASE_2_VALIDADOR.md.
  */
 
 export type IssueLevel = 'error' | 'warning';
@@ -136,6 +137,7 @@ function runRules(ctx: GraphContext): ValidationIssue[] {
     ...ruleHumanPath(ctx),
     ...ruleOptOut(ctx),
     ...ruleClosedHandoff(ctx),
+    ...ruleInactivity(ctx),
     ...ruleSensitiveData(ctx),
     ...ruleBursts(ctx),
     ...ruleMergeable(ctx),
@@ -728,6 +730,41 @@ function ruleOptOut(ctx: GraphContext): ValidationIssue[] {
     return [issue('V-CUMP-02', 'error', 'No hay palabra para darse de baja. WhatsApp exige que el cliente pueda dejar de recibir mensajes.')];
   }
   return [];
+}
+
+/**
+ * Inactividad (Fase 5). V-CUMP-04: un recordatorio como máximo; el contrato
+ * solo admite uno, así que esto atrapa un arreglo. V-CUMP-03: nada puede
+ * salir con la ventana de 24 h cerrada (el schema ya pone un tope más bajo,
+ * 120 min; esto dice el porqué de WhatsApp). V-EST-05: esos mensajes salen
+ * sin pasar por un paso, así que no resuelven {{variables}}.
+ */
+function ruleInactivity(ctx: GraphContext): ValidationIssue[] {
+  const raw = (ctx.flow as { inactivity?: unknown }).inactivity;
+  if (!raw || typeof raw !== 'object') return [];
+  const inactivity = raw as Record<string, unknown>;
+  const out: ValidationIssue[] = [];
+
+  const manyReminders = Array.isArray(inactivity.reminder) || 'reminders' in inactivity;
+  if (manyReminders) {
+    out.push(issue('V-CUMP-04', 'error', 'Solo se permite un recordatorio de inactividad por silencio del cliente. Más de uno afecta la calidad del número.'));
+  }
+
+  const parts: Array<[string, unknown]> = [
+    ['El recordatorio', manyReminders ? undefined : inactivity.reminder],
+    ['El cierre', inactivity.close],
+  ];
+  for (const [what, value] of parts) {
+    if (!value || typeof value !== 'object') continue;
+    const { after_minutes: minutes, text } = value as { after_minutes?: unknown; text?: unknown };
+    if (typeof minutes === 'number' && minutes * 60_000 >= SERVICE_WINDOW_MS) {
+      out.push(issue('V-CUMP-03', 'error', `${what} de inactividad saldría a los ${minutes} min, con la ventana de 24 h ya cerrada: ahí WhatsApp solo deja mandar plantillas aprobadas.`));
+    }
+    if (typeof text === 'string' && /\{\{\s*[\w.]+\s*\}\}/.test(text)) {
+      out.push(issue('V-EST-05', 'error', `${what} de inactividad usa {{variables}}, pero ese mensaje sale sin pasar por un paso y no las resuelve. Escríbelo sin variables.`));
+    }
+  }
+  return out;
 }
 
 const SENSITIVE_PATTERNS: Array<{ re: RegExp; what: string }> = [

@@ -124,10 +124,10 @@ No se mete un tercero que paga sin cerrar esto. Es la diferencia entre un susto 
 
 Es lo que convierte "diseñar mejor los bots" en algo verificable, y da más valor por menos trabajo que casi cualquier feature nueva.
 
-- [ ] Tabla `bot_flow_test_cases`
-- [ ] UI mínima en el Designer: `inputs[] → expected last_node + outputs contains`
+- [x] Tabla de casos de prueba: `flow_test_cases` (migración 023, Studio Fase 4, #91), aplicada y verificada el 2026-09-12
+- [x] UI mínima: en el Studio, no en el Designer. «Guardar como prueba» desde el simulador y el paso 8 (#91)
 - [x] Runner con el motor real: `StudioFlowTestRunner` sobre `SimulateConversationUseCase` (Studio, Fase 4). `SimulateMessageUseCase` se borró el 2026-09-11
-- [ ] **Gate:** no se publica una versión con un caso en rojo
+- [x] **Gate:** no se publica una versión con un caso en rojo (`PublishFlowUseCase`, #91)
 - [ ] 3–5 casos para el flow del tenant cero como primer ejemplo
 
 ### Cumplimiento Meta antes de escalar
@@ -135,8 +135,8 @@ Es lo que convierte "diseñar mejor los bots" en algo verificable, y da más val
 - [x] Ventana de servicio de 24 h (`bot_users.last_inbound_at`)
 - [x] Opt-out real (`bot_users.opted_out_at`)
 - [ ] Monitoreo del quality rating vía webhook de `account_update`
-- [ ] Marcar leído y "escribiendo" (bloqueado por 1A)
-- [ ] Delay de 600–1200 ms entre mensajes (DEC-08 decidida, sin implementar)
+- [~] Marcar leído y "escribiendo": hecho en el Studio, Fase 5 (#97). Sin probar contra un número real (1A)
+- [~] Delay de 600–1200 ms entre mensajes (DEC-08) y espera del "entregado": hecho en #98. Sin probar contra un número real (1A)
 
 ---
 
@@ -150,10 +150,10 @@ El flow más maduro usa 6 de los 14 tipos de nodo. Esto es ganancia disponible s
 
 - [ ] Auditar cada flow vivo contra los 14 tipos y decidir dónde aportan carrusel, ubicación, CTA URL, reacciones y WhatsApp Flows nativos
 - [ ] Carrito multi-producto (DEC-02): juntar varios artículos en **una** alerta estructurada al dueño. Con DEC-01=A el bot sigue escalando siempre, así que el valor está en la calidad del aviso, no en cerrar la venta
-- [ ] Validación en `wait_input` (C-04)
+- [x] Validación en `wait_input` (C-04): Studio Fase 5, #93
 - [ ] Extracción de cantidades (C-05)
-- [ ] Desambiguación cuando hay varios matches (B-02)
-- [ ] Escape words configurables por tenant en vez de hardcodeadas (C-08)
+- [x] Desambiguación cuando hay varios matches (B-02): Studio Fase 5, #94
+- [x] Escape words configurables por tenant en vez de hardcodeadas (C-08): Studio Fase 5, #92
 - [ ] Branching por contexto (C-02)
 
 ### Panel y catálogo
@@ -203,6 +203,50 @@ Nada de esto entra sin ADR explícito.
 
 ---
 
+## STUDIO DE CHATBOTS — especificación del 2026-09-10
+
+Armar y probar bots sin tocar JSON, sobre el motor de producción. La especificación no está en el repo; cada fase deja su documento en `docs/studio/`.
+
+- [x] **Fase 0 — Inventario:** #84, #86 (`INVENTARIO.md`)
+- [x] **Fase 1 — Motor observable:** #87, #88
+- [x] **Fase 2 — Validador:** #89
+- [x] **Fase 3 — Asistente de 8 pasos:** #90
+- [x] **Fase 4 — Pruebas y versiones:** #91. Migración 023 aplicada y verificada el 2026-09-12
+- [x] **Fase 5 — Control de respuestas, cerrada el 2026-09-12:**
+  - palabras de escape (#92), capturas (#93), desambiguación (#94) y horario (#95);
+  - fusión de mensajes (#96), "escribiendo" (#97) y orden de entrega (#98);
+  - inactividad (#104, migración 024).
+
+  Detalle en `FASE_5_CONTROL.md`.
+  - [ ] Aplicar y verificar la migración 024 el día que se mergee #104 (regla 8; SQL en `FASE_5_CONTROL.md` §8)
+  - [ ] Confirmar el `NODE_ENV` del servidor Ubuntu: el barrido de inactividad arranca por defecto solo con `production`; con otro valor necesita `INACTIVITY_SWEEP=on`
+- [~] **Pendiente de verificar en vivo:**
+  - el criterio de la Fase 3 (OVY arma un bot de cerrajería en menos de 15 minutos);
+  - el flujo de la Fase 4 en un navegador;
+  - "escribiendo", el orden de entrega y la inactividad contra un número real (1A).
+- [ ] **Fase 6 — Mensajes enriquecidos:** carrusel, CTA URL, ubicación, medios, contacto, reacciones y botón de llamada. Antes de empezar se decide D-4 (carrusel dinámico sobre `pos_products`, que no tiene imagen) y D-7 (botón de llamada contra `request_call_permission`), de `INVENTARIO.md` §10
+- [ ] **Fase 7 — Plantillas y opt-in**
+- [ ] **Fase 8 — Traza en producción** (`conversation_events`)
+- [ ] **Fase 9 — WhatsApp Flows**
+
+### Decisiones de §16 de la especificación: cerradas
+
+| # | Pregunta | Decisión (OVY) | Qué implica |
+|---|---|---|---|
+| 1 | ¿El AdminOperador puede publicar cambios de solo texto? | No, por ahora (D-4.3, 2026-09-11) | Publicar y rollback siguen siendo de `super_admin`. Se retoma con un caso real |
+| 2 | Al publicar, ¿las conversaciones en curso terminan en su versión o migran? | Migran a la nueva (D-4.1, 2026-09-11) | Sin fijado de versión por sesión. Se avisa antes de un publish estructural con conversaciones activas |
+| 3 | ¿Cómo se traslada el costo de los mensajes de servicio desde octubre? | Nada que construir todavía (2026-09-12) | V-COSTO-01/02 siguen como avisos informativos hasta que Meta publique el precio oficial |
+| 4 | ¿Dónde llegan los avisos de paso a humano? | Siempre en el panel; por WhatsApp al dueño como intento adicional, solo con su ventana de 24 h abierta (2026-09-12) | Sin plantilla utility por ahora |
+| 5 | ¿Cuánto se conservan los `conversation_events`? | Sin fecha de borrado por ahora (2026-09-12) | La tabla llega con la Fase 8 |
+
+- [ ] **Llevar la decisión 4 al código.** Hoy el motor manda el aviso al dueño por WhatsApp siempre (`ConversationEngine.ts:360`), sin revisar su ventana, y fuera de ella Meta lo rechaza (H-6). Falta:
+  - mandarlo solo con la ventana abierta, usando el `last_inbound_at` del dueño, que se registra cuando le escribe al bot algo que no es un comando;
+  - dejar constancia cuando no se manda.
+
+  La bandeja `/escalaciones` del panel ya lista las conversaciones en pausa por paso a humano.
+
+---
+
 ## PARALELO — SECURITECH cámaras
 
 Negocio físico. No compite por las mismas horas de desarrollo.
@@ -226,7 +270,7 @@ Esto va antes que cualquier otra cosa de esta sección. Ver `ESTADO` §7 para el
 - [x] Mergear el PR **#79** (bloques compuestos, F1-a)
 - [x] Mergear la consolidación documental al final
 - [x] Borrar `fix/compose-env-file`, `docs/reglas-flow` y `feat/bloques-compuestos` al mergear
-- [ ] **Aplicar y verificar la migración 021** (regla 8). Está en `main` desde el 2026-09-09 y **no está en Cloud**. Es lo único de este bloque que sigue abierto, y no se cierra desde el repo
+- [x] **Aplicar y verificar la migración 021** (regla 8). Aplicada en Cloud; verificada por lectura REST el 2026-09-12
 
 ### Higiene inmediata (una tarde de trabajo, alto retorno)
 
@@ -254,7 +298,7 @@ Esto va antes que cualquier otra cosa de esta sección. Ver `ESTADO` §7 para el
 
 ## Orden de ataque sugerido
 
-1. **Devolver a `main` el trabajo huérfano** (#80 → #78 → #79) y aplicar la migración 021. Es lo único que hoy hace que `main` no sea lo que el equipo cree que es.
+1. ~~**Devolver a `main` el trabajo huérfano** (#80 → #78 → #79) y aplicar la migración 021.~~ Hecho: la 021 se verificó en Cloud el 2026-09-12.
 2. **Higiene transversal** — una tarde, desatasca todo lo demás.
 3. **Decidir 1B**: LAN con túnel o VPS con dominio. Bloquea el resto de la fase.
 4. **1A en paralelo, todos los días** — es lo único que no acelera con más horas de código.

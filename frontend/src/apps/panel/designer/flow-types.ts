@@ -232,6 +232,10 @@ export interface BotFlow {
    * silencio a las palabras de siempre.
    */
   escape?: unknown;
+  /** Qué hace el bot fuera de horario (Fase 5). Mismo trato: se edita en el Studio, se conserva aquí. */
+  hours?: unknown;
+  /** Recordatorio y cierre por inactividad (Fase 5). Mismo trato. */
+  inactivity?: unknown;
 }
 
 /** Flow vacío que carga el canvas cuando el flow no tiene draft (DEC-1/Fase 4). */

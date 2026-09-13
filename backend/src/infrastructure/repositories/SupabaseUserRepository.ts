@@ -196,6 +196,66 @@ export class SupabaseUserRepository implements UserRepository {
     );
   }
 
+  async listAwaitingReply(tenantId: string, lastInboundFrom: Date, lastInboundTo: Date): Promise<User[]> {
+    const { data, error } = await this.supabase
+      .from('bot_users')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .not('current_node_id', 'is', null)
+      .neq('current_node_id', 'end')
+      .is('opted_out_at', null)
+      .gte('last_inbound_at', lastInboundFrom.toISOString())
+      .lte('last_inbound_at', lastInboundTo.toISOString())
+      .order('last_inbound_at', { ascending: true })
+      .limit(500);
+
+    if (error) {
+      this.logger.error({ error, tenantId }, 'listAwaitingReply failed');
+      throw new Error(`listAwaitingReply failed: ${error.message}`);
+    }
+    return (data ?? []).map((row) => this.mapRow(row));
+  }
+
+  async markInactivityReminder(tenantId: string, phoneNumber: string, lastInboundAt: Date, at: Date): Promise<boolean> {
+    const since = lastInboundAt.toISOString();
+    // UPDATE condicionado: si el cliente escribió (last_inbound_at cambió) o
+    // ya se le recordó en este silencio, no toca ninguna fila.
+    const { data, error } = await this.supabase
+      .from('bot_users')
+      .update({ inactivity_reminded_at: at.toISOString() })
+      .eq('tenant_id', tenantId)
+      .eq('phone_number', phoneNumber)
+      .eq('last_inbound_at', since)
+      .or(`inactivity_reminded_at.is.null,inactivity_reminded_at.lt."${since}"`)
+      .select('id');
+
+    if (error) {
+      this.logger.error(
+        { error, tenantId, phoneNumber },
+        'markInactivityReminder failed (¿falta la migración 024?)',
+      );
+      throw new Error(`markInactivityReminder failed: ${error.message} (¿falta la migración 024?)`);
+    }
+    return (data ?? []).length > 0;
+  }
+
+  async closeInactiveSession(tenantId: string, phoneNumber: string, lastInboundAt: Date): Promise<boolean> {
+    const { data, error } = await this.supabase
+      .from('bot_users')
+      .update({ current_state: 'initial', current_node_id: null, context: {} })
+      .eq('tenant_id', tenantId)
+      .eq('phone_number', phoneNumber)
+      .eq('last_inbound_at', lastInboundAt.toISOString())
+      .not('current_node_id', 'is', null)
+      .select('id');
+
+    if (error) {
+      this.logger.error({ error, tenantId, phoneNumber }, 'closeInactiveSession failed');
+      throw new Error(`closeInactiveSession failed: ${error.message}`);
+    }
+    return (data ?? []).length > 0;
+  }
+
   private mapRow(row: Record<string, any>): User {
     return {
       id: row.id,
@@ -207,6 +267,7 @@ export class SupabaseUserRepository implements UserRepository {
       humanPausedUntil: row.human_paused_until ? new Date(row.human_paused_until) : null,
       lastInboundAt: row.last_inbound_at ? new Date(row.last_inbound_at) : null,
       optedOutAt: row.opted_out_at ? new Date(row.opted_out_at) : null,
+      inactivityRemindedAt: row.inactivity_reminded_at ? new Date(row.inactivity_reminded_at) : null,
       createdAt: new Date(row.created_at),
       updatedAt: new Date(row.updated_at),
     };

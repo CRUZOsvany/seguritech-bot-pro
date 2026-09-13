@@ -119,6 +119,13 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
     case 'clock_advanced':
       lines.push(`Reloj adelantado ${formatMinutes(step.minutes)}: ahora es ${when(step.now)}.`);
       break;
+    case 'inactivity':
+      lines.push(
+        step.action === 'reminder'
+          ? `El cliente lleva ${formatMinutes(step.afterMinutes)} sin contestar en ${q(step.nodeId)}: el bot manda el recordatorio (solo uno por silencio).`
+          : `El cliente lleva ${formatMinutes(step.afterMinutes)} sin contestar: la conversación se cierra${step.sent ? ' con el mensaje de cierre' : ''} y el próximo mensaje empieza de nuevo.`,
+      );
+      break;
     }
   }
   flushPath();

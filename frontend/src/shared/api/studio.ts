@@ -229,6 +229,16 @@ export interface WizardSpec {
   escape?: WizardEscape;
   /** Fuera de horario: `block` solo avisa que está cerrado; `continue` atiende igual. Sin él, `block`. */
   hours?: { whenClosed: 'block' | 'continue' };
+  /** Si el cliente deja de contestar a media conversación (Fase 5). Sin ella, el bot espera sin escribir. */
+  inactivity?: WizardInactivity;
+}
+
+/** Minutos desde el último mensaje del cliente. Los topes los revisa el backend. */
+export interface WizardInactivity {
+  /** Un solo recordatorio por silencio. Texto tal cual: sin {{variables}}. */
+  reminder?: { afterMinutes: number; text: string };
+  /** Cierra la conversación y borra lo capturado. El texto es opcional. */
+  close: { afterMinutes: number; text?: string };
 }
 
 export interface StudioMold {
