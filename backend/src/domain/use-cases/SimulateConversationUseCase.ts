@@ -15,6 +15,7 @@ import {
   InMemorySessionRepository,
   SequentialIdGenerator,
   noopAudit,
+  seedOwnerWindow,
 } from '@/domain/conversation/simulation/fakes';
 
 /**
@@ -38,6 +39,12 @@ export interface SimulateConversationInput {
   /** Hora de arranque del reloj simulado. */
   startAt: Date;
   steps: SimulationStep[];
+  /**
+   * ¿El dueño le escribió al bot en las últimas 24 h? De eso depende que el
+   * aviso de paso a humano le llegue por WhatsApp (decisión 4 de §16).
+   * Default: sí, desde `startAt`, para que la vista previa muestre el aviso.
+   */
+  ownerWindowOpen?: boolean;
 }
 
 export interface SessionSnapshot {
@@ -85,6 +92,13 @@ export class SimulateConversationUseCase {
   async execute(input: SimulateConversationInput): Promise<SimulatedTurn[]> {
     const clock = new FakeClock(input.startAt);
     const sessions = new InMemorySessionRepository(clock);
+    // Decisión 4 de §16: el aviso al dueño solo sale con su ventana de 24 h
+    // abierta. Por default se simula que el dueño le escribió al bot al
+    // empezar, para que se vea el aviso; con `ownerWindowOpen: false`, no.
+    if (input.ownerWindowOpen !== false) {
+      const ownerPhone = (await this.tenantConfigPort.getConfig(input.tenantId))?.ownerPhone;
+      if (ownerPhone) await seedOwnerWindow(sessions, input.tenantId, ownerPhone, input.from, input.startAt);
+    }
     const messenger = new CapturingMessenger();
     // El log de una simulación no es un evento de producción.
     const logger = this.logger.child({ simulation: true }, { level: 'silent' });

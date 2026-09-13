@@ -32,6 +32,7 @@ import {
   InMemorySessionRepository,
   SequentialIdGenerator,
   noopAudit,
+  seedOwnerWindow,
 } from '@/domain/conversation/simulation/fakes';
 import { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
 import { MetaWhatsAppAdapter } from '@/infrastructure/adapters/MetaWhatsAppAdapter';
@@ -108,8 +109,12 @@ async function runProduction(mold: Mold): Promise<unknown[]> {
     } as unknown as MetaCredentialsRepository;
     const adapter = new MetaWhatsAppAdapter(silentLogger, credsRepo);
     const clock = new FakeClock(new Date(conversation.startAt));
+    const sessions = new InMemorySessionRepository(clock);
+    // Mismo supuesto que el simulador por default (decisión 4 de §16): el
+    // dueño le escribió al bot al empezar, así que su ventana está abierta.
+    if (config.ownerPhone) await seedOwnerWindow(sessions, HARNESS_TENANT_ID, config.ownerPhone, HARNESS_CUSTOMER_PHONE, clock.now());
     const controller = new BotController(
-      new InMemorySessionRepository(clock),
+      sessions,
       adapter,
       makeTenantConfigPort(config),
       { findActiveByTenant: async () => flow } as unknown as BotFlowRepository,
@@ -216,7 +221,15 @@ describe('las conversaciones grabadas recorren lo que dicen recorrer', () => {
     expect(kinds).toEqual(expect.arrayContaining(['catalog_search', 'validation', 'input_ignored', 'escalation']));
     expect(text).toContain('Perfecto, *Engargolado*');
     expect(text).toContain('Cuaderno profesional 100 hojas');
-    expect(text).toContain('SIM-0001'); // folio de {{order_id}}, determinista
+    // El folio de {{order_id}} es determinista. Iba en la alerta del pedido al
+    // dueño, pero esa alerta ya no sale: el pedido llega 48 h después de que el
+    // dueño le escribió al bot (se simula al empezar), con su ventana de 24 h
+    // cerrada (decisión 4 de §16). El folio se ve en lo capturado.
+    expect(JSON.stringify(turns.flatMap((t) => t.trace))).toContain('SIM-0001');
+    const escalations = turns
+      .flatMap((t) => t.trace)
+      .filter((s) => s.kind === 'escalation') as unknown as Array<{ ownerNotified: boolean; ownerSkipped?: string }>;
+    expect(escalations.map((e) => (e.ownerNotified ? 'avisado' : e.ownerSkipped))).toEqual(['avisado', 'window_closed']);
   });
 
   it('securitech: dos mensajes en el saludo y alerta al dueño', async () => {

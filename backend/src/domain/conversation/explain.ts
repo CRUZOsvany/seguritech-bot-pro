@@ -111,10 +111,7 @@ export function explainTrace(trace: DecisionStep[], timeZone = 'America/Mexico_C
       );
       break;
     case 'escalation':
-      lines.push(
-        `Pasa a una persona: el bot se calla hasta ${when(step.pausedUntil)}` +
-          (step.ownerNotified ? ' y se avisa al dueño.' : '. No se pudo avisar al dueño: no tiene número configurado.'),
-      );
+      lines.push(`Pasa a una persona: el bot se calla hasta ${when(step.pausedUntil)}${explainOwnerAlert(step)}`);
       break;
     case 'clock_advanced':
       lines.push(`Reloj adelantado ${formatMinutes(step.minutes)}: ahora es ${when(step.now)}.`);
@@ -161,6 +158,24 @@ function explainGate(
     return 'Fuera de horario, el paso a persona usa su texto de fuera de horario. El aviso al dueño se manda igual.';
   case 'no_flow':
     return 'El negocio no tiene un flujo publicado: se contesta "en mantenimiento".';
+  }
+}
+
+/** Qué pasó con el aviso al dueño por WhatsApp (decisión 4 de §16). */
+function explainOwnerAlert(step: Extract<DecisionStep, { kind: 'escalation' }>): string {
+  if (step.ownerNotified) return ' y se avisa al dueño.';
+  const inbox = ' La conversación queda en la bandeja de escalaciones del panel.';
+  switch (step.ownerSkipped) {
+  case 'window_closed':
+    return `. No se avisa al dueño por WhatsApp: no le ha escrito al bot en las últimas 24 h, y fuera de esa ventana WhatsApp no deja mandarle un mensaje libre.${inbox}`;
+  case 'window_unknown':
+    return `. No se avisa al dueño por WhatsApp: no se pudo revisar su ventana de 24 h.${inbox}`;
+  case 'send_failed':
+    return `. El aviso al dueño por WhatsApp falló.${inbox}`;
+  case 'no_alert_text':
+    return `. El paso no trae aviso para el dueño.${inbox}`;
+  default:
+    return `. No se pudo avisar al dueño: no tiene número configurado.${inbox}`;
   }
 }
 

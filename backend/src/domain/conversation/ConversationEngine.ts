@@ -12,7 +12,7 @@ import { SESSION_EXPIRED_NOTICE, isSessionExpired } from '@/domain/services/Sess
 import { enrichOwnerAlert } from '@/domain/services/OwnerAlertFormatter';
 import type { FlowInterpreter } from '@/domain/services/FlowInterpreter';
 import type { BusinessHoursService } from '@/domain/services/BusinessHoursService';
-import type { DecisionStep } from './trace';
+import type { DecisionStep, OwnerAlertSkipped } from './trace';
 import { matchEscape, resolveEscape } from './escapeWords';
 import {
   representativeText,
@@ -349,6 +349,7 @@ export class ConversationEngine {
 
       // Enviar outputs
       let ownerNotified = false;
+      let ownerSkipped: OwnerAlertSkipped | undefined;
       for (const output of result.outputs) {
         switch (output.kind) {
         case 'escape_to_human': {
@@ -357,26 +358,44 @@ export class ConversationEngine {
           await turn.send({ to: from, audience: 'customer', content: { kind: 'text', text: closedText ?? output.userResponse } });
           // Aviso al dueño por WhatsApp — best-effort: NUNCA rompe el flujo del cliente.
           // El destino (ownerPhone) viene de owner_data.whatsapp_dueno vía TenantConfig.
-          if (config.ownerPhone && output.ownerAlert?.trim()) {
-            try {
-              const alert = enrichOwnerAlert(output.ownerAlert, from, this.deps.clock.now());
-              await turn.send(
-                { to: config.ownerPhone, audience: 'owner', content: { kind: 'text', text: alert } },
-                { countsAsLastText: false },
-              );
-              ownerNotified = true;
-              logger.info({ tenantId }, 'Aviso de lead enviado al dueño');
-            } catch (err) {
-              logger.error(
-                { err, tenantId },
-                'No se pudo enviar el aviso al dueño (el cliente sí recibió su cierre)',
-              );
-            }
-          } else if (!config.ownerPhone) {
+          if (!config.ownerPhone) {
+            ownerSkipped = 'no_owner_phone';
             logger.warn(
               { tenantId },
               'escape_to_human sin ownerPhone (owner_data.whatsapp_dueno) — aviso no enviado',
             );
+          } else if (!output.ownerAlert?.trim()) {
+            ownerSkipped = 'no_alert_text';
+          } else {
+            // Decisión 4 de §16 (2026-09-12): el aviso es un mensaje libre, y
+            // fuera de la ventana de 24 h del dueño Meta lo rechaza (H-6). Solo
+            // se intenta con la ventana abierta; si no, se registra y la
+            // conversación queda en la bandeja /escalaciones del panel (la
+            // pausa de abajo se activa igual). Sin plantilla utility por ahora.
+            const ownerWindow = await this.ownerWindow(tenantId, config.ownerPhone);
+            if (ownerWindow !== 'open') {
+              ownerSkipped = ownerWindow === 'closed' ? 'window_closed' : 'window_unknown';
+              logger.warn(
+                { tenantId, reason: ownerSkipped },
+                'Aviso al dueño no enviado: su ventana de 24 h no está abierta; la conversación queda en la bandeja de escalaciones',
+              );
+            } else {
+              try {
+                const alert = enrichOwnerAlert(output.ownerAlert, from, this.deps.clock.now());
+                await turn.send(
+                  { to: config.ownerPhone, audience: 'owner', content: { kind: 'text', text: alert } },
+                  { countsAsLastText: false },
+                );
+                ownerNotified = true;
+                logger.info({ tenantId }, 'Aviso de lead enviado al dueño');
+              } catch (err) {
+                ownerSkipped = 'send_failed';
+                logger.error(
+                  { err, tenantId },
+                  'No se pudo enviar el aviso al dueño (el cliente sí recibió su cierre)',
+                );
+              }
+            }
           }
           break;
         }
@@ -406,7 +425,12 @@ export class ConversationEngine {
       if (handoffTriggered) {
         const pausedUntil = new Date(this.deps.clock.now().getTime() + this.deps.handoffPauseMs);
         await this.deps.sessions.setHumanHandoff(tenantId, from, pausedUntil);
-        turn.trace.push({ kind: 'escalation', pausedUntil: pausedUntil.toISOString(), ownerNotified });
+        turn.trace.push({
+          kind: 'escalation',
+          pausedUntil: pausedUntil.toISOString(),
+          ownerNotified,
+          ...(ownerNotified || !ownerSkipped ? {} : { ownerSkipped }),
+        });
         logger.info(
           { tenantId, from, pausedUntil },
           'Handoff humano activado — bot silenciado 48 h',
@@ -427,6 +451,26 @@ export class ConversationEngine {
     } catch (error) {
       logger.error({ error, tenantId, from }, 'Error procesando mensaje');
       throw error;
+    }
+  }
+
+  /**
+   * Decisión 4 de §16: ¿el dueño le escribió al bot en las últimas 24 h? Su
+   * último mensaje queda en bot_users como el de cualquier contacto (se
+   * registra en todo mensaje que no sea un comando #listo). Si no se puede
+   * consultar, 'unknown': el aviso no se intenta y el turno del cliente sigue.
+   */
+  private async ownerWindow(tenantId: string, ownerPhone: string): Promise<'open' | 'closed' | 'unknown'> {
+    try {
+      const now = this.deps.clock.now().getTime();
+      for (const phone of ownerPhoneCandidates(ownerPhone)) {
+        const owner = await this.deps.sessions.findByPhoneNumber(tenantId, phone);
+        if (owner?.lastInboundAt && now < owner.lastInboundAt.getTime() + SERVICE_WINDOW_MS) return 'open';
+      }
+      return 'closed';
+    } catch (err) {
+      this.deps.logger.error({ err, tenantId }, 'No se pudo revisar la ventana de 24 h del dueño; el aviso no se intenta');
+      return 'unknown';
     }
   }
 
@@ -476,6 +520,12 @@ export class ConversationEngine {
   ): Promise<boolean> {
     const match = matchOwnerResumeCommand(content);
     if (!match) return false;
+
+    // Un comando también es un mensaje del dueño al número del bot: abre su
+    // ventana de 24 h, y de ella depende que los avisos de paso a humano le
+    // lleguen por WhatsApp (decisión 4 de §16). Se registra como cualquier otro.
+    await this.getOrCreateUser(tenantId, ownerPhone);
+    await this.deps.sessions.touchLastInbound(tenantId, ownerPhone, this.deps.clock.now());
 
     turn.trace.push({ kind: 'gate', gate: 'owner_command', detail: content.trim() });
     const reply = async (text: string): Promise<boolean> => {
@@ -559,6 +609,19 @@ class TurnRecorder {
 
 function normalizeDigits(phone: string): string {
   return phone.replace(/\D/g, '');
+}
+
+/**
+ * Cómo puede estar guardado el dueño en bot_users: tal como lo manda Meta en
+ * el webhook. En México Meta suele mandar 521 + 10 dígitos, y el número del
+ * dueño a veces se captura como 52 + 10 (H-9): se prueban las dos formas, para
+ * no dejar sin aviso a un dueño que sí tiene la ventana abierta.
+ */
+function ownerPhoneCandidates(ownerPhone: string): string[] {
+  const digits = normalizeDigits(ownerPhone);
+  if (/^521\d{10}$/.test(digits)) return [digits, `52${digits.slice(3)}`];
+  if (/^52\d{10}$/.test(digits)) return [digits, `521${digits.slice(2)}`];
+  return [digits];
 }
 
 function isSamePhone(from: string, ownerPhone: string): boolean {
