@@ -82,7 +82,29 @@ sesiones, reloj y envío falsos, así que no escribe en la base.
 
 - Es **soft-delete** (`status = 'archived'`, `deleted_at` seteado) — no
   cascade hard-delete. El registro y sus filas relacionadas siguen en la
-  base de datos.
+  base de datos. En el panel se llama **Archivar**. Audita `tenant.delete`.
+- Tras archivar, el tenant desaparece de **todas** las lecturas
+  (`GET /tenants`, `/tenants/:id`, `/detail` → 404): todas filtran
+  `deleted_at IS NULL`.
+
+`DELETE /api/admin/tenants/:id/permanent` (desde 2026-09-12)
+
+- **Hard-delete irreversible**: `DELETE FROM tenants` y las FKs
+  `on delete cascade` se llevan flows, versiones, mensajes, configuración,
+  credenciales Meta, servicios, POS y directorio. `admin_users.tenant_id`
+  queda en `null` (el operador no se borra).
+- Solo `super_admin`. Body: `{"confirmNombreNegocio": string}` — tiene que ser
+  **idéntico** a `nombre_negocio` (mayúsculas y acentos incluidos).
+- Solo con status `draft`, `sandbox` o `archived`; `live`/`paused` → 400.
+  **Sí encuentra tenants ya archivados con soft-delete**: es la única vía para
+  purgarlos (lee con `findIncludingDeleted`, sin filtro de `deleted_at`).
+- Respuestas: `200 {ok:true}` · `400 {error:'El nombre no coincide'}` ·
+  `400 {error:'Solo se pueden eliminar clientes en draft, sandbox o archivados. …'}` ·
+  `400` sin `confirmNombreNegocio` · `404` si no existe · `403` para `admin_operator`.
+- Audita `tenant.delete.permanent` (distinta de `tenant.delete`) con
+  `metadata: {nombre_negocio, status}` — la fila del tenant ya no existe, el
+  nombre solo queda ahí.
+- Fuente: `tenantsRouter.ts` + `domain/use-cases/HardDeleteTenantUseCase.ts`.
 
 ---
 

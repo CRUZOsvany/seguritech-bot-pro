@@ -145,12 +145,23 @@ export class OwnerDataIncompleteError extends Error {
  * Puerto para operaciones de administración de tenants.
  * Solo usado por el panel interno de SegurITech — no expuesto al cliente final.
  *
- * Todas las queries de lectura filtran por deleted_at IS NULL.
+ * Todas las queries de lectura filtran por deleted_at IS NULL, salvo
+ * findIncludingDeleted.
  */
 export interface TenantRepository {
   findAll(): Promise<TenantSummary[]>;
   findById(id: string): Promise<TenantSummary | null>;
   findFullDetail(id: string): Promise<TenantDetail | null>;
+
+  /**
+   * Nombre y status del tenant AUNQUE esté soft-deleted — la única lectura de
+   * este puerto que no filtra deleted_at. Existe para el borrado permanente,
+   * que tiene que poder purgar lo que "Archivar" (softDelete) ya ocultó de la
+   * lista. null si la fila no existe.
+   */
+  findIncludingDeleted(
+    id: string,
+  ): Promise<{ id: string; nombre_negocio: string; status: TenantStatus } | null>;
   /**
    * Actualiza el estado FSM del tenant.
    * Transiciones válidas: draft→sandbox→live⇄paused→archived.
@@ -183,6 +194,20 @@ export interface TenantRepository {
    * NO toca bot_flows ni messages (histórico recuperable).
    */
   softDelete(id: string): Promise<void>;
+
+  /**
+   * Hard-delete: DELETE FROM tenants WHERE id = ?. IRREVERSIBLE.
+   * A diferencia de softDelete, SÍ borra todo lo que cuelga del tenant: las FKs
+   * `on delete cascade` a tenants se llevan configuración del bot, flows y sus
+   * versiones, mensajes, bot_users, credenciales Meta, servicios, catálogo POS
+   * y directorio de servicios. Única excepción: admin_users.tenant_id es
+   * `on delete set null` — el operador del tenant queda sin tenant, no se borra.
+   * El audit log no tiene FK y conserva el rastro.
+   *
+   * No valida nada: las guardas (nombre exacto, status permitido) viven en
+   * HardDeleteTenantUseCase.
+   */
+  hardDelete(id: string): Promise<void>;
 
   /**
    * Verifica si un módulo está habilitado en el tenant (Sprint 5.1a).

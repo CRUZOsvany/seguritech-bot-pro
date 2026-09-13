@@ -2,6 +2,7 @@ import { Router } from 'express';
 import type pino from 'pino';
 import type { AssignMoldeUseCase } from '@/domain/use-cases/AssignMoldeUseCase';
 import type { SetTenantStatusUseCase } from '@/domain/use-cases/SetTenantStatusUseCase';
+import { HardDeleteTenantUseCase } from '@/domain/use-cases/HardDeleteTenantUseCase';
 import type { SimulateConversationUseCase } from '@/domain/use-cases/SimulateConversationUseCase';
 import type { CreateTenantUseCase } from '@/domain/use-cases/CreateTenantUseCase';
 import type { TenantRepository } from '@/domain/ports/TenantRepository';
@@ -111,6 +112,8 @@ export function createAdminRouter(params: {
     new StudioFlowTestRunner(simulateConversationUseCase, logger),
     logger,
   );
+  // Borrado permanente: las dos guardas (nombre exacto, status) viven aquí.
+  const hardDeleteTenantUseCase = new HardDeleteTenantUseCase(tenantRepository, logger);
 
   const router = Router();
 
@@ -164,6 +167,7 @@ export function createAdminRouter(params: {
       assignMoldeUseCase,
       setTenantStatusUseCase,
       createTenantUseCase,
+      hardDeleteTenantUseCase,
       tenantRepository,
       tenantServiceRepository,
       botFlowRepository,

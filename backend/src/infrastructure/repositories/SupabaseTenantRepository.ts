@@ -234,6 +234,26 @@ export class SupabaseTenantRepository implements TenantRepository {
     };
   }
 
+  async findIncludingDeleted(
+    id: string,
+  ): Promise<{ id: string; nombre_negocio: string; status: TenantStatus } | null> {
+    // Sin .is('deleted_at', null) a propósito: ver el JSDoc del puerto.
+    const { data, error } = await this.supabase
+      .from('tenants')
+      .select('id, nombre_negocio, status')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      this.logger.error({ error, id }, 'findIncludingDeleted failed');
+      throw new Error(`findIncludingDeleted failed: ${error.message}`);
+    }
+    if (!data) return null;
+
+    const t = data as { id: string; nombre_negocio: string; status: string };
+    return { id: t.id, nombre_negocio: t.nombre_negocio, status: t.status as TenantStatus };
+  }
+
   async setStatus(id: string, status: TenantStatus): Promise<void> {
     const { error } = await this.supabase
       .from('tenants')
@@ -452,6 +472,19 @@ export class SupabaseTenantRepository implements TenantRepository {
     if (error) throw new Error(`softDelete tenant: ${error.message}`);
 
     this.logger.warn({ id }, '🗑️  Tenant soft-deleted (status=archived, deleted_at set)');
+  }
+
+  async hardDelete(id: string): Promise<void> {
+    // Mismo mecanismo que el rollback de createAtomic: FK ON DELETE CASCADE
+    // limpia todo lo que cuelga del tenant. Sin filtro de deleted_at: purgar lo
+    // ya archivado es justo uno de los usos.
+    const { error } = await this.supabase.from('tenants').delete().eq('id', id);
+    if (error) throw new Error(`hardDelete tenant: ${error.message}`);
+
+    this.logger.warn(
+      { id },
+      '💥 Tenant BORRADO PERMANENTEMENTE (DELETE + cascade: flows, mensajes, config, POS — sin vuelta atrás)',
+    );
   }
 
   async isModuleEnabled(id: string, module: 'pos' | 'bot'): Promise<boolean> {
