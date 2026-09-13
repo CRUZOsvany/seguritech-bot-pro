@@ -41,6 +41,12 @@ const SimulateBodySchema = z.object({
   startAt: z.string().datetime({ offset: true }).optional(),
   /** Teléfono del cliente simulado. Si es el del dueño, aplican sus reglas. */
   from: z.string().regex(/^\d{8,15}$/).optional(),
+  /**
+   * ¿El dueño le escribió al bot en las últimas 24 h? De eso depende que el
+   * aviso de paso a humano le llegue por WhatsApp (decisión 4 de §16).
+   * Default: sí, desde `startAt`.
+   */
+  ownerWindowOpen: z.boolean().optional(),
 });
 
 /**
@@ -106,6 +112,7 @@ export function createStudioRouter(params: {
           from,
           startAt,
           steps,
+          ownerWindowOpen: body.ownerWindowOpen,
         });
 
         res.json({

@@ -192,6 +192,36 @@ export class CapturingMessenger implements MessengerPort {
 /** Auditoría de simulación: una prueba no deja rastro en admin_audit_log. */
 export const noopAudit: AuditPort = { log: () => undefined };
 
+/**
+ * Decisión 4 de §16: el aviso al dueño por WhatsApp solo sale con su ventana
+ * de 24 h abierta, y la ventana la abre un mensaje suyo al bot. Esto registra
+ * ese mensaje en `at`, como si el dueño le hubiera escrito al bot. Si el
+ * cliente simulado es el propio dueño no hace falta: su mensaje la abre.
+ *
+ * Id fijo a propósito: no consume la secuencia de ids, que cambiaría los
+ * folios y rompería la paridad con producción.
+ */
+export async function seedOwnerWindow(
+  sessions: UserRepository,
+  tenantId: string,
+  ownerPhone: string,
+  from: string,
+  at: Date,
+): Promise<void> {
+  const phone = ownerPhone.replace(/\D/g, '');
+  if (!phone || phone === from.replace(/\D/g, '')) return;
+  await sessions.save({
+    id: 'sim-dueno',
+    tenantId,
+    phoneNumber: phone,
+    currentState: 'initial' as User['currentState'],
+    context: {},
+    createdAt: at,
+    updatedAt: at,
+  });
+  await sessions.touchLastInbound(tenantId, phone, at);
+}
+
 function copy(user: User): User {
   return structuredClone(user);
 }

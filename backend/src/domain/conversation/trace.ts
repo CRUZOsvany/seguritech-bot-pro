@@ -70,8 +70,12 @@ export type DecisionStep =
   /** Nodo sin transiciones que no es `end`: la conversación se corta. */
   | { kind: 'dead_end'; nodeId: string }
   | { kind: 'engine_error'; reason: 'cycle' | 'node_not_found' | 'empty_without_default'; nodeId: string }
-  /** Paso a humano: el bot se silencia hasta `pausedUntil`. */
-  | { kind: 'escalation'; pausedUntil: string; ownerNotified: boolean }
+  /**
+   * Paso a humano: el bot se silencia hasta `pausedUntil`. Si el aviso al
+   * dueño por WhatsApp no salió, `ownerSkipped` dice por qué; la conversación
+   * queda igual en la bandeja /escalaciones del panel.
+   */
+  | { kind: 'escalation'; pausedUntil: string; ownerNotified: boolean; ownerSkipped?: OwnerAlertSkipped }
   /** Solo en simulación: el reloj se adelantó. */
   | { kind: 'clock_advanced'; minutes: number; now: string }
   /**
@@ -79,6 +83,13 @@ export type DecisionStep =
    * dice si salió un mensaje (un cierre sin texto no manda nada).
    */
   | { kind: 'inactivity'; action: 'reminder' | 'close'; afterMinutes: number; nodeId: string; sent: boolean };
+
+/**
+ * Por qué no salió el aviso al dueño por WhatsApp (decisión 4 de §16): sin
+ * número, sin texto de aviso en el paso, su ventana de 24 h cerrada, no se
+ * pudo revisar la ventana, o el envío falló.
+ */
+export type OwnerAlertSkipped = 'no_owner_phone' | 'no_alert_text' | 'window_closed' | 'window_unknown' | 'send_failed';
 
 export type GateName =
   | 'no_config'
