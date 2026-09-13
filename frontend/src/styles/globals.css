@@ -104,6 +104,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-primary-text: var(--primary-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -149,6 +150,10 @@
   --primary: #B9A67C;               /* dorado */
   --primary-foreground: #14263D;    /* navy sobre dorado, nunca blanco */
   --ring: #B9A67C;
+  /* Dorado para TEXTO (links) sobre fondos claros. El dorado de marca da
+     2.2:1 sobre crema; este da 5.0 sobre crema, 5.2 sobre card, 5.5 sobre
+     popover y 4.7 sobre muted. Los fondos dorados siguen usando --primary. */
+  --primary-text: #7A6644;
 
   /* Crema de marca. Válidos en Tailwind v4: @theme inline mapea --color-* a
      var() directo, así que bg-background/bg-card/bg-popover heredan estos hex.
@@ -195,6 +200,7 @@
   --primary: #B9A67C;
   --primary-foreground: #14263D;
   --ring: #B9A67C;
+  --primary-text: #B9A67C;          /* sobre navy el dorado de marca ya da 6.4:1 */
 }
 
 /* ============================================================
