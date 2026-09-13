@@ -140,56 +140,61 @@
 
 /* ============================================================
    SegurITech — Override de marca sobre shadcn neutral.
-   --primary = #1f6feb (azul GitHub / SegurITech).
-   --destructive se queda con el rojo neutral default (similar a #d1242f).
+   Paleta: navy #14263D · dorado #B9A67C · crema #F5F4EF.
+   --primary es el dorado con texto navy encima (6.4:1; blanco sobre
+   dorado no llega a 2.2:1). --destructive se queda con el rojo neutral
+   default: es semántico, no de marca.
    ============================================================ */
 :root {
-  --primary: oklch(0.59 0.22 256);
-  --primary-foreground: oklch(0.985 0 0);
-  --ring: oklch(0.59 0.22 256);
+  --primary: #B9A67C;               /* dorado */
+  --primary-foreground: #14263D;    /* navy sobre dorado, nunca blanco */
+  --ring: #B9A67C;
 
-  /* Paleta papel marfil (light-only). Valores hex EXACTOS acordados con el
-     equipo. Válidos en Tailwind v4: @theme inline mapea --color-* a var()
-     directo, así que bg-background/bg-card/bg-popover heredan estos hex.
+  /* Crema de marca. Válidos en Tailwind v4: @theme inline mapea --color-* a
+     var() directo, así que bg-background/bg-card/bg-popover heredan estos hex.
+     Los saltos de luminosidad (OKLCH) copian los de la paleta marfil anterior:
+     card +0.015 · muted −0.025 · border −0.063.
      Jerarquía: canvas (body) < surface (cards) < elevated (popovers, blanco). */
-  --background: #F8F6F1;            /* canvas — body / app-shell */
-  --foreground: #1F1D1A;            /* negro cálido (no #000) */
-  --card: #FCFAF6;                  /* surface — cards, paneles */
-  --card-foreground: #1F1D1A;
-  --popover: #FFFFFF;               /* elevated — dropdowns/popovers, máx contraste */
-  --popover-foreground: #1F1D1A;
-  --secondary: #F1EEE7;             /* muted cálido — headers tabla, footers */
-  --secondary-foreground: #1F1D1A;
-  --muted: #F1EEE7;
-  --muted-foreground: #6B6760;
-  --accent: #F1EEE7;                /* hover neutro cálido (nav, select focus) */
-  --accent-foreground: #1F1D1A;
-  --border: #E5E1D8;
-  --input: #E5E1D8;
+  --background: #F5F4EF;            /* canvas — body / app-shell */
+  --foreground: #14263D;            /* navy */
+  --card: #FAF9F4;                  /* surface — cards, paneles */
+  --card-foreground: #14263D;
+  --popover: #FFFFFF;               /* elevated — menús, diálogos, toasts */
+  --popover-foreground: #14263D;
+  --secondary: #EDECE7;             /* crema hundido — headers tabla, footers */
+  --secondary-foreground: #14263D;
+  --muted: #EDECE7;
+  --muted-foreground: #576472;      /* navy 70 % sobre crema: 5.5:1 */
+  --accent: #EDECE7;                /* hover neutro (nav, select focus) */
+  --accent-foreground: #14263D;
+  --border: #E0DFDA;
+  --input: #E0DFDA;
 }
 
 /* ============================================================
-   SegurITech — paleta oscura de marca (cálida, no negro puro).
-   Sobrescribe los tokens base cuando html tiene class="dark".
+   SegurITech — paleta oscura de marca: navy de fondo, crema de texto y
+   el mismo dorado en primary (la marca no cambia entre temas).
+   Saltos OKLCH iguales a los de la paleta oscura anterior:
+   card +0.03 · popover/muted +0.064 · accent +0.084 · border +0.104.
    ============================================================ */
 .dark {
-  --background: #1A1714;
-  --foreground: #EDEAE3;
-  --card: #211E1A;
-  --card-foreground: #EDEAE3;
-  --popover: #2A2620;
-  --popover-foreground: #EDEAE3;
-  --secondary: #2A2620;
-  --secondary-foreground: #EDEAE3;
-  --muted: #2A2620;
-  --muted-foreground: #A8A29A;
-  --accent: #2F2B25;
-  --accent-foreground: #EDEAE3;
-  --border: #34302A;
-  --input: #34302A;
-  --primary: oklch(0.62 0.20 256);
-  --primary-foreground: #0F0E0C;
-  --ring: oklch(0.62 0.20 256);
+  --background: #14263D;
+  --foreground: #F5F4EF;
+  --card: #1B2E45;
+  --card-foreground: #F5F4EF;
+  --popover: #24364E;
+  --popover-foreground: #F5F4EF;
+  --secondary: #24364E;
+  --secondary-foreground: #F5F4EF;
+  --muted: #24364E;
+  --muted-foreground: #ADB2B6;      /* crema 68 % sobre navy: 7.2:1 */
+  --accent: #293B54;
+  --accent-foreground: #F5F4EF;
+  --border: #2E415A;
+  --input: #2E415A;
+  --primary: #B9A67C;
+  --primary-foreground: #14263D;
+  --ring: #B9A67C;
 }
 
 /* ============================================================
